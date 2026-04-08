@@ -1,0 +1,67 @@
+# Add to tests/fixtures/mock_data.py:
+
+def create_{{metric_name}}_dataset() -> Dataset:
+    """Create a dataset for {{MetricName}} metric testing.
+
+    Returns:
+        Dataset configured for {{metric_name}} evaluation testing.
+    """
+    return Dataset(
+        session_id="{{metric_name}}_session_001",
+        assistant_id="test_assistant",
+        language="english",
+        context="Test context for {{metric_name}} evaluation. "
+                "This provides background information for the conversation.",
+        conversation=[
+            Batch(
+                qa_id="{{metric_name}}_qa_001",
+                query="First test query",
+                assistant="First test assistant response that should be evaluated.",
+                ground_truth_assistant="Expected first response.",
+            ),
+            Batch(
+                qa_id="{{metric_name}}_qa_002",
+                query="Second test query with different characteristics",
+                assistant="Second test response with more content to analyze.",
+                ground_truth_assistant="Expected second response.",
+            ),
+            Batch(
+                qa_id="{{metric_name}}_qa_003",
+                query="Third test query",
+                assistant="Third response for comprehensive testing.",
+                ground_truth_assistant="Expected third response.",
+            ),
+        ],
+    )
+
+
+# Add to tests/fixtures/mock_retriever.py:
+
+from tests.fixtures.mock_data import create_{{metric_name}}_dataset
+
+
+class {{MetricName}}DatasetRetriever(Retriever):
+    """Mock retriever for {{MetricName}} metric testing."""
+
+    def load_dataset(self) -> list[Dataset]:
+        """Return {{metric_name}} testing dataset."""
+        return [create_{{metric_name}}_dataset()]
+
+
+# Add to tests/conftest.py imports:
+from tests.fixtures.mock_data import create_{{metric_name}}_dataset
+from tests.fixtures.mock_retriever import {{MetricName}}DatasetRetriever
+
+
+# Add these fixtures to tests/conftest.py:
+
+@pytest.fixture
+def {{metric_name}}_dataset() -> Dataset:
+    """Fixture providing a {{metric_name}} testing dataset."""
+    return create_{{metric_name}}_dataset()
+
+
+@pytest.fixture
+def {{metric_name}}_dataset_retriever() -> type[{{MetricName}}DatasetRetriever]:
+    """Fixture providing {{MetricName}}DatasetRetriever class."""
+    return {{MetricName}}DatasetRetriever

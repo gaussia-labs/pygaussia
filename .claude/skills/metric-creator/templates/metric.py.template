@@ -1,0 +1,113 @@
+"""{{MetricName}} metric for {{description}}."""
+
+from pygaussia.core import Gaussia, Retriever
+from pygaussia.schemas import Batch
+from pygaussia.schemas.{{metric_name}} import {{MetricName}}Metric
+
+
+class {{MetricName}}(Gaussia):
+    """{{Description}}.
+
+    This metric evaluates AI assistant responses for {{metric_purpose}}.
+
+    Args:
+        retriever: Retriever class for loading datasets
+        {{param_name}}: {{param_description}} (default: {{param_default}})
+        **kwargs: Additional arguments passed to Gaussia base class
+
+    Example:
+        >>> results = {{MetricName}}.run(MyRetriever)
+        >>> for metric in results:
+        ...     print(f"{metric.qa_id}: {metric.{{metric_name}}_score}")
+    """
+
+    def __init__(
+        self,
+        retriever: type[Retriever],
+        # Add your configuration parameters here
+        **kwargs,
+    ):
+        """Initialize {{MetricName}} metric.
+
+        Args:
+            retriever: Data retriever class
+            **kwargs: Additional configuration (verbose, etc.)
+        """
+        super().__init__(retriever, **kwargs)
+
+        # Initialize metric-specific attributes
+        # self.config_param = config_param
+
+        self.logger.info("--{{METRIC_NAME_UPPER}} CONFIGURATION--")
+        # self.logger.debug(f"Config param: {self.config_param}")
+
+    def batch(
+        self,
+        session_id: str,
+        context: str,
+        assistant_id: str,
+        batch: list[Batch],
+        language: str | None = "english",
+    ):
+        """Process a batch of conversations.
+
+        Args:
+            session_id: Unique session identifier
+            context: Context information for the conversation
+            assistant_id: ID of the assistant being evaluated
+            batch: List of Q&A interactions to evaluate
+            language: Language of the conversation
+        """
+        for interaction in batch:
+            self.logger.debug(f"QA ID: {interaction.qa_id}")
+
+            # Evaluate the interaction
+            score, insight = self._evaluate(
+                query=interaction.query,
+                assistant=interaction.assistant,
+                ground_truth=interaction.ground_truth_assistant,
+                context=context,
+            )
+
+            # Create and store the metric result
+            metric = {{MetricName}}Metric(
+                session_id=session_id,
+                assistant_id=assistant_id,
+                qa_id=interaction.qa_id,
+                {{metric_name}}_score=score,
+                {{metric_name}}_insight=insight,
+            )
+
+            self.logger.debug(f"Score: {metric.{{metric_name}}_score}")
+            self.metrics.append(metric)
+
+    def _evaluate(
+        self,
+        query: str,
+        assistant: str,
+        ground_truth: str,
+        context: str,
+    ) -> tuple[float, str]:
+        """Evaluate a single interaction.
+
+        Args:
+            query: User's question
+            assistant: Assistant's response
+            ground_truth: Expected response (may be empty)
+            context: Conversation context
+
+        Returns:
+            Tuple of (score, insight) where score is 0.0-1.0
+        """
+        # TODO: Implement your evaluation logic here
+        #
+        # Common patterns:
+        # 1. Rule-based: Use regex, lexicons, or string matching
+        # 2. LLM-judge: Use Judge class for LLM-based evaluation
+        # 3. Statistical: Use FrequentistMode or BayesianMode
+        # 4. Embedding: Use sentence-transformers for similarity
+
+        score = 0.0
+        insight = "Evaluation not implemented"
+
+        return score, insight

@@ -1,0 +1,27 @@
+"""{{MetricName}} metric schemas."""
+
+from .metrics import BaseMetric
+
+
+class {{MetricName}}Metric(BaseMetric):
+    """
+    {{MetricName}} metric for evaluating {{description}}.
+
+    This schema stores the evaluation results for each Q&A interaction.
+
+    Attributes:
+        session_id: Unique identifier for the conversation session (inherited)
+        assistant_id: Identifier for the AI assistant (inherited)
+        qa_id: Unique identifier for the Q&A interaction
+        {{metric_name}}_score: Main evaluation score (0.0-1.0)
+        {{metric_name}}_insight: Explanation of the evaluation result
+    """
+
+    qa_id: str
+    {{metric_name}}_score: float
+    {{metric_name}}_insight: str
+
+    # Add additional metric-specific fields as needed:
+    # {{metric_name}}_subscores: dict[str, float] | None = None
+    # {{metric_name}}_details: str | None = None
+    # {{metric_name}}_confidence: float | None = None
