@@ -45,12 +45,16 @@ jobs:
             cp "$f" "../central-docs/${TARGET_DIR}/$f"
           done
 
+      - name: Get short SHA
+        id: short-sha
+        run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.DOCS_REPO_PAT }}
           path: central-docs
-          branch: docs/sync-python-sdk
+          branch: docs/sync-python-sdk-${{ steps.short-sha.outputs.sha }}
           delete-branch: true
           title: "docs(python): sync SDK docs from pygaussia@${{ github.sha }}"
           body: |
