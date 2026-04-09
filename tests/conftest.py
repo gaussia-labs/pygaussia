@@ -17,7 +17,7 @@ except Exception:
 import pytest
 from pydantic import SecretStr
 
-from pygaussia.schemas.common import Batch, Dataset
+from gaussia.schemas.common import Batch, Dataset
 
 
 def pytest_configure(config):

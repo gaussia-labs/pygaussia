@@ -1,20 +1,20 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
-from pygaussia.prompt_optimizer.mipro import MIPROv2Optimizer
-from pygaussia.prompt_optimizer.mipro.proposer import DemoBootstrapper, InstructionProposer, _InstructionVariants
-from pygaussia.prompt_optimizer.schemas import Demo, MIPROv2Result
+import pytest
 
+from gaussia.prompt_optimizer.mipro import MIPROv2Optimizer
+from gaussia.prompt_optimizer.mipro.proposer import DemoBootstrapper, InstructionProposer, _InstructionVariants
+from gaussia.prompt_optimizer.schemas import Demo, MIPROv2Result
 from tests.prompt_optimizer.conftest import MOCK_DATASETS, PromptOptimizerRetriever
 
 
 def _make_optimizer(mock_model, mock_executor, mock_evaluator, **kwargs) -> MIPROv2Optimizer:
-    defaults = dict(
-        num_candidates=2,
-        num_trials=2,
-        num_demo_sets=2,
-        max_demos_per_set=2,
-    )
+    defaults = {
+        "num_candidates": 2,
+        "num_trials": 2,
+        "num_demo_sets": 2,
+        "max_demos_per_set": 2,
+    }
     defaults.update(kwargs)
     return MIPROv2Optimizer(
         PromptOptimizerRetriever, model=mock_model,
@@ -103,8 +103,10 @@ class TestMIPROv2BuildPrompt:
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
         demos = [Demo(query="q1", response="r1"), Demo(query="q2", response="r2")]
         result = optimizer._build_prompt("instruction", demos)
-        assert "q1" in result and "r1" in result
-        assert "q2" in result and "r2" in result
+        assert "q1" in result
+        assert "r1" in result
+        assert "q2" in result
+        assert "r2" in result
 
 
 class TestMIPROv2CollectExamples:
@@ -159,35 +161,35 @@ class TestMIPROv2EvaluatePrompt:
 
 
 class TestMIPROv2Optimize:
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_result_type(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
         result = optimizer._optimize()
         assert isinstance(result, MIPROv2Result)
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_n_examples_in_result(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
         result = optimizer._optimize()
         assert result.n_examples == 4
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_demos_are_demo_instances(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
         result = optimizer._optimize()
         assert all(isinstance(d, Demo) for d in result.demos)
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_trials_run_matches_num_trials(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator, num_trials=2)
         result = optimizer._optimize()
         assert result.trials_run == 2
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_optimized_instruction_is_string(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
@@ -195,7 +197,7 @@ class TestMIPROv2Optimize:
         assert isinstance(result.optimized_instruction, str)
         assert len(result.optimized_instruction) > 0
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_optimized_prompt_contains_instruction(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator)
@@ -204,7 +206,7 @@ class TestMIPROv2Optimize:
 
 
 class TestMIPROv2Run:
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_run_returns_miprov2_result(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         result = MIPROv2Optimizer.run(
@@ -220,7 +222,7 @@ class TestMIPROv2Run:
         )
         assert isinstance(result, MIPROv2Result)
 
-    @patch("pygaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
+    @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_run_exposes_optimized_prompt(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         result = MIPROv2Optimizer.run(

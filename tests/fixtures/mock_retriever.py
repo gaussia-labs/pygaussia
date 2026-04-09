@@ -1,7 +1,7 @@
 """Mock retriever implementations for testing."""
 
-from pygaussia.core.retriever import Retriever
-from pygaussia.schemas.common import Dataset
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset
 from tests.fixtures.mock_data import (
     create_agentic_dataset,
     create_bestof_dataset,

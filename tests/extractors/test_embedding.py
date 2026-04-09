@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from pygaussia.core.embedder import Embedder
-from pygaussia.extractors.embedding import EmbeddingGroupExtractor
-from pygaussia.schemas.toxicity import GroupDetection
+from gaussia.core.embedder import Embedder
+from gaussia.extractors.embedding import EmbeddingGroupExtractor
+from gaussia.schemas.toxicity import GroupDetection
 
 
 class MockEmbedder(Embedder):

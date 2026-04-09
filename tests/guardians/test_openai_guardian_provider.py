@@ -2,7 +2,7 @@
 
 import pytest
 
-from pygaussia.guardians.llms.providers import OpenAIGuardianProvider
+from gaussia.guardians.llms.providers import OpenAIGuardianProvider
 
 
 class TestOpenAIGuardianProviderParseResponse:

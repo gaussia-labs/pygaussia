@@ -4,9 +4,9 @@ from collections.abc import Iterator
 
 import pytest
 
-from pygaussia.core.base import Gaussia
-from pygaussia.core.retriever import Retriever
-from pygaussia.schemas.common import Batch, Dataset, IterationLevel, SessionMetadata, StreamedBatch
+from gaussia.core.base import Gaussia
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Batch, Dataset, IterationLevel, SessionMetadata, StreamedBatch
 from tests.fixtures.mock_data import create_sample_dataset
 
 

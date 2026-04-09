@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from pygaussia.metrics.agentic import Agentic
-from pygaussia.schemas.agentic import AgenticMetric, ToolCorrectnessScore
+from gaussia.metrics.agentic import Agentic
+from gaussia.schemas.agentic import AgenticMetric, ToolCorrectnessScore
 from tests.fixtures.mock_retriever import AgenticDatasetRetriever, MockRetriever
 
 
@@ -41,7 +41,7 @@ class TestAgenticMetric:
         assert result.parameter_accuracy < 1.0
         assert result.overall_correctness < 1.0
 
-    @patch("pygaussia.metrics.agentic.Judge")
+    @patch("gaussia.metrics.agentic.Judge")
     def test_process_per_conversation_pass_at_k(self, mock_judge_class):
         """pass_at_k and pass_pow_k are computed per conversation using its interactions."""
         mock_judge = MagicMock()
@@ -69,15 +69,18 @@ class TestAgenticMetric:
         assert all(m.k == 3 for m in metrics)
 
         # Conversations 1, 2, 4: fully correct → pass_at_k = 1.0
-        assert metrics[0].pass_at_k == 1.0 and metrics[0].pass_pow_k == 1.0
-        assert metrics[1].pass_at_k == 1.0 and metrics[1].pass_pow_k == 1.0
-        assert metrics[3].pass_at_k == 1.0 and metrics[3].pass_pow_k == 1.0
+        assert metrics[0].pass_at_k == 1.0
+        assert metrics[0].pass_pow_k == 1.0
+        assert metrics[1].pass_at_k == 1.0
+        assert metrics[1].pass_pow_k == 1.0
+        assert metrics[3].pass_at_k == 1.0
+        assert metrics[3].pass_pow_k == 1.0
 
         # Conversation 3: 1/3 correct → p=1/3, pass@3 = 1-(2/3)^3 ≈ 0.704, pass^3 = (1/3)^3 ≈ 0.037
         assert 0.70 < metrics[2].pass_at_k < 0.71
         assert 0.037 < metrics[2].pass_pow_k < 0.038
 
-    @patch("pygaussia.metrics.agentic.Judge")
+    @patch("gaussia.metrics.agentic.Judge")
     def test_process_all_correct(self, mock_judge_class):
         """All correct conversations → pass_at_k = pass_pow_k = 1.0."""
         mock_judge = MagicMock()
@@ -90,7 +93,7 @@ class TestAgenticMetric:
         assert all(m.pass_at_k == 1.0 for m in metrics)
         assert all(m.pass_pow_k == 1.0 for m in metrics)
 
-    @patch("pygaussia.metrics.agentic.Judge")
+    @patch("gaussia.metrics.agentic.Judge")
     def test_process_none_correct(self, mock_judge_class):
         """All incorrect interactions → pass_at_k = pass_pow_k = 0.0."""
         mock_judge = MagicMock()
@@ -103,7 +106,7 @@ class TestAgenticMetric:
         assert all(m.pass_at_k == 0.0 for m in metrics)
         assert all(m.pass_pow_k == 0.0 for m in metrics)
 
-    @patch("pygaussia.metrics.agentic.Judge")
+    @patch("gaussia.metrics.agentic.Judge")
     def test_run_returns_metrics_with_pass_fields(self, mock_judge_class):
         """run() returns AgenticMetric instances with k, pass_at_k, pass_pow_k set."""
         mock_judge = MagicMock()
@@ -118,7 +121,7 @@ class TestAgenticMetric:
         assert 0.0 <= metrics[0].pass_at_k <= 1.0
         assert 0.0 <= metrics[0].pass_pow_k <= 1.0
 
-    @patch("pygaussia.metrics.agentic.Judge")
+    @patch("gaussia.metrics.agentic.Judge")
     def test_threshold_boundary(self, mock_judge_class):
         """Score at threshold counts as correct; just below does not."""
         mock_judge = MagicMock()
@@ -136,7 +139,7 @@ class TestAgenticMetric:
 
     def test_pass_at_k_formula(self):
         """Bernoulli model: 1 - (1 - c/n)^k."""
-        from pygaussia.metrics.agentic import pass_at_k
+        from gaussia.metrics.agentic import pass_at_k
 
         assert 0.96 < pass_at_k(n=3, c=2, k=3) < 0.97   # 1 - (1/3)^3 ≈ 0.963
         assert pass_at_k(n=3, c=0, k=3) == 0.0
@@ -145,7 +148,7 @@ class TestAgenticMetric:
 
     def test_pass_pow_k_formula(self):
         """Formula: (c/n)^k."""
-        from pygaussia.metrics.agentic import pass_pow_k
+        from gaussia.metrics.agentic import pass_pow_k
 
         assert 0.29 < pass_pow_k(n=3, c=2, k=3) < 0.30  # (2/3)^3 ≈ 0.296
         assert pass_pow_k(n=3, c=0, k=3) == 0.0
@@ -153,7 +156,7 @@ class TestAgenticMetric:
 
     def test_pass_at_k_k_exceeds_n(self):
         """k > n is valid with the Bernoulli model."""
-        from pygaussia.metrics.agentic import pass_at_k, pass_pow_k
+        from gaussia.metrics.agentic import pass_at_k, pass_pow_k
 
         assert 0.99 < pass_at_k(n=3, c=2, k=5) < 1.0   # 1-(1/3)^5 ≈ 0.9959
         assert 0.13 < pass_pow_k(n=3, c=2, k=5) < 0.14  # (2/3)^5 ≈ 0.132

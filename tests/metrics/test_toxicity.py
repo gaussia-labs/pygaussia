@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
-from pygaussia.core.embedder import Embedder
-from pygaussia.metrics.toxicity import Toxicity
-from pygaussia.schemas.toxicity import ToxicityMetric
-from pygaussia.statistical import BayesianMode, FrequentistMode
+from gaussia.core.embedder import Embedder
+from gaussia.metrics.toxicity import Toxicity
+from gaussia.schemas.toxicity import ToxicityMetric
+from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_sample_batch, create_sample_dataset
 
 
@@ -382,8 +382,8 @@ class TestToxicityMetric:
         assert isinstance(ASB, float)
         assert ASB == 0.0
 
-    @patch("pygaussia.metrics.toxicity.hdbscan")
-    @patch("pygaussia.metrics.toxicity.umap")
+    @patch("gaussia.metrics.toxicity.hdbscan")
+    @patch("gaussia.metrics.toxicity.umap")
     def test_batch_processing(self, mock_umap, mock_hdbscan):
         """Test batch processing with mocked dependencies."""
         from tests.fixtures.mock_retriever import MockRetriever
@@ -407,7 +407,7 @@ class TestToxicityMetric:
         dataset = create_sample_dataset(conversation=batch_data)
         retriever = type("TestRetriever", (MockRetriever,), {"load_dataset": lambda self: [dataset]})
 
-        with patch("pygaussia.metrics.toxicity.EmbeddingGroupExtractor", MockGroupExtractor):
+        with patch("gaussia.metrics.toxicity.EmbeddingGroupExtractor", MockGroupExtractor):
             toxicity = Toxicity(
                 retriever,
                 embedder=mock_embedder,
@@ -443,9 +443,9 @@ class TestToxicityMetric:
         retriever = type("TestRetriever", (MockRetriever,), {"load_dataset": lambda self: [dataset]})
 
         with (
-            patch("pygaussia.metrics.toxicity.hdbscan") as mock_hdbscan,
-            patch("pygaussia.metrics.toxicity.umap") as mock_umap,
-            patch("pygaussia.metrics.toxicity.EmbeddingGroupExtractor", MockGroupExtractor),
+            patch("gaussia.metrics.toxicity.hdbscan") as mock_hdbscan,
+            patch("gaussia.metrics.toxicity.umap") as mock_umap,
+            patch("gaussia.metrics.toxicity.EmbeddingGroupExtractor", MockGroupExtractor),
         ):
             mock_umap_instance = MagicMock()
             mock_umap_instance.fit_transform.return_value = np.array([[0.1, 0.2], [0.3, 0.4]])

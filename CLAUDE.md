@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Gaussia (pygaussia) is the Python implementation of the Gaussia AI evaluation framework. It provides metrics for measuring fairness, toxicity, bias, conversational quality, and more for AI models and assistants.
+Gaussia is the Python implementation of the Gaussia AI evaluation framework. It provides metrics for measuring fairness, toxicity, bias, conversational quality, and more for AI models and assistants.
 
 - **PyPI package name**: `gaussia`
-- **Import name**: `pygaussia`
-- **Base class**: `Gaussia` (in `pygaussia.core.base`)
+- **Import name**: `gaussia`
+- **Base class**: `Gaussia` (in `gaussia.core.base`)
 
 ## Development Commands
 
@@ -39,7 +39,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Type checking
-uv run mypy src/pygaussia
+uv run mypy src/gaussia
 
 # Build package
 uv build
@@ -88,7 +88,7 @@ Every code smell is a defect. Do not introduce any. If you encounter one while w
 
 ### Core Pattern: Gaussia Base Class
 
-All metrics inherit from `Gaussia` (in `src/pygaussia/core/base.py`):
+All metrics inherit from `Gaussia` (in `src/gaussia/core/base.py`):
 1. Subclass `Gaussia`
 2. Implement `batch()` method to process conversation batches
 3. Append results to `self.metrics`
@@ -108,26 +108,26 @@ Results in self.metrics
 
 ### Key Modules
 
-- **`src/pygaussia/metrics/`**: Metric implementations (Toxicity, Bias, Context, Conversational, Humanity, BestOf, Agentic, Vision, Regulatory)
-- **`src/pygaussia/core/`**: Base classes — `Gaussia`, `Retriever`, `Guardian`, `ToxicityLoader`, `SentimentAnalyzer`
-- **`src/pygaussia/schemas/`**: Pydantic models for data validation (`Dataset`, `Batch`, metric-specific schemas)
-- **`src/pygaussia/statistical/`**: Statistical modes (`FrequentistMode`, `BayesianMode`)
-- **`src/pygaussia/guardians/`**: Bias detection implementations
-- **`src/pygaussia/loaders/`**: Dataset loaders (e.g., `HurtlexLoader` for toxicity lexicons)
-- **`src/pygaussia/llm/`**: LLM integration (`Judge`, prompts, schemas for structured outputs)
-- **`src/pygaussia/extractors/`**: Group extraction implementations (`EmbeddingGroupExtractor`)
-- **`src/pygaussia/generators/`**: Synthetic dataset generation
-- **`src/pygaussia/prompt_optimizer/`**: Prompt optimization algorithms (GEPA, MIPROv2)
-- **`src/pygaussia/explainability/`**: Token attribution analysis
-- **`src/pygaussia/utils/`**: Utilities (logging configuration)
+- **`src/gaussia/metrics/`**: Metric implementations (Toxicity, Bias, Context, Conversational, Humanity, BestOf, Agentic, Vision, Regulatory)
+- **`src/gaussia/core/`**: Base classes — `Gaussia`, `Retriever`, `Guardian`, `ToxicityLoader`, `SentimentAnalyzer`
+- **`src/gaussia/schemas/`**: Pydantic models for data validation (`Dataset`, `Batch`, metric-specific schemas)
+- **`src/gaussia/statistical/`**: Statistical modes (`FrequentistMode`, `BayesianMode`)
+- **`src/gaussia/guardians/`**: Bias detection implementations
+- **`src/gaussia/loaders/`**: Dataset loaders (e.g., `HurtlexLoader` for toxicity lexicons)
+- **`src/gaussia/llm/`**: LLM integration (`Judge`, prompts, schemas for structured outputs)
+- **`src/gaussia/extractors/`**: Group extraction implementations (`EmbeddingGroupExtractor`)
+- **`src/gaussia/generators/`**: Synthetic dataset generation
+- **`src/gaussia/prompt_optimizer/`**: Prompt optimization algorithms (GEPA, MIPROv2)
+- **`src/gaussia/explainability/`**: Token attribution analysis
+- **`src/gaussia/utils/`**: Utilities (logging configuration)
 
 ### Custom Retriever Pattern
 
 Users implement a `Retriever` subclass to load their data:
 
 ```python
-from pygaussia.core.retriever import Retriever
-from pygaussia.schemas.common import Dataset
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset
 
 class MyRetriever(Retriever):
     def load_dataset(self) -> list[Dataset]:

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pygaussia.metrics.context import Context
-from pygaussia.schemas.context import ContextMetric
-from pygaussia.statistical import BayesianMode, FrequentistMode
+from gaussia.metrics.context import Context
+from gaussia.schemas.context import ContextMetric
+from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_sample_batch
 from tests.fixtures.mock_retriever import ContextDatasetRetriever, MockRetriever
 
@@ -48,7 +48,7 @@ class TestContextMetric:
         )
         assert isinstance(context.statistical_mode, BayesianMode)
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_processing(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -76,7 +76,7 @@ class TestContextMetric:
         assert metric.interactions[0].qa_id == "qa_001"
         assert metric.interactions[0].context_awareness == pytest.approx(0.85)
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_session_accumulation(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -90,7 +90,7 @@ class TestContextMetric:
         assert len(context.metrics) == 1
         assert context.metrics[0].n_interactions == 2
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_multiple_sessions(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -103,7 +103,7 @@ class TestContextMetric:
 
         assert len(context.metrics) == 2
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_with_observation(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -116,7 +116,7 @@ class TestContextMetric:
         call_args = mock_judge.check.call_args
         assert "observation" in call_args[0][2]
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_without_observation(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -132,7 +132,7 @@ class TestContextMetric:
         call_args = mock_judge.check.call_args
         assert "ground_truth_assistant" in call_args[0][2]
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_batch_raises_on_no_result(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -147,7 +147,7 @@ class TestContextMetric:
                 batch=[create_sample_batch(qa_id="qa_001")],
             )
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_run_method(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -158,7 +158,7 @@ class TestContextMetric:
         assert len(metrics) > 0
         assert all(isinstance(m, ContextMetric) for m in metrics)
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_judge_initialization_params(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -182,7 +182,7 @@ class TestContextMetric:
             verbose=False,
         )
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_verbose_mode(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -194,9 +194,9 @@ class TestContextMetric:
 
         assert len(context.metrics) == 1
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_structured_output_mode(self, mock_judge_class, mock_model):
-        from pygaussia.llm.schemas import ContextJudgeOutput
+        from gaussia.llm.schemas import ContextJudgeOutput
 
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -215,7 +215,7 @@ class TestContextMetric:
         assert len(context.metrics) == 1
         assert context.metrics[0].context_awareness == pytest.approx(0.85)
 
-    @patch("pygaussia.metrics.context.Judge")
+    @patch("gaussia.metrics.context.Judge")
     def test_bayesian_mode_produces_ci(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge

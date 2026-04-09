@@ -2,7 +2,7 @@
 
 import pytest
 
-from pygaussia.statistical import FrequentistMode
+from gaussia.statistical import FrequentistMode
 
 
 class TestFrequentistMode:

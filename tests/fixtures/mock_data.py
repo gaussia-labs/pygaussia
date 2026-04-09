@@ -1,6 +1,6 @@
 """Mock datasets for testing metrics."""
 
-from pygaussia.schemas.common import Batch, Dataset
+from gaussia.schemas.common import Batch, Dataset
 
 
 def create_sample_batch(

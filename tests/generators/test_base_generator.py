@@ -5,14 +5,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pygaussia.generators import (
+from gaussia.generators import (
     BaseGenerator,
     LocalMarkdownLoader,
     RandomSamplingStrategy,
     SequentialStrategy,
 )
-from pygaussia.schemas.common import Batch, Dataset
-from pygaussia.schemas.generators import (
+from gaussia.schemas.common import Batch, Dataset
+from gaussia.schemas.generators import (
     Chunk,
     ConversationTurn,
     GeneratedConversationOutput,
@@ -125,7 +125,7 @@ class TestBaseGeneratorGenerateQueries:
             chunk_summary="Test summary",
         )
 
-        with patch("pygaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
+        with patch("gaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
             # Mock the chain that is created when prompt | model
             mock_chain = MagicMock()
             mock_chain.invoke.return_value = mock_result
@@ -151,7 +151,7 @@ class TestBaseGeneratorGenerateQueries:
         mock_model.invoke = MagicMock(return_value=mock_response)
 
         # Create a mock chain that returns our mock response
-        with patch("pygaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
+        with patch("gaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
             mock_chain = MagicMock()
             mock_chain.invoke.return_value = mock_response
             mock_prompt.from_messages.return_value.__or__ = MagicMock(return_value=mock_chain)
@@ -191,7 +191,7 @@ class TestBaseGeneratorGenerateConversation:
             chunk_summary="Test summary",
         )
 
-        with patch("pygaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
+        with patch("gaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
             mock_chain = MagicMock()
             mock_chain.invoke.return_value = mock_result
             mock_prompt.from_messages.return_value.__or__ = MagicMock(return_value=mock_chain)
@@ -221,7 +221,7 @@ class TestBaseGeneratorGenerateDataset:
             chunk_summary="Summary",
         )
 
-        with patch("pygaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
+        with patch("gaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
             mock_chain = MagicMock()
             mock_chain.invoke.return_value = mock_result
             mock_prompt.from_messages.return_value.__or__ = MagicMock(return_value=mock_chain)
@@ -451,7 +451,7 @@ class TestBaseGeneratorWithStrategies:
             chunk_summary="Summary",
         )
 
-        with patch("pygaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
+        with patch("gaussia.schemas.generators.ChatPromptTemplate") as mock_prompt:
             mock_chain = MagicMock()
             mock_chain.invoke.return_value = mock_result
             mock_prompt.from_messages.return_value.__or__ = MagicMock(return_value=mock_chain)

@@ -1,7 +1,7 @@
 """Unit tests for Humanity metric."""
 
-from pygaussia.metrics.humanity import Humanity
-from pygaussia.schemas.humanity import HumanityMetric
+from gaussia.metrics.humanity import Humanity
+from gaussia.schemas.humanity import HumanityMetric
 from tests.fixtures.mock_data import create_sample_batch
 from tests.fixtures.mock_retriever import MockRetriever
 

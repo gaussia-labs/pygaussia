@@ -1,13 +1,13 @@
 """Unit tests for vision metrics: VisionSimilarity, VisionHallucination."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from pygaussia.metrics.vision import VisionHallucination, VisionSimilarity
-from pygaussia.schemas.vision import VisionHallucinationMetric, VisionSimilarityMetric
+from gaussia.metrics.vision import VisionHallucination, VisionSimilarity
+from gaussia.schemas.vision import VisionHallucinationMetric, VisionSimilarityMetric
 from tests.fixtures.mock_data import create_sample_batch, create_sample_dataset
-from tests.fixtures.mock_retriever import MockRetriever, VisionDatasetRetriever
+from tests.fixtures.mock_retriever import MockRetriever
 
 
 def _mock_scorer(similarities: list[float]):

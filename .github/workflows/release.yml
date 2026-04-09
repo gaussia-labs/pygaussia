@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, develop]
     paths:
-      - 'src/pygaussia/**'
+      - 'src/gaussia/**'
 
 jobs:
   test:
@@ -25,7 +25,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check
-        run: uv run mypy src/pygaussia
+        run: uv run mypy src/gaussia
 
       - name: Test
         run: uv run pytest -m "not slow"

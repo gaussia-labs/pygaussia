@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pygaussia.schemas.generators import Chunk, GeneratedQuery
+from gaussia.schemas.generators import Chunk, GeneratedQuery
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def sample_chunk() -> Chunk:
     """Fixture providing a single sample chunk."""
     return Chunk(
         content="Gaussia is a performance-measurement library for evaluating AI models. It provides metrics for fairness, toxicity, bias, and conversational quality.",
-        chunk_id="pygaussia_intro",
+        chunk_id="gaussia_intro",
         metadata={"header": "Introduction", "chunking_method": "header"},
     )
 
@@ -171,7 +171,7 @@ def mock_llm_response() -> dict:
 @pytest.fixture
 def sample_conversation_turns():
     """Fixture providing sample conversation turns."""
-    from pygaussia.schemas.generators import ConversationTurn
+    from gaussia.schemas.generators import ConversationTurn
 
     return [
         ConversationTurn(

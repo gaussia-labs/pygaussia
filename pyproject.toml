@@ -135,12 +135,12 @@ Repository = "https://github.com/gaussia-labs/pygaussia.git"
 Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pygaussia"]
+packages = ["src/gaussia"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/pygaussia/**/*.py",
-    "src/pygaussia/artifacts/**/*",
+    "src/gaussia/**/*.py",
+    "src/gaussia/artifacts/**/*",
     "README.md",
     "LICENSE",
 ]
@@ -223,12 +223,12 @@ ignore = [
 "tests/**/*.py" = ["ARG", "PLR2004", "S101", "N802", "N806", "PTH", "DTZ", "B007", "UP038", "SIM117", "E402", "C401"]
 "examples/**/*.py" = ["ARG", "PTH", "B007", "C408", "T201", "PLR2004", "DTZ", "C401"]
 ".claude/**/*.py" = ["ARG", "PTH"]
-"src/pygaussia/metrics/toxicity.py" = ["N802", "N803"]
-"src/pygaussia/llm/prompts.py" = ["N816"]
-"src/pygaussia/generators/context_loaders/*.py" = ["PTH207"]
+"src/gaussia/metrics/toxicity.py" = ["N802", "N803"]
+"src/gaussia/llm/prompts.py" = ["N816"]
+"src/gaussia/generators/context_loaders/*.py" = ["PTH207"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pygaussia"]
+known-first-party = ["gaussia"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -278,7 +278,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=src/pygaussia",
+    "--cov=src/gaussia",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
     "--cov-report=html",
@@ -304,7 +304,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["src/pygaussia"]
+source = ["src/gaussia"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -340,7 +340,7 @@ major_version_zero = true
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["src/pygaussia/__init__.py:__version__"]
+version_variables = ["src/gaussia/__init__.py:__version__"]
 build_command = "uv build"
 commit_message = "chore(release): v{version}"
 tag_format = "v{version}"

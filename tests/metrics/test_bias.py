@@ -2,10 +2,10 @@
 
 import pytest
 
-from pygaussia.core import Guardian
-from pygaussia.metrics.bias import Bias
-from pygaussia.schemas.bias import BiasMetric, GuardianBias, ProtectedAttribute
-from pygaussia.statistical import BayesianMode, FrequentistMode
+from gaussia.core import Guardian
+from gaussia.metrics.bias import Bias
+from gaussia.schemas.bias import BiasMetric, GuardianBias, ProtectedAttribute
+from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_sample_batch
 from tests.fixtures.mock_retriever import MockRetriever
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pygaussia.schemas.explainability import (
+from gaussia.schemas.explainability import (
     AttributionBatchResult,
     AttributionMethod,
     AttributionResult,
@@ -177,7 +177,7 @@ class TestInterpretoResultParser:
 
     def test_parse_object_with_tokens_attributions(self):
         """Test parsing object with tokens and attributions attributes."""
-        from pygaussia.explainability import InterpretoResultParser
+        from gaussia.explainability import InterpretoResultParser
 
         parser = InterpretoResultParser()
 
@@ -192,7 +192,7 @@ class TestInterpretoResultParser:
 
     def test_parse_dict_format(self):
         """Test parsing dict format."""
-        from pygaussia.explainability import InterpretoResultParser
+        from gaussia.explainability import InterpretoResultParser
 
         parser = InterpretoResultParser()
 
@@ -205,7 +205,7 @@ class TestInterpretoResultParser:
 
     def test_parse_empty_result(self):
         """Test parsing returns empty lists for unparseable input."""
-        from pygaussia.explainability import InterpretoResultParser
+        from gaussia.explainability import InterpretoResultParser
 
         parser = InterpretoResultParser()
 
@@ -220,7 +220,7 @@ class TestBaseAttributionMethod:
 
     def test_method_classes_have_required_attributes(self):
         """Test all method classes have required class attributes."""
-        from pygaussia.explainability import (
+        from gaussia.explainability import (
             GradientShap,
             InputXGradient,
             IntegratedGradients,
@@ -272,7 +272,7 @@ class TestAttributionExplainer:
 
     def test_explainer_initialization(self, mock_model, mock_tokenizer):
         """Test AttributionExplainer initialization."""
-        from pygaussia.explainability import AttributionExplainer, Lime
+        from gaussia.explainability import AttributionExplainer, Lime
 
         explainer = AttributionExplainer(
             model=mock_model,
@@ -287,7 +287,7 @@ class TestAttributionExplainer:
 
     def test_explainer_initialization_defaults(self, mock_model, mock_tokenizer):
         """Test AttributionExplainer default parameters."""
-        from pygaussia.explainability import AttributionExplainer, Lime
+        from gaussia.explainability import AttributionExplainer, Lime
 
         explainer = AttributionExplainer(
             model=mock_model,
@@ -298,7 +298,7 @@ class TestAttributionExplainer:
 
     def test_explainer_accepts_custom_parser(self, mock_model, mock_tokenizer):
         """Test AttributionExplainer accepts custom result parser."""
-        from pygaussia.explainability import (
+        from gaussia.explainability import (
             AttributionExplainer,
             AttributionResultParser,
         )
@@ -317,7 +317,7 @@ class TestAttributionExplainer:
 
     def test_build_attribution_result(self, mock_model, mock_tokenizer):
         """Test _build_attribution_result method."""
-        from pygaussia.explainability import AttributionExplainer, Lime
+        from gaussia.explainability import AttributionExplainer, Lime
 
         explainer = AttributionExplainer(
             model=mock_model,
@@ -340,7 +340,7 @@ class TestAttributionExplainer:
 
     def test_build_attribution_result_normalizes_scores(self, mock_model, mock_tokenizer):
         """Test that _build_attribution_result normalizes scores."""
-        from pygaussia.explainability import AttributionExplainer, Lime
+        from gaussia.explainability import AttributionExplainer, Lime
 
         explainer = AttributionExplainer(
             model=mock_model,
@@ -376,7 +376,7 @@ class TestConvenienceFunction:
         """Create a mock tokenizer."""
         return MagicMock()
 
-    @patch("pygaussia.explainability.attributions.Lime")
+    @patch("gaussia.explainability.attributions.Lime")
     def test_compute_attributions(
         self,
         mock_lime_class,
@@ -384,7 +384,7 @@ class TestConvenienceFunction:
         mock_tokenizer,
     ):
         """Test compute_attributions convenience function."""
-        from pygaussia.explainability import compute_attributions
+        from gaussia.explainability import compute_attributions
 
         # Mock the Lime method
         mock_lime_instance = MagicMock()
@@ -421,7 +421,7 @@ class TestExplainMethod:
 
     def test_explain_uses_default_method(self, mock_model, mock_tokenizer):
         """Test explain uses default method when not specified."""
-        from pygaussia.explainability import AttributionExplainer, Saliency
+        from gaussia.explainability import AttributionExplainer, Saliency
 
         explainer = AttributionExplainer(
             model=mock_model,
@@ -434,7 +434,7 @@ class TestExplainMethod:
 
     def test_explain_batch_returns_batch_result(self, mock_model, mock_tokenizer):
         """Test explain_batch returns AttributionBatchResult."""
-        from pygaussia.explainability import AttributionExplainer
+        from gaussia.explainability import AttributionExplainer
 
         # Create a mock parser that returns valid data
         mock_parser = MagicMock()

@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
 
-from pygaussia.core.retriever import Retriever
-from pygaussia.schemas.common import Batch, Dataset
+import pytest
+
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Batch, Dataset
 
 
 def _make_batch(qa_id: str, query: str) -> Batch:

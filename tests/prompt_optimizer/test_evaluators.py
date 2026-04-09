@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import MagicMock
 
-from pygaussia.prompt_optimizer.evaluators import LLMEvaluator
+import pytest
+
+from gaussia.prompt_optimizer.evaluators import LLMEvaluator
 
 
 class TestLLMEvaluatorParseScore:

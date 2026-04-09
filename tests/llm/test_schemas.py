@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from pygaussia.llm.schemas import (
+from gaussia.llm.schemas import (
     BestOfJudgeOutput,
     ContextJudgeOutput,
     ConversationalJudgeOutput,

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pygaussia.statistical import BayesianMode
+from gaussia.statistical import BayesianMode
 
 
 class TestBayesianMode:

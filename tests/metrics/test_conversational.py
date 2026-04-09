@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pygaussia.metrics.conversational import Conversational
-from pygaussia.schemas.conversational import ConversationalMetric, ConversationalScore
-from pygaussia.statistical import BayesianMode, FrequentistMode
+from gaussia.metrics.conversational import Conversational
+from gaussia.schemas.conversational import ConversationalMetric, ConversationalScore
+from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_sample_batch
 from tests.fixtures.mock_retriever import ConversationalDatasetRetriever, MockRetriever
 
@@ -59,7 +59,7 @@ class TestConversationalMetric:
         )
         assert isinstance(conv.statistical_mode, BayesianMode)
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_processing(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -89,7 +89,7 @@ class TestConversationalMetric:
         assert metric.interactions[0].qa_id == "qa_001"
         assert metric.interactions[0].memory == pytest.approx(0.9)
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_session_accumulation(self, mock_judge_class, mock_model):
         """Two separate batch() calls for the same session_id → one metric."""
         mock_judge = MagicMock()
@@ -104,7 +104,7 @@ class TestConversationalMetric:
         assert len(conv.metrics) == 1
         assert conv.metrics[0].n_interactions == 2
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_multiple_sessions(self, mock_judge_class, mock_model):
         """Different session_ids → separate metrics."""
         mock_judge = MagicMock()
@@ -118,7 +118,7 @@ class TestConversationalMetric:
 
         assert len(conv.metrics) == 2
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_with_observation(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -131,7 +131,7 @@ class TestConversationalMetric:
         call_args = mock_judge.check.call_args
         assert "observation" in call_args[0][2]
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_without_observation(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -144,7 +144,7 @@ class TestConversationalMetric:
         call_args = mock_judge.check.call_args
         assert "ground_truth_assistant" in call_args[0][2]
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_batch_raises_on_no_result(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -159,7 +159,7 @@ class TestConversationalMetric:
                 batch=[create_sample_batch(qa_id="qa_001")],
             )
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_run_method(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -170,7 +170,7 @@ class TestConversationalMetric:
         assert len(metrics) > 0
         assert all(isinstance(m, ConversationalMetric) for m in metrics)
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_judge_initialization_params(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -193,7 +193,7 @@ class TestConversationalMetric:
             eos_json_clause="]",
         )
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_language_parameter(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -211,7 +211,7 @@ class TestConversationalMetric:
         call_args = mock_judge.check.call_args
         assert call_args[0][2]["preferred_language"] == "spanish"
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_verbose_mode(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -223,9 +223,9 @@ class TestConversationalMetric:
 
         assert len(conv.metrics) == 1
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_structured_output_mode(self, mock_judge_class, mock_model):
-        from pygaussia.llm.schemas import ConversationalJudgeOutput
+        from gaussia.llm.schemas import ConversationalJudgeOutput
 
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -254,7 +254,7 @@ class TestConversationalMetric:
         assert conv.metrics[0].conversational_memory.mean == pytest.approx(8.5)
         assert conv.metrics[0].conversational_language.mean == pytest.approx(9.0)
 
-    @patch("pygaussia.metrics.conversational.Judge")
+    @patch("gaussia.metrics.conversational.Judge")
     def test_bayesian_mode_produces_ci(self, mock_judge_class, mock_model):
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge

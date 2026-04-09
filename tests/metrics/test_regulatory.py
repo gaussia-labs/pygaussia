@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from pygaussia.connectors import LocalCorpusConnector, RegulatoryDocument
-from pygaussia.core.contradiction_checker import ContradictionChecker, RankedChunk
-from pygaussia.core.document_retriever import DocumentRetriever, RetrievedChunk
-from pygaussia.core.embedder import Embedder
-from pygaussia.core.reranker import Reranker
-from pygaussia.metrics.regulatory import Regulatory
-from pygaussia.schemas.regulatory import RegulatoryChunk, RegulatoryInteraction, RegulatoryMetric
+from gaussia.connectors import LocalCorpusConnector, RegulatoryDocument
+from gaussia.core.contradiction_checker import ContradictionChecker, RankedChunk
+from gaussia.core.document_retriever import DocumentRetriever, RetrievedChunk
+from gaussia.core.embedder import Embedder
+from gaussia.core.reranker import Reranker
+from gaussia.metrics.regulatory import Regulatory
+from gaussia.schemas.regulatory import RegulatoryChunk, RegulatoryInteraction, RegulatoryMetric
 
 
 class MockCorpusConnector:
@@ -135,7 +135,7 @@ class TestDocumentRetriever:
     """Test suite for DocumentRetriever."""
 
     def test_retriever_initialization(self):
-        from pygaussia.core.document_retriever import DocumentRetrieverConfig
+        from gaussia.core.document_retriever import DocumentRetrieverConfig
 
         config = DocumentRetrieverConfig(
             top_k=5,

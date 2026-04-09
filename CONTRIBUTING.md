@@ -1,4 +1,4 @@
-# Contributing to pygaussia
+# Contributing to gaussia
 
 ## How Features Are Built
 
@@ -99,7 +99,7 @@ pygaussia/
 │       ├── data-model.md         # Pydantic schemas (if needed)
 │       ├── research.md           # Technical research (if needed)
 │       └── tasks.md              # Executable task list
-├── src/pygaussia/                # Source code
+├── src/gaussia/                # Source code
 └── tests/                        # Tests (mirrors src/ structure)
 ```
 
@@ -141,7 +141,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Type checking
-uv run mypy src/pygaussia
+uv run mypy src/gaussia
 ```
 
 ## Code Standards
@@ -159,4 +159,4 @@ uv run mypy src/pygaussia
 - Reference the paper if applicable
 - All tests must pass (`uv run pytest`)
 - All linting must pass (`uv run ruff check .`)
-- Type checking must pass (`uv run mypy src/pygaussia`)
+- Type checking must pass (`uv run mypy src/gaussia`)

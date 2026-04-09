@@ -1,10 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
-from pygaussia.prompt_optimizer.evaluators import LLMEvaluator
-from pygaussia.prompt_optimizer.gepa import GEPAOptimizer
-from pygaussia.prompt_optimizer.schemas import OptimizationResult
+import pytest
 
+from gaussia.prompt_optimizer.evaluators import LLMEvaluator
+from gaussia.prompt_optimizer.gepa import GEPAOptimizer
+from gaussia.prompt_optimizer.schemas import OptimizationResult
 from tests.prompt_optimizer.conftest import PromptOptimizerRetriever
 
 
@@ -148,7 +148,7 @@ class TestGEPAOptimize:
         result = optimizer._optimize()
         assert result.initial_score == pytest.approx(1.0)
 
-    @patch("pygaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
+    @patch("gaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
     def test_adopts_better_candidate(self, mock_generate, mock_model, mock_executor):
         mock_generate.return_value = ["improved prompt"]
         call_count = 0
@@ -159,7 +159,7 @@ class TestGEPAOptimize:
             # seed evaluation (4 calls) → low, candidate evaluation (4 calls) → high, next eval (4 calls) → perfect
             if call_count <= 4:
                 return 0.3
-            elif call_count <= 8:
+            if call_count <= 8:
                 return 0.9
             return 1.0
 
@@ -172,7 +172,7 @@ class TestGEPAOptimize:
         assert result.optimized_prompt == "improved prompt"
         assert result.final_score > result.initial_score
 
-    @patch("pygaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
+    @patch("gaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
     def test_stops_when_candidate_does_not_improve(self, mock_generate, mock_model, mock_executor):
         mock_generate.return_value = ["same quality prompt"]
         evaluator = MagicMock(return_value=0.4)
@@ -184,7 +184,7 @@ class TestGEPAOptimize:
         result = optimizer._optimize()
         assert result.iterations_run == 1
 
-    @patch("pygaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
+    @patch("gaussia.prompt_optimizer.gepa.gepa.GEPAOptimizer._generate_candidates")
     def test_history_has_one_entry_per_completed_iteration(self, mock_generate, mock_model, mock_executor):
         mock_generate.return_value = ["candidate"]
         evaluator = MagicMock(return_value=0.4)

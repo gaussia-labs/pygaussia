@@ -2,12 +2,12 @@
 
 import pytest
 
-from pygaussia.generators.strategies import (
+from gaussia.generators.strategies import (
     BaseChunkSelectionStrategy,
     RandomSamplingStrategy,
     SequentialStrategy,
 )
-from pygaussia.schemas.generators import Chunk
+from gaussia.schemas.generators import Chunk
 
 
 class TestSequentialStrategy:

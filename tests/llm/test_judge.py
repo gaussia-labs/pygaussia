@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel, Field
 
-from pygaussia.llm.judge import Judge
-from pygaussia.llm.schemas import ContextJudgeOutput
+from gaussia.llm.judge import Judge
+from gaussia.llm.schemas import ContextJudgeOutput
 
 
 class MockResponseSchema(BaseModel):
@@ -44,7 +44,7 @@ class TestJudge:
         assert judge.bos_json_clause == "<json>"
         assert judge.eos_json_clause == "</json>"
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_regex_mode_valid_json(self, mock_template, mock_model):
         """Test check method in regex mode with valid JSON."""
         mock_response = MagicMock()
@@ -64,7 +64,7 @@ class TestJudge:
         assert thought == ""
         assert json_data == {"score": 0.85, "valid": True}
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_regex_mode_no_json_found(self, mock_template, mock_model):
         """Test check method in regex mode when no JSON found."""
         mock_response = MagicMock()
@@ -84,7 +84,7 @@ class TestJudge:
         assert thought == ""
         assert json_data is None
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_regex_mode_invalid_json(self, mock_template, mock_model):
         """Test check method in regex mode with invalid JSON."""
         mock_response = MagicMock()
@@ -104,7 +104,7 @@ class TestJudge:
         assert thought == ""
         assert json_data is None
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_regex_mode_custom_json_clauses(self, mock_template, mock_model):
         """Test check method with custom JSON clauses."""
         mock_response = MagicMock()
@@ -123,7 +123,7 @@ class TestJudge:
 
         assert json_data == {"value": 42}
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_regex_mode_with_langchain_reasoning(self, mock_template, mock_model):
         """Test check method extracts reasoning from LangChain's additional_kwargs."""
         mock_response = MagicMock()
@@ -143,7 +143,7 @@ class TestJudge:
         assert thought == "Let me analyze this"
         assert json_data == {"result": "done"}
 
-    @patch("pygaussia.llm.judge.create_agent")
+    @patch("gaussia.llm.judge.create_agent")
     def test_check_structured_mode(self, mock_create_agent, mock_model):
         """Test check method in structured output mode."""
         expected_result = ContextJudgeOutput(score=0.9, insight="Good context")
@@ -164,7 +164,7 @@ class TestJudge:
         assert thought == ""
         assert result == expected_result
 
-    @patch("pygaussia.llm.judge.create_agent")
+    @patch("gaussia.llm.judge.create_agent")
     def test_check_structured_mode_with_reasoning(self, mock_create_agent, mock_model):
         """Test check method extracts reasoning from additional_kwargs in structured mode."""
         expected_result = ContextJudgeOutput(score=0.9, insight="Good context")
@@ -185,7 +185,7 @@ class TestJudge:
         assert thought == "First I analyze. Then I evaluate."
         assert result == expected_result
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_structured_mode_fallback_to_regex(self, mock_template, mock_model):
         """Test check falls back to regex when no schema provided in structured mode."""
         mock_response = MagicMock()
@@ -204,7 +204,7 @@ class TestJudge:
 
         assert result == {"score": 0.5}
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_chat_history_accumulates(self, mock_template, mock_model):
         """Test that chat history accumulates across calls."""
         mock_response = MagicMock()
@@ -229,7 +229,7 @@ class TestJudge:
         assert len(judge.chat_history) == 2
         assert judge.chat_history[1] == ("human", "Query 2")
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_json_with_whitespace(self, mock_template, mock_model):
         """Test check handles JSON with extra whitespace."""
         mock_response = MagicMock()
@@ -248,7 +248,7 @@ class TestJudge:
 
         assert json_data == {"key": "value"}
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_nested_json(self, mock_template, mock_model):
         """Test check handles nested JSON."""
         mock_response = MagicMock()
@@ -276,7 +276,7 @@ class TestJudge:
         assert "insight" in schema_str
         assert "```json" in schema_str
 
-    @patch("pygaussia.llm.judge.ChatPromptTemplate")
+    @patch("gaussia.llm.judge.ChatPromptTemplate")
     def test_check_with_schema_in_regex_mode(self, mock_template, mock_model):
         """Test check appends schema to prompt in regex mode."""
         mock_response = MagicMock()

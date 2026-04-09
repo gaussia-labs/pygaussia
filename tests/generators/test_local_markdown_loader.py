@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pygaussia.generators.context_loaders import LocalMarkdownLoader
-from pygaussia.schemas.generators import Chunk
+from gaussia.generators.context_loaders import LocalMarkdownLoader
+from gaussia.schemas.generators import Chunk
 
 
 class TestLocalMarkdownLoader:

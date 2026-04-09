@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pygaussia.metrics.best_of import BestOf
-from pygaussia.schemas.best_of import BestOfMetric
+from gaussia.metrics.best_of import BestOf
+from gaussia.schemas.best_of import BestOfMetric
 from tests.fixtures.mock_retriever import BestOfDatasetRetriever, MockRetriever
 
 
@@ -44,7 +44,7 @@ class TestBestOfMetric:
         assert best_of.eos_json_clause == "</json>"
         assert best_of.criteria == "Quality comparison"
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_process_tournament(self, mock_judge_class, mock_model):
         """Test tournament processing with multiple contestants."""
         mock_judge = MagicMock()
@@ -66,7 +66,7 @@ class TestBestOfMetric:
         assert isinstance(metrics[0], BestOfMetric)
         assert metrics[0].bestof_winner_id is not None
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_run_method(self, mock_judge_class, mock_model):
         """Test the run class method."""
         mock_judge = MagicMock()
@@ -90,10 +90,10 @@ class TestBestOfMetric:
         assert len(metrics) > 0
         assert isinstance(metrics[0], BestOfMetric)
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_judge_initialization_params(self, mock_judge_class, mock_model):
         """Test that Judge is initialized with correct parameters."""
-        from pygaussia.llm.schemas import BestOfJudgeOutput
+        from gaussia.llm.schemas import BestOfJudgeOutput
 
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -125,7 +125,7 @@ class TestBestOfMetric:
             eos_json_clause="]",
         )
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_tie_handling(self, mock_judge_class, mock_model):
         """Test handling of tie results."""
         mock_judge = MagicMock()
@@ -159,10 +159,10 @@ class TestBestOfMetric:
         # First round was a tie, second round picked a winner
         assert metrics[0].bestof_winner_id is not None
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_structured_output_mode(self, mock_judge_class, mock_model):
         """Test BestOf with structured output enabled."""
-        from pygaussia.llm.schemas import BestOfJudgeOutput
+        from gaussia.llm.schemas import BestOfJudgeOutput
 
         mock_judge = MagicMock()
         mock_judge_class.return_value = mock_judge
@@ -186,7 +186,7 @@ class TestBestOfMetric:
         assert len(metrics) == 1
         assert metrics[0].bestof_winner_id == "assistant_a"
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_raises_on_no_result(self, mock_judge_class, mock_model):
         """Test that ValueError is raised when judge returns None."""
         mock_judge = MagicMock()
@@ -198,7 +198,7 @@ class TestBestOfMetric:
         with pytest.raises(ValueError, match="No valid response"):
             best_of._process()
 
-    @patch("pygaussia.metrics.best_of.Judge")
+    @patch("gaussia.metrics.best_of.Judge")
     def test_verbose_mode(self, mock_judge_class, mock_model):
         """Test that verbose mode doesn't break processing."""
         mock_judge = MagicMock()

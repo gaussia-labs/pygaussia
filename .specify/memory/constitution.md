@@ -36,7 +36,7 @@ Each module has a clear responsibility. Cross-module dependencies flow downward:
 - **`llm/`**: LLM integration. Self-contained with its own schemas and prompts.
 - **`extractors/`**: Group extraction. Depend on `core/`.
 - **`generators/`**: Synthetic data generation. Depend on `core/` and `schemas/`.
-- **`utils/`**: Utilities. No dependencies on other pygaussia modules.
+- **`utils/`**: Utilities. No dependencies on other gaussia modules.
 
 ## Quality Tools
 
@@ -44,7 +44,7 @@ Each module has a clear responsibility. Cross-module dependencies flow downward:
 uv run pytest                  # Tests
 uv run ruff check .            # Linter
 uv run ruff format .           # Formatter
-uv run mypy src/pygaussia      # Type checker
+uv run mypy src/gaussia      # Type checker
 ```
 
 ## Python-Specific Rules

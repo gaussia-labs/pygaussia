@@ -20,8 +20,8 @@ pip install gaussia[all]         # Everything
 ## Quick Start
 
 ```python
-from pygaussia import Retriever, Dataset, Batch
-from pygaussia.metrics import Context
+from gaussia import Retriever, Dataset, Batch
+from gaussia.metrics import Context
 
 # 1. Define your data source
 class MyRetriever(Retriever):
@@ -69,7 +69,7 @@ metrics = Context.run(retriever=MyRetriever())
 Pluggable bias detection backends:
 
 ```python
-from pygaussia.guardians import IBMGraniteGuardian, LLamaGuardGuardian
+from gaussia.guardians import IBMGraniteGuardian, LLamaGuardGuardian
 
 metrics = Bias.run(retriever=MyRetriever(), guardian=IBMGraniteGuardian())
 ```
@@ -79,7 +79,7 @@ metrics = Bias.run(retriever=MyRetriever(), guardian=IBMGraniteGuardian())
 Choose between frequentist and Bayesian aggregation:
 
 ```python
-from pygaussia import FrequentistMode, BayesianMode
+from gaussia import FrequentistMode, BayesianMode
 
 metrics = Context.run(retriever=MyRetriever(), statistical_mode=FrequentistMode())
 metrics = Context.run(retriever=MyRetriever(), statistical_mode=BayesianMode())
@@ -90,7 +90,7 @@ metrics = Context.run(retriever=MyRetriever(), statistical_mode=BayesianMode())
 Generate evaluation datasets from documents:
 
 ```python
-from pygaussia.generators import BaseGenerator, create_markdown_loader
+from gaussia.generators import BaseGenerator, create_markdown_loader
 
 loader = create_markdown_loader(path="./docs")
 generator = BaseGenerator(context_loader=loader)
@@ -102,7 +102,7 @@ datasets = generator.generate()
 Token-level attribution analysis:
 
 ```python
-from pygaussia.explainability import AttributionExplainer
+from gaussia.explainability import AttributionExplainer
 
 explainer = AttributionExplainer(method="lime")
 attributions = explainer.explain(text="Your input text")
@@ -113,7 +113,7 @@ attributions = explainer.explain(text="Your input text")
 Optimize prompts using evolutionary and multi-objective strategies:
 
 ```python
-from pygaussia.prompt_optimizer import GEPAOptimizer, MIPROv2Optimizer
+from gaussia.prompt_optimizer import GEPAOptimizer, MIPROv2Optimizer
 ```
 
 ## Documentation
