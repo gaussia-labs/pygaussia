@@ -1,0 +1,90 @@
+[
+  {
+    "session_id": "incidents-notifications",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "El sistema de notificaciones de Nexo soporta tres canales: email, Slack y notificaciones in-app. Las notificaciones de Slack requieren que la integración esté activa en Configuración > Integraciones y que el canal destino esté correctamente configurado. Un error común es que el bot de Nexo no tenga permisos de escritura en el canal seleccionado. Para verificarlo: Slack > Manage Apps > Nexo > Permissions. Las notificaciones en exceso se gestionan desde Configuración > Notificaciones > Frecuencia, donde se puede activar el modo 'Resumen diario' para agruparlas.",
+    "conversation": [
+      {
+        "qa_id": "notif-001",
+        "query": "No recibo notificaciones de Nexo en Slack aunque tengo la integración activada.",
+        "ground_truth_assistant": "**Diagnóstico:** La integración de Slack está activa pero las notificaciones no llegan al canal configurado.\n\n**Causa probable:** El bot de Nexo no tiene permisos de escritura en el canal destino.\n\n**Solución inmediata:**\n1. Abrí Slack > Manage Apps > Nexo > Permissions.\n2. Verificá que el canal destino figure en la lista de canales permitidos.\n3. Si no está, agregalo y guardá los cambios.\n4. Enviá una notificación de prueba desde Configuración > Integraciones > Slack > Probar.\n\n**Seguimiento:** Si el problema persiste, desconectá y reconectá la integración desde Configuración > Integraciones.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "notif-002",
+        "query": "Recibo demasiadas notificaciones y no puedo encontrar cómo reducirlas.",
+        "ground_truth_assistant": "**Diagnóstico:** El volumen de notificaciones supera lo esperado y la configuración actual no las agrupa.\n\n**Causa probable:** El modo de frecuencia está configurado en 'Inmediata' en lugar de 'Resumen diario'.\n\n**Solución inmediata:**\n1. Andá a Configuración > Notificaciones > Frecuencia.\n2. Cambiá el modo a 'Resumen diario' para agrupar todas las notificaciones en un solo email o mensaje.\n3. Guardá los cambios.\n\n**Seguimiento:** Podés personalizar qué tipos de eventos generan notificaciones desde la misma sección.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "incidents-performance",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "La vista de cronograma de Nexo carga todos los datos del proyecto en memoria del cliente. Para proyectos con más de 500 tareas, el tiempo de carga puede superar los 20 segundos en conexiones lentas. La solución recomendada es activar la paginación desde Configuración del proyecto > Vista > Paginación de cronograma (disponible en planes Pro y Business). Las búsquedas globales usan un índice que se actualiza cada 5 minutos, por lo que cambios recientes pueden no aparecer de inmediato.",
+    "conversation": [
+      {
+        "qa_id": "perf-001",
+        "query": "La vista de cronograma tarda más de 30 segundos en cargar. El proyecto tiene 800 tareas.",
+        "ground_truth_assistant": "**Diagnóstico:** La vista de cronograma está cargando las 800 tareas completas en memoria, lo que supera el umbral de rendimiento recomendado.\n\n**Causa probable:** La paginación de cronograma no está activada, forzando la carga completa de todos los datos.\n\n**Solución inmediata:**\n1. Andá a Configuración del proyecto > Vista > Paginación de cronograma.\n2. Activá la opción y configurá el tamaño de página (recomendado: 100 tareas).\n3. Guardá y recargá la vista.\n\n**Seguimiento:** Esta función está disponible en planes Pro y Business. Si estás en plan Free, considerá dividir el proyecto en subproyectos más pequeños.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "perf-002",
+        "query": "Moví una tarea a 'Completado' hace 10 minutos y en la búsqueda global sigue apareciendo como pendiente.",
+        "ground_truth_assistant": "**Diagnóstico:** El estado de la tarea en la búsqueda global no refleja el cambio reciente.\n\n**Causa probable:** El índice de búsqueda global se actualiza cada 5 minutos, por lo que cambios recientes pueden tener un retraso visible.\n\n**Solución inmediata:**\n1. Esperá hasta 5 minutos y volvé a buscar.\n2. Si el problema persiste más de 10 minutos, forzá una reindexación desde Configuración > Búsqueda > Reindexar workspace.\n\n**Seguimiento:** Este comportamiento es esperado. Si necesitás resultados en tiempo real, usá los filtros de la vista de lista en lugar de la búsqueda global.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "incidents-export",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Nexo permite exportar proyectos a PDF y Excel. La exportación a PDF tiene un límite de 200 tareas por archivo — proyectos más grandes se exportan en múltiples archivos. La exportación a Excel tiene un límite de 1000 filas por hoja; si el proyecto supera ese límite, las filas restantes se escriben en hojas adicionales. Un bug conocido en la versión 2.x hace que la exportación a PDF falle silenciosamente si el proyecto contiene imágenes adjuntas con tamaño mayor a 5 MB — el archivo se genera vacío. El workaround es eliminar temporalmente los adjuntos grandes antes de exportar.",
+    "conversation": [
+      {
+        "qa_id": "export-001",
+        "query": "Exporté el proyecto a PDF pero el archivo descargado está vacío.",
+        "ground_truth_assistant": "**Diagnóstico:** La exportación a PDF se completó pero el archivo generado no contiene datos.\n\n**Causa probable:** El proyecto contiene imágenes adjuntas con tamaño mayor a 5 MB, lo que activa un bug conocido en la versión 2.x que genera el PDF vacío.\n\n**Solución inmediata:**\n1. Identificá los adjuntos del proyecto con tamaño mayor a 5 MB desde la vista de archivos.\n2. Eliminá o reemplazá esos adjuntos temporalmente.\n3. Volvé a exportar a PDF.\n4. Una vez obtenido el archivo, podés restaurar los adjuntos originales.\n\n**Seguimiento:** Este bug está registrado y será corregido en la versión 2.1. Como alternativa, usá la exportación a Excel que no tiene esta limitación.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "export-002",
+        "query": "Exporté a Excel un proyecto con 2000 tareas pero el archivo solo tiene 1000 filas.",
+        "ground_truth_assistant": "**Diagnóstico:** La exportación a Excel generó solo la mitad de las tareas esperadas.\n\n**Causa probable:** Excel tiene un límite de 1000 filas por hoja. Las 1000 tareas restantes se escribieron en hojas adicionales del mismo archivo.\n\n**Solución inmediata:**\n1. Abrí el archivo Excel exportado.\n2. Verificá las pestañas inferiores — las tareas 1001 a 2000 deberían estar en 'Hoja 2'.\n\n**Seguimiento:** Si las hojas adicionales no aparecen, el archivo puede estar corrupto. En ese caso, exportá el proyecto en dos partes usando filtros de fecha.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "incidents-permissions",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Los permisos de Nexo se evalúan en tiempo real excepto el token de sesión, que almacena el rol del usuario en el momento del login. Si se cambia el rol de un usuario mientras tiene sesión activa, el cambio no se aplica hasta que cierre sesión y vuelva a ingresar. Un bug conocido en la versión 2.x hace que los proyectos con visibilidad 'Workspace' sean visibles para todos los miembros independientemente de su rol asignado al proyecto. El workaround es cambiar la visibilidad del proyecto a 'Solo miembros' desde Configuración del proyecto > Privacidad.",
+    "conversation": [
+      {
+        "qa_id": "perm-001",
+        "query": "Un usuario con rol Member puede ver un proyecto privado al que no fue asignado.",
+        "ground_truth_assistant": "**Diagnóstico:** Un usuario accede a un proyecto al que no debería tener acceso según su rol.\n\n**Causa probable:** La visibilidad del proyecto está configurada como 'Workspace', lo que permite a todos los miembros verlo independientemente de su asignación — comportamiento de un bug conocido en la versión 2.x.\n\n**Solución inmediata:**\n1. Andá a Configuración del proyecto > Privacidad.\n2. Cambiá la visibilidad de 'Workspace' a 'Solo miembros'.\n3. Guardá los cambios — el acceso se restringirá de inmediato.\n\n**Seguimiento:** Este bug está registrado y será corregido en la versión 2.1.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "perm-002",
+        "query": "Cambié el rol de un usuario de Member a Viewer pero sigue pudiendo editar tareas.",
+        "ground_truth_assistant": "**Diagnóstico:** El cambio de rol no se refleja en la sesión activa del usuario.\n\n**Causa probable:** El token de sesión almacena el rol del momento del login. El nuevo rol de Viewer no se aplica hasta que el usuario cierre sesión y vuelva a ingresar.\n\n**Solución inmediata:**\n1. Pedile al usuario que cierre sesión desde el menú superior derecho > Cerrar sesión.\n2. Al volver a ingresar, el rol Viewer quedará activo y no podrá editar tareas.\n\n**Seguimiento:** Si necesitás que el cambio sea inmediato sin que el usuario cierre sesión, podés revocar su sesión manualmente desde Configuración > Equipo > [usuario] > Cerrar sesiones activas.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  }
+]

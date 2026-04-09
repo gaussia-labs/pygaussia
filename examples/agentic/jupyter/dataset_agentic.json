@@ -1,0 +1,302 @@
+[
+  {
+    "session_id": "agentic_eval_session",
+    "assistant_id": "agent_response_1",
+    "language": "english",
+    "context": "You are a helpful AI assistant with access to a calculator tool.",
+    "conversation": [
+      {
+        "qa_id": "q1_math",
+        "query": "What is 15 + 27?",
+        "ground_truth_assistant": "15 + 27 equals 42.",
+        "assistant": "Using the calculator, I found that 15 + 27 = 42.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "result": 42,
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2_weather",
+        "query": "What's the weather like in San Francisco?",
+        "ground_truth_assistant": "The weather in San Francisco is currently 18°C and partly cloudy.",
+        "assistant": "I checked the weather for San Francisco. It's currently 18°C and partly cloudy.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco", "units": "celsius"},
+              "result": {"temperature": 18, "condition": "partly cloudy"},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco", "units": "celsius"},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3_complex",
+        "query": "If I buy 3 items at $12 each and have a 10% discount, what's the total?",
+        "ground_truth_assistant": "First, 3 items at $12 each is $36. With a 10% discount, you pay $32.40.",
+        "assistant": "Let me calculate that. First, 3 × $12 = $36. Then applying the 10% discount: $36 × 0.9 = $32.40. Your total is $32.40.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "result": 36,
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "result": 32.4,
+              "step": 2
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "step": 2
+            }
+          ],
+          "tool_sequence_matters": true
+        }
+      }
+    ]
+  },
+  {
+    "session_id": "agentic_eval_session2",
+    "assistant_id": "agent_response_2",
+    "language": "english",
+    "context": "You are a helpful AI assistant with access to a calculator tool.",
+    "conversation": [
+      {
+        "qa_id": "q1_math",
+        "query": "What is 15 + 27?",
+        "ground_truth_assistant": "15 + 27 equals 42.",
+        "assistant": "The sum of 15 and 27 is 42.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "result": 42,
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2_weather",
+        "query": "What's the weather like in San Francisco?",
+        "ground_truth_assistant": "The weather in San Francisco is currently 18°C and partly cloudy.",
+        "assistant": "San Francisco weather: 18 degrees Celsius, partly cloudy skies.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco", "units": "celsius"},
+              "result": {"temperature": 18, "condition": "partly cloudy"},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco", "units": "celsius"},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3_complex",
+        "query": "If I buy 3 items at $12 each and have a 10% discount, what's the total?",
+        "ground_truth_assistant": "First, 3 items at $12 each is $36. With a 10% discount, you pay $32.40.",
+        "assistant": "3 items × $12 = $36. After 10% discount: $32.40.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "result": 36,
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "result": 32.4,
+              "step": 2
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "step": 2
+            }
+          ],
+          "tool_sequence_matters": true
+        }
+      }
+    ]
+  },
+  {
+    "session_id": "agentic_eval_session3",
+    "assistant_id": "agent_response_3",
+    "language": "english",
+    "context": "You are a helpful AI assistant with access to a calculator tool.",
+    "conversation": [
+      {
+        "qa_id": "q1_math",
+        "query": "What is 15 + 27?",
+        "ground_truth_assistant": "15 + 27 equals 42.",
+        "assistant": "I calculated 15 + 27 and got 53.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "result": 42,
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "add", "a": 15, "b": 27},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2_weather",
+        "query": "What's the weather like in San Francisco?",
+        "ground_truth_assistant": "The weather in San Francisco is currently 18°C and partly cloudy.",
+        "assistant": "It's partly cloudy in San Francisco with a temperature of 18°C.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco"},
+              "result": {"temperature": 18, "condition": "partly cloudy"},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "weather_api",
+              "parameters": {"location": "San Francisco", "units": "celsius"},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3_complex",
+        "query": "If I buy 3 items at $12 each and have a 10% discount, what's the total?",
+        "ground_truth_assistant": "First, 3 items at $12 each is $36. With a 10% discount, you pay $32.40.",
+        "assistant": "The subtotal is $36 (3 × $12). After applying 10% discount, the final total is $32.40.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "result": 36,
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "result": 32.4,
+              "step": 2
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 3, "b": 12},
+              "step": 1
+            },
+            {
+              "tool_name": "calculator",
+              "parameters": {"operation": "multiply", "a": 36, "b": 0.9},
+              "step": 2
+            }
+          ],
+          "tool_sequence_matters": true
+        }
+      }
+    ]
+  }
+]

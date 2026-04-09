@@ -1,0 +1,90 @@
+[
+  {
+    "session_id": "support-billing",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Nexo ofrece tres planes: Free (hasta 3 proyectos, 5 miembros, sin soporte prioritario), Pro ($15/mes por usuario, proyectos ilimitados, soporte prioritario, 50 GB de almacenamiento) y Business ($25/mes por usuario, todo lo de Pro más auditoría de acceso, SSO y soporte 24/7). Los pagos se procesan el primer día de cada mes. Para actualizar tu plan, ve a Configuración > Facturación > Cambiar plan. Los cambios son inmediatos. Para cancelar, ve a Configuración > Facturación > Cancelar suscripción — tu plan activo continúa hasta el fin del período facturado.",
+    "conversation": [
+      {
+        "qa_id": "billing-001",
+        "query": "¿Cuánto cuesta el plan Pro y qué incluye?",
+        "ground_truth_assistant": "El plan Pro cuesta $15 por usuario por mes. Incluye proyectos ilimitados, soporte prioritario y 50 GB de almacenamiento.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "billing-002",
+        "query": "Si cancelo hoy, ¿pierdo el acceso inmediatamente?",
+        "ground_truth_assistant": "No. Al cancelar, tu plan activo continúa hasta el fin del período facturado actual.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "support-auth",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Para recuperar tu contraseña, ve a la pantalla de inicio de sesión y hacé clic en '¿Olvidaste tu contraseña?'. Ingresá tu email y recibirás un enlace de recuperación válido por 30 minutos. Si no recibís el email, revisá la carpeta de spam o verificá que la dirección esté registrada en Nexo. La verificación en dos pasos (2FA) se activa desde Configuración > Seguridad > Verificación en dos pasos. Nexo es compatible con Google Authenticator y Authy. Una vez activado, el 2FA es obligatorio para todos los inicios de sesión desde dispositivos nuevos.",
+    "conversation": [
+      {
+        "qa_id": "auth-001",
+        "query": "Pedí el email de recuperación de contraseña y no me llegó nada.",
+        "ground_truth_assistant": "Revisá tu carpeta de spam. Si no está ahí, verificá que el email que ingresaste esté registrado en Nexo. El enlace de recuperación es válido por 30 minutos.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "auth-002",
+        "query": "¿Cómo activo la verificación en dos pasos?",
+        "ground_truth_assistant": "Andá a Configuración > Seguridad > Verificación en dos pasos. Nexo es compatible con Google Authenticator y Authy. Una vez activado, se pedirá en cada inicio de sesión desde un dispositivo nuevo.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "support-storage",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Nexo permite adjuntar archivos a tareas y proyectos. Los formatos soportados son: imágenes (JPG, PNG, GIF, WebP), documentos (PDF, DOCX, XLSX, PPTX, TXT), y archivos comprimidos (ZIP, RAR). El tamaño máximo por archivo es de 100 MB en el plan Pro y 250 MB en el plan Business. El plan Free tiene un límite de 10 MB por archivo. Los videos no están soportados como adjuntos — para compartir videos, usá un enlace externo (YouTube, Vimeo, Drive). El almacenamiento total del plan Pro es de 50 GB y del plan Business ilimitado.",
+    "conversation": [
+      {
+        "qa_id": "storage-001",
+        "query": "Intenté subir un archivo de 120 MB y me dio error. Tengo el plan Pro.",
+        "ground_truth_assistant": "El límite por archivo en el plan Pro es de 100 MB. Tu archivo de 120 MB supera ese límite. Para archivos más grandes necesitás el plan Business, que permite hasta 250 MB por archivo.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "storage-002",
+        "query": "¿Puedo adjuntar videos a una tarea?",
+        "ground_truth_assistant": "No, los videos no están soportados como adjuntos. Para compartir un video, usá un enlace externo de YouTube, Vimeo o Drive.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  },
+  {
+    "session_id": "support-permissions",
+    "assistant_id": "support-bot",
+    "language": "spanish",
+    "context": "Nexo tiene tres roles de equipo: Admin, Member y Viewer. El Admin puede agregar y eliminar miembros, cambiar roles, crear y eliminar proyectos, y modificar la configuración del espacio de trabajo. El Member puede crear y editar tareas, comentar, y ver todos los proyectos a los que tiene acceso. El Viewer solo puede ver tareas y comentarios, sin poder editarlos ni crear nuevos. Para cambiar el rol de un miembro, el Admin debe ir a Configuración > Equipo, seleccionar al miembro y elegir el nuevo rol. Los cambios de rol son efectivos de inmediato.",
+    "conversation": [
+      {
+        "qa_id": "permissions-001",
+        "query": "¿Un Viewer puede crear tareas?",
+        "ground_truth_assistant": "No. El rol Viewer solo permite ver tareas y comentarios, sin poder editarlos ni crear nuevos.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      },
+      {
+        "qa_id": "permissions-002",
+        "query": "¿Cómo le cambio el rol a un miembro del equipo?",
+        "ground_truth_assistant": "Andá a Configuración > Equipo, seleccioná al miembro y elegí el nuevo rol. Solo los Admins pueden cambiar roles y el cambio es inmediato.",
+        "assistant": "",
+        "ground_truth_agentic": {}
+      }
+    ]
+  }
+]
