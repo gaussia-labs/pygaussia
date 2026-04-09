@@ -340,24 +340,19 @@ major_version_zero = true
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = []
+version_variables = ["src/pygaussia/__init__.py:__version__"]
 build_command = "uv build"
 commit_message = "chore(release): v{version}"
 tag_format = "v{version}"
 
-[tool.semantic_release.branches.main]
-match = "main"
+[tool.semantic_release.branches.master]
+match = "master"
 prerelease = false
 
 [tool.semantic_release.branches.develop]
 match = "develop"
 prerelease = true
 prerelease_token = "b"
-
-[tool.semantic_release.branches.feature]
-match = "feat/.*"
-prerelease = true
-prerelease_token = "a"
 
 [tool.semantic_release.changelog]
 exclude_commit_patterns = [
