@@ -5,6 +5,7 @@ on:
     branches: [master, develop]
     paths:
       - 'src/gaussia/**'
+      - 'pyproject.toml'
       - '.github/workflows/release.yml'
 
 jobs:
