@@ -143,3 +143,37 @@ Shared fixtures in `tests/conftest.py` provide mock retrievers and datasets for 
 
 - **`Dataset`**: A conversation session with `session_id`, `assistant_id`, `language`, `context`, and `conversation` (list of Batch)
 - **`Batch`**: Single Q&A interaction with `query`, `assistant`, `ground_truth_assistant`, `qa_id`
+
+## Paper-Driven Development
+
+This project follows a paper-first workflow. Metrics and significant features originate from accepted papers in [gaussia-labs/papers](https://github.com/gaussia-labs/papers), then get translated into SDK implementations via Specification-Driven Development.
+
+### Full Lifecycle
+
+```
+Paper (LaTeX)  →  Accepted  →  Implementation Issue  →  SDK Spec  →  Plan  →  Tasks  →  Code
+```
+
+### SDD Workflow
+
+The `speckit` skill (installed via `npx skills add @gaussia-labs/skills`) guides the full workflow. Tell Claude to:
+
+- **Specify**: Create a spec from a paper or feature description
+- **Clarify**: Resolve gaps between paper methodology and SDK implementation
+- **Plan**: Map paper algorithms to Gaussia architecture
+- **Tasks**: Generate executable TDD task list
+- **Implement**: Execute tasks following test-first
+
+### Key Files
+
+- **`.specify/memory/constitution.md`**: SDK-specific principles (pipeline, module boundaries, Python tools)
+- **`specs/[###-feature-name]/`**: Feature specifications, plans, and task lists
+
+### Rules
+
+- Papers are the upstream source of truth for methodology. Specs translate papers into implementable requirements.
+- Every implementation traces back: code → plan → spec → paper.
+- `[NEEDS CLARIFICATION]` markers must be resolved before planning.
+- Tests are written and verified to FAIL before implementation (TDD).
+- Constitution gates (SOLID, Pattern, Simplicity, Pipeline) must pass before implementation.
+- For infrastructure/tooling work without a paper, the workflow starts at Spec directly.
