@@ -1,5 +1,10 @@
 # Gaussia
 
+[![PyPI version](https://img.shields.io/pypi/v/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - License](https://img.shields.io/pypi/l/gaussia)](https://pypi.org/project/gaussia/)
+
 AI evaluation framework for measuring fairness, quality, and safety of AI models and assistants.
 
 ## Installation
