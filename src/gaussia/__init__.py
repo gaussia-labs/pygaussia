@@ -1,8 +1,4 @@
-"""
-Gaussia: AI Evaluation Framework
-
-A modular framework for measuring fairness, quality, and safety of AI assistant responses.
-"""
+"""Gaussia: AI Evaluation Framework."""
 
 from .core import (
     BaseGroupExtractor,
