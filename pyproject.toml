@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gaussia"
-version = "0.1.0"
+version = "1.0.0-b.1"
 description = "Gaussia - AI evaluation framework for measuring fairness, quality, and safety of AI models and assistants"
 readme = "README.md"
 license = {text = "MIT"}
