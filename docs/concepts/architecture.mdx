@@ -1,104 +1,246 @@
 ---
 title: "Architecture"
-description: "Understand the Gaussia evaluation pipeline from data loading to metric results"
+description: "Understanding Gaussia's core architecture and design patterns"
 ---
 
-## Pipeline overview
+# Architecture
 
-Every Gaussia evaluation follows a single pipeline. Data flows through four stages:
+Gaussia follows a simple yet powerful architecture designed for extensibility and ease of use.
 
-```mermaid
-flowchart TD
-    A["Retriever"] -->|"load_dataset()"| B["Dataset[]"]
-    B -->|"_process()"| C["Gaussia Metric"]
-    C -->|"batch()"| D["Per-interaction scoring"]
-    D -->|"on_process_complete()"| E["Aggregated results"]
-```
+## Overview
 
-### 1. Retriever
+<Frame>
+  ```mermaid
+  flowchart LR
+      A["Retriever<br/>Your Data"] --> B["Gaussia<br/>Base"]
+      B --> C["Metrics<br/>Results"]
+      B --> D["Statistical<br/>Modes"]
+  ```
+</Frame>
 
-The `Retriever` is an abstract class you implement to load conversation data from any source — a database, API, CSV file, or in-memory data. It returns a list of `Dataset` objects (or an iterator for streaming).
+## Data Flow
 
-### 2. Dataset
+The core data flow in Gaussia is:
 
-A `Dataset` represents a complete conversation session. It contains metadata (session ID, assistant ID, language, context) and a list of `Batch` objects — each one a single user–assistant interaction.
+1. **Retriever** loads your conversation data (`list[Dataset]`, `Iterator[Dataset]`, or `Iterator[StreamedBatch]`)
+2. **Gaussia** base class iterates through datasets
+3. **Metric** implementations process each conversation batch
+4. **Results** are collected in `self.metrics`
 
-### 3. Metric processing
+<Steps>
+  <Step title="Load Data">
+    `Retriever.load_dataset()` returns `list[Dataset]`
+  </Step>
 
-The `Gaussia` base class orchestrates iteration. It calls your metric's `batch()` method for each conversation, passing the session metadata and the list of interactions.
+  <Step title="Process Datasets">
+    `Gaussia._process()` iterates through datasets
+  </Step>
 
-### 4. Aggregation
+  <Step title="Compute Metrics">
+    `Metric.batch()` processes each conversation
+  </Step>
 
-After all conversations are processed, `on_process_complete()` runs. Metrics that accumulate data across sessions (like Toxicity) use this hook to compute global results.
+  <Step title="Collect Results">
+    Results stored in `self.metrics`
+  </Step>
+</Steps>
 
-## Iteration levels
+### Gaussia Base Class
 
-The pipeline supports three iteration strategies, configured via the `Retriever.iteration_level` property:
-
-| Level | Description | Use case |
-|---|---|---|
-| `FULL_DATASET` | Loads everything into memory, iterates by session | Small to medium datasets |
-| `STREAM_SESSIONS` | Yields one `Dataset` at a time via generator | Large datasets that don't fit in memory |
-| `STREAM_BATCHES` | Yields one `StreamedBatch` at a time | Real-time or event-driven evaluation |
+All metrics inherit from `Gaussia` (`gaussia/core/base.py`):
 
 ```python
-from gaussia.schemas.common import IterationLevel
+from abc import ABC, abstractmethod
+from typing import Type
+from gaussia.core.retriever import Retriever
 
-class StreamingRetriever(Retriever):
+class Gaussia(ABC):
+    def __init__(self, retriever: Type[Retriever], verbose: bool = False, **kwargs):
+        self.retriever = retriever(**kwargs)
+        self.metrics = []
+        self.verbose = verbose
+
+    @abstractmethod
+    def batch(self, session_id: str, context: str, assistant_id: str,
+              batch: list[Batch], language: str | None) -> None:
+        """Process a batch of conversations. Implemented by each metric."""
+        pass
+
+    @classmethod
+    def run(cls, retriever: Type[Retriever], **kwargs) -> list:
+        """One-shot execution: instantiate and process."""
+        instance = cls(retriever, **kwargs)
+        instance._process()
+        return instance.metrics
+```
+
+### Retriever
+
+Abstract base class for data loading:
+
+```python
+from abc import ABC, abstractmethod
+from gaussia.schemas.common import Dataset
+
+class Retriever(ABC):
+    def __init__(self, **kwargs):
+        pass
+
     @property
     def iteration_level(self) -> IterationLevel:
-        return IterationLevel.STREAM_SESSIONS
+        return IterationLevel.FULL_DATASET  # default
 
-    def load_dataset(self):
-        for session in fetch_sessions():
-            yield Dataset(...)
+    @abstractmethod
+    def load_dataset(self) -> list[Dataset] | Iterator[Dataset] | Iterator[StreamedBatch]:
+        """Load and return datasets for evaluation."""
+        pass
 ```
 
-## Class hierarchy
+### Data Structures
 
-```mermaid
-classDiagram
-    class Gaussia {
-        <<abstract>>
-        +run(retriever, **kwargs) list
-        +batch(session_id, context, assistant_id, batch, language)*
-        +on_process_complete()
-        -_process() list
-        -_resolve_weights(batch) dict
-        -_aggregate_scores(scores, batches, weights, mode) tuple
-    }
+**Dataset**: A complete conversation session
 
-    class Retriever {
-        <<abstract>>
-        +load_dataset()* list~Dataset~ | Iterator
-        +iteration_level IterationLevel
-    }
-
-    class StatisticalMode {
-        <<abstract>>
-        +rate_estimation(successes, trials)*
-        +aggregate_metrics(metrics, weights)*
-        +dispersion_metric(values, center)*
-        +distribution_divergence(observed, reference)*
-        +get_result_type()* str
-    }
-
-    Gaussia --> Retriever : uses
-    Gaussia --> StatisticalMode : uses
-    Context --|> Gaussia
-    Conversational --|> Gaussia
-    Toxicity --|> Gaussia
-    Bias --|> Gaussia
-    FrequentistMode --|> StatisticalMode
-    BayesianMode --|> StatisticalMode
+```python
+class Dataset(BaseModel):
+    session_id: str          # Unique session identifier
+    assistant_id: str        # ID of the assistant being evaluated
+    language: str | None     # Language code (e.g., "english")
+    context: str             # System context/instructions
+    conversation: list[Batch] # List of Q&A interactions
 ```
 
-## Weight resolution
+**Batch**: A single Q&A interaction
 
-Gaussia supports per-interaction weighting. When a `Batch` has a `weight` field:
+```python
+class Batch(BaseModel):
+    qa_id: str                          # Unique interaction ID
+    query: str                          # User question
+    assistant: str                      # Assistant response
+    ground_truth_assistant: str | None  # Expected response
+    observation: str | None             # Additional notes
+    weight: float | None                # Importance weight
+    agentic: dict | None                # Tool usage metadata
+    ground_truth_agentic: dict | None   # Expected tool usage
+    logprobs: dict | None               # Log probabilities
+```
 
-- **All weights provided**: Must sum to 1.0, otherwise falls back to equal weights
-- **Some weights provided**: Remaining weight is distributed equally among unweighted interactions
-- **No weights**: All interactions receive equal weight (`1/n`)
+## Metric Architecture
 
-This applies to all metrics that use `_aggregate_scores()`.
+Each metric follows this pattern:
+
+```python
+from gaussia.core.base import Gaussia
+
+class MyMetric(Gaussia):
+    def __init__(self, retriever, verbose=False, **kwargs):
+        super().__init__(retriever, verbose, **kwargs)
+        # Initialize metric-specific components
+
+    def batch(self, session_id, context, assistant_id, batch, language):
+        # Process the batch and compute metrics
+        result = self._compute(batch)
+        self.metrics.append(result)
+```
+
+## Statistical Modes
+
+Gaussia supports two statistical approaches:
+
+<Tabs>
+  <Tab title="Frequentist">
+    Returns point estimates (floats):
+
+    ```python
+    from gaussia.statistical import FrequentistMode
+
+    metrics = Toxicity.run(
+        MyRetriever,
+        statistical_mode=FrequentistMode(),
+    )
+    # Returns: metric.group_profiling.frequentist.DIDT = 0.33
+    ```
+  </Tab>
+
+  <Tab title="Bayesian">
+    Returns full posterior distributions:
+
+    ```python
+    from gaussia.statistical import BayesianMode
+
+    bayesian = BayesianMode(
+        mc_samples=5000,
+        ci_level=0.95,
+    )
+    metrics = Toxicity.run(
+        MyRetriever,
+        statistical_mode=bayesian,
+    )
+    # Returns: metric.group_profiling.bayesian.summary['DIDT']
+    # {mean: 0.17, ci_low: 0.08, ci_high: 0.27}
+    ```
+  </Tab>
+</Tabs>
+
+## Module Structure
+
+```
+gaussia/
+├── core/
+│   ├── base.py           # Gaussia base class
+│   ├── retriever.py      # Retriever abstract class
+│   ├── guardian.py        # Guardian interface (bias detection)
+│   ├── sentiment.py       # Sentiment analyzer interface
+│   ├── loader.py          # Toxicity loader interface
+│   └── extractor.py       # Group extractor interface
+├── metrics/
+│   ├── context.py         # Context metric
+│   ├── conversational.py  # Conversational metric
+│   ├── toxicity.py        # Toxicity metric
+│   ├── bias.py            # Bias metric
+│   ├── humanity.py        # Humanity metric
+│   ├── best_of.py         # BestOf metric
+│   ├── agentic.py         # Agentic metric
+│   ├── vision.py          # Vision metrics
+│   └── regulatory.py      # Regulatory metric
+├── schemas/
+│   ├── common.py          # Dataset, Batch schemas
+│   └── ...                # Metric-specific schemas
+├── statistical/
+│   ├── base.py            # StatisticalMode interface
+│   ├── frequentist.py     # Frequentist implementation
+│   └── bayesian.py        # Bayesian implementation
+├── generators/            # Test dataset generation
+├── llm/                   # LLM integration (Judge)
+├── guardians/             # Guardian implementations
+├── extractors/            # Group extractor implementations
+└── loaders/               # Toxicity lexicon loaders
+```
+
+## Extension Points
+
+Gaussia is designed for extensibility:
+
+| Component | Interface | Purpose |
+|---|---|---|
+| `Retriever` | `load_dataset()` | Load custom data sources |
+| `Guardian` | `is_biased()` | Custom bias detection |
+| `SentimentAnalyzer` | `infer()` | Custom sentiment analysis |
+| `ToxicityLoader` | `load()` | Custom toxicity lexicons |
+| `BaseGroupExtractor` | `detect_one()` | Custom group detection |
+| `StatisticalMode` | Various methods | Custom statistical analysis |
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Retriever" icon="database" href="/concepts/retriever">
+    Create custom retrievers for any data source
+  </Card>
+
+  <Card title="Dataset & Batch" icon="table" href="/concepts/datasets">
+    Understand data structures
+  </Card>
+
+  <Card title="Statistical Modes" icon="calculator" href="/concepts/statistical-modes">
+    Frequentist vs Bayesian approaches
+  </Card>
+</CardGroup>

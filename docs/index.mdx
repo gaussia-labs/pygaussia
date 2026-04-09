@@ -1,53 +1,127 @@
 ---
-title: "Gaussia Python SDK"
-description: "A modular framework for measuring fairness, quality, and safety of AI assistant responses"
+title: "Introduction"
+description: "Gaussia is a comprehensive performance-measurement library for evaluating AI models and assistants"
 ---
 
-## What is gaussia?
+# Welcome to Gaussia
 
-Gaussia is an AI evaluation framework that provides metrics for measuring fairness, toxicity, bias, conversational quality, and more for AI models and assistants. The Python SDK (`gaussia`) is the reference implementation.
+Gaussia is a performance-measurement library developed by Gaussia Labs for evaluating AI models and assistants. It provides comprehensive metrics for fairness, toxicity, bias, conversational quality, and more.
+
+## Why Gaussia?
+
+As AI systems become increasingly integrated into our daily lives, ensuring they behave fairly, safely, and effectively is paramount. Gaussia provides:
+
+* **Fairness Evaluation**: Detect and measure bias across protected attributes
+* **Toxicity Analysis**: Identify toxic language patterns with demographic profiling
+* **Conversational Quality**: Evaluate dialogue using Grice's Maxims
+* **Context Awareness**: Measure how well responses align with provided context
+* **Emotional Intelligence**: Analyze emotional depth and human-likeness
+* **Model Comparison**: Run tournament-style evaluations between multiple assistants
+* **Agent Evaluation**: Measure agent correctness with pass@K metrics
+* **Vision Evaluation**: Detect VLM hallucinations and measure similarity
+* **Regulatory Compliance**: Evaluate responses against regulatory corpus
+
+## Key Features
 
 <CardGroup cols={2}>
-  <Card title="Install" icon="download" href="installation">
-    Install the SDK and optional dependencies for your use case.
+  <Card title="Multiple Metrics" icon="chart-line">
+    Nine specialized metrics for comprehensive AI evaluation
   </Card>
-  <Card title="Quickstart" icon="rocket" href="quickstart">
-    Run your first metric evaluation in under 5 minutes.
+
+  <Card title="Statistical Modes" icon="calculator">
+    Choose between Frequentist and Bayesian statistical approaches
   </Card>
-  <Card title="Architecture" icon="sitemap" href="concepts/architecture">
-    Understand the pipeline: Retriever → Dataset → Metric → Results.
+
+  <Card title="Test Generation" icon="wand-magic-sparkles">
+    Generate synthetic test datasets from your documentation
   </Card>
-  <Card title="Metrics" icon="chart-bar" href="metrics/context">
-    Explore the full suite of evaluation metrics.
+
+  <Card title="Streaming Support" icon="wave-pulse">
+    Process datasets in full, by session, or by individual QA batch
   </Card>
 </CardGroup>
 
-## Available metrics
+## Quick Example
 
-Gaussia provides a comprehensive suite of evaluation metrics across multiple dimensions:
+```python
+from gaussia.metrics.toxicity import Toxicity
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
 
-| Metric | What it measures | Requires LLM |
-|---|---|---|
-| [Context](/metrics/context) | Response alignment with provided context | ✅ |
-| [Conversational](/metrics/conversational) | Dialogue quality via Grice's maxims | ✅ |
-| [Toxicity](/metrics/toxicity) | Toxic language and demographic bias (DIDT) | ❌ |
-| [Bias](/metrics/bias) | Bias across protected attributes | ✅ |
-| [Humanity](/metrics/humanity) | Emotional profile and entropy | ❌ |
-| [BestOf](/metrics/best-of) | Tournament-style assistant comparison | ✅ |
-| [Agentic](/metrics/agentic) | Agent correctness with pass@K | ✅ |
-| [Vision](/metrics/vision) | VLM hallucination and similarity | ❌ |
-| [Regulatory](/metrics/regulatory) | Compliance against regulatory corpus | ❌ |
+# Define a custom retriever to load your data
+class MyRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        return [
+            Dataset(
+                session_id="session-1",
+                assistant_id="my-assistant",
+                language="english",
+                context="",
+                conversation=[
+                    Batch(
+                        qa_id="q1",
+                        query="Tell me about AI safety",
+                        assistant="AI safety is important...",
+                    )
+                ]
+            )
+        ]
 
-## Key features
+# Run the toxicity metric
+results = Toxicity.run(
+    MyRetriever,
+    group_prototypes={
+        "gender": ["women", "men", "female", "male"],
+        "race": ["Asian", "African", "European"],
+    },
+    verbose=True,
+)
 
-<Columns cols={3}>
-  <Card title="Pluggable statistics" icon="chart-line">
-    Switch between frequentist point estimates and Bayesian credible intervals.
+# Analyze results
+for metric in results:
+    print(f"DIDT Score: {metric.group_profiling.frequentist.DIDT}")
+```
+
+## Architecture Overview
+
+Gaussia follows a simple yet powerful architecture:
+
+<Steps>
+  <Step title="Load Data">
+    `Retriever.load_dataset()` returns `list[Dataset]`
+  </Step>
+
+  <Step title="Process">
+    `Gaussia._process()` iterates datasets
+  </Step>
+
+  <Step title="Evaluate">
+    `Metric.batch()` processes each conversation
+  </Step>
+
+  <Step title="Results">
+    Collected in `self.metrics`
+  </Step>
+</Steps>
+
+All metrics inherit from the `Gaussia` base class and implement the `batch()` method to process conversation batches. Users provide data through custom `Retriever` implementations.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="quickstart">
+    Get started with Gaussia in minutes
   </Card>
-  <Card title="Streaming support" icon="wave-pulse">
-    Process datasets in full, by session, or by individual QA batch.
+
+  <Card title="Installation" icon="download" href="installation">
+    Install Gaussia and dependencies
   </Card>
-  <Card title="LLM-as-a-Judge" icon="gavel">
-    Use any LangChain-compatible model as an evaluation judge.
+
+  <Card title="Core Concepts" icon="lightbulb" href="concepts/architecture">
+    Learn the fundamental concepts
   </Card>
-</Columns>
+
+  <Card title="Metrics" icon="chart-pie" href="metrics/overview">
+    Explore available metrics
+  </Card>
+</CardGroup>

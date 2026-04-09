@@ -1,127 +1,223 @@
 ---
 title: "Quickstart"
-description: "Run your first AI evaluation metric in under 5 minutes"
+description: "Get started with Gaussia in minutes"
 ---
 
-This guide walks you through evaluating an AI assistant's context awareness using the **Context** metric. By the end, you'll understand the three-step pattern that applies to every Gaussia metric.
+# Quickstart
 
-## Step 1: Define your data retriever
+This guide will help you get started with Gaussia and run your first AI evaluation.
 
-Every evaluation starts with a `Retriever` — a class that loads your conversation data into Gaussia's `Dataset` format.
+## Prerequisites
+
+* Python 3.11 or higher
+* [uv](https://docs.astral.sh/uv/) (recommended) or pip
+
+## Installation
+
+<CodeGroup>
+  ```bash uv (Recommended)
+  # Install core package
+  uv add gaussia
+
+  # Install with specific metric dependencies
+  uv add "gaussia[toxicity]"
+  uv add langchain-openai
+  ```
+
+  ```bash pip
+  # Install core package
+  pip install gaussia
+
+  # Install with all dependencies
+  pip install "gaussia[all]"
+  ```
+</CodeGroup>
+
+## Step 1: Create a Retriever
+
+The first step is to create a retriever that loads your conversation data. A retriever is a class that inherits from `Retriever` and implements the `load_dataset()` method.
 
 ```python
 from gaussia.core.retriever import Retriever
 from gaussia.schemas.common import Dataset, Batch
 
-
 class MyRetriever(Retriever):
+    """Custom retriever to load your AI conversation data."""
+
     def load_dataset(self) -> list[Dataset]:
         return [
             Dataset(
-                session_id="session-001",
-                assistant_id="my-assistant",
+                session_id="evaluation-session-1",
+                assistant_id="my-assistant-v1",
                 language="english",
-                context="Gaussia is an AI evaluation framework created by Gaussia Labs.",
+                context="You are a helpful customer service assistant.",
                 conversation=[
                     Batch(
                         qa_id="q1",
-                        query="What is Gaussia?",
-                        assistant="Gaussia is an AI evaluation framework.",
-                        ground_truth_assistant="Gaussia is an AI evaluation framework created by Gaussia Labs.",
+                        query="What are your return policies?",
+                        assistant="Our return policy allows returns within 30 days...",
+                        ground_truth_assistant="Returns are accepted within 30 days with receipt.",
                     ),
                     Batch(
                         qa_id="q2",
-                        query="Who created it?",
-                        assistant="It was created by Gaussia Labs.",
-                        ground_truth_assistant="Gaussia Labs created the framework.",
+                        query="How can I track my order?",
+                        assistant="You can track your order by logging into your account...",
+                        ground_truth_assistant="Log into your account and visit Order History.",
                     ),
-                ],
+                ]
             )
         ]
 ```
 
-## Step 2: Run a metric
+## Step 2: Run a Metric
 
-Every metric follows the same pattern: `Metric.run(RetrieverClass, **config)`.
+Once you have a retriever, you can run any metric. Here's an example using the Context metric:
 
 ```python
-from langchain_openai import ChatOpenAI
 from gaussia.metrics.context import Context
+from langchain_openai import ChatOpenAI
 
-# Use any LangChain-compatible model
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# Initialize a judge model (any LangChain-compatible model)
+judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
 
-# Run the evaluation
-results = Context.run(MyRetriever, model=model)
-```
-
-## Step 3: Inspect results
-
-Each metric returns a list of result objects with structured data:
-
-```python
-for result in results:
-    print(f"Session: {result.session_id}")
-    print(f"Context awareness: {result.context_awareness:.2f}")
-    print(f"Interactions evaluated: {result.n_interactions}")
-
-    for interaction in result.interactions:
-        print(f"  {interaction.qa_id}: {interaction.context_awareness:.2f}")
-```
-
-```text Output
-Session: session-001
-Context awareness: 0.92
-Interactions evaluated: 2
-  q1: 0.90
-  q2: 0.95
-```
-
-## The pattern
-
-Every Gaussia metric follows this same three-step pattern:
-
-```mermaid
-flowchart LR
-    A["1. Retriever<br/>Load your data"] --> B["2. Metric.run()<br/>Run evaluation"]
-    B --> C["3. Results<br/>Inspect metrics"]
-```
-
-<Tip>
-  The `Metric.run()` class method is a convenience shortcut. Under the hood, it instantiates the metric with the retriever, calls `_process()` to iterate through the dataset, and returns the collected metrics.
-</Tip>
-
-## Using statistical modes
-
-By default, metrics use `FrequentistMode` (weighted mean). Switch to `BayesianMode` for credible intervals:
-
-```python
-from gaussia.statistical import BayesianMode
-
-results = Context.run(
+# Run the Context metric
+metrics = Context.run(
     MyRetriever,
-    model=model,
-    statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+    model=judge_model,
+    use_structured_output=True,
+    verbose=True,
 )
 
-for result in results:
-    print(f"Context awareness: {result.context_awareness:.2f}")
-    print(f"95% CI: [{result.context_awareness_ci_low:.2f}, {result.context_awareness_ci_high:.2f}]")
+# Analyze results
+for metric in metrics:
+    print(f"Session: {metric.session_id}  ({metric.n_interactions} interactions)")
+    print(f"  Context awareness: {metric.context_awareness:.2f}")
+
+    for interaction in metric.interactions:
+        status = "✅" if interaction.context_awareness >= 0.8 else "❌"
+        print(f"  {status} [{interaction.qa_id}] {interaction.context_awareness:.2f}")
 ```
 
-## Next steps
+## Step 3: Analyze Results
+
+Each metric returns a list of results. The structure depends on the metric type:
+
+<Tabs>
+  <Tab title="Context">
+    ```python
+    for metric in metrics:
+        print(f"Session: {metric.session_id}")
+        print(f"Score: {metric.context_awareness}")  # 0-1 scale
+
+        for interaction in metric.interactions:
+            print(f"  [{interaction.qa_id}] {interaction.context_awareness:.2f}")
+    ```
+  </Tab>
+
+  <Tab title="Toxicity">
+    ```python
+    for metric in metrics:
+        print(f"Session: {metric.session_id}")
+        print(f"Cluster Profiling: {metric.cluster_profiling}")
+        if metric.group_profiling:
+            gp = metric.group_profiling.frequentist
+            print(f"DIDT Score: {gp.DIDT}")
+    ```
+  </Tab>
+
+  <Tab title="Conversational">
+    ```python
+    for metric in metrics:
+        print(f"Session: {metric.session_id}")
+        print(f"Quality Maxim: {metric.conversational_quality_maxim.mean:.1f}/10")
+        print(f"Sensibleness:  {metric.conversational_sensibleness.mean:.1f}/10")
+    ```
+  </Tab>
+</Tabs>
+
+## Complete Example
+
+Here's a complete example that evaluates an AI assistant using multiple metrics:
+
+```python
+import os
+from gaussia.metrics.context import Context
+from gaussia.metrics.conversational import Conversational
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
+from langchain_openai import ChatOpenAI
+
+# 1. Define your retriever
+class CustomerServiceRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        return [
+            Dataset(
+                session_id="cs-eval-001",
+                assistant_id="customer-service-bot",
+                language="english",
+                context="You are a helpful customer service assistant for an e-commerce store.",
+                conversation=[
+                    Batch(
+                        qa_id="q1",
+                        query="I want to return a product I bought last week.",
+                        assistant="I'd be happy to help with your return! You can return items within 30 days of purchase. Please visit our Returns Portal with your order number ready.",
+                        ground_truth_assistant="Items can be returned within 30 days. Use the Returns Portal.",
+                    ),
+                    Batch(
+                        qa_id="q2",
+                        query="What's your phone number for support?",
+                        assistant="You can reach our support team at 1-800-EXAMPLE. We're available Monday through Friday, 9 AM to 5 PM EST.",
+                        ground_truth_assistant="Support: 1-800-EXAMPLE, Mon-Fri 9-5 EST.",
+                    ),
+                ]
+            )
+        ]
+
+# 2. Initialize the judge model
+judge = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"), temperature=0.0)
+
+# 3. Run Context metric
+print("=== Context Evaluation ===")
+context_results = Context.run(
+    CustomerServiceRetriever,
+    model=judge,
+    use_structured_output=True,
+    verbose=True,
+)
+
+for m in context_results:
+    print(f"Context Awareness: {m.context_awareness:.2f}")
+
+# 4. Run Conversational metric
+print("\n=== Conversational Evaluation ===")
+conv_results = Conversational.run(
+    CustomerServiceRetriever,
+    model=judge,
+    use_structured_output=True,
+    verbose=True,
+)
+
+for m in conv_results:
+    print(f"Quality:      {m.conversational_quality_maxim.mean:.1f}/10")
+    print(f"Sensibleness: {m.conversational_sensibleness.mean:.1f}/10")
+```
+
+## What's Next?
 
 <CardGroup cols={2}>
-  <Card title="Architecture" icon="sitemap" href="concepts/architecture">
-    Understand the full evaluation pipeline.
+  <Card title="Metrics Overview" icon="chart-pie" href="metrics/overview">
+    Learn about all available metrics
   </Card>
-  <Card title="Custom retrievers" icon="database" href="concepts/retriever">
-    Connect to your own data sources.
+
+  <Card title="Generators" icon="wand-magic-sparkles" href="advanced/generators">
+    Generate synthetic test datasets
   </Card>
-  <Card title="All metrics" icon="chart-bar" href="metrics/context">
-    Explore every available metric.
+
+  <Card title="Core Concepts" icon="lightbulb" href="concepts/architecture">
+    Understand the architecture
   </Card>
-  <Card title="Statistical modes" icon="chart-line" href="concepts/statistical-modes">
-    Choose between frequentist and Bayesian analysis.
+
+  <Card title="Statistical Modes" icon="calculator" href="concepts/statistical-modes">
+    Frequentist vs Bayesian approaches
   </Card>
 </CardGroup>

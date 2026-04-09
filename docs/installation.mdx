@@ -1,91 +1,171 @@
 ---
 title: "Installation"
-description: "Install the Gaussia Python SDK and configure optional metric dependencies"
+description: "Install Gaussia and its dependencies"
 ---
+
+# Installation
+
+Gaussia uses a modular dependency system, allowing you to install only the components you need.
 
 ## Requirements
 
-- Python **≥ 3.11**
-- Package manager: `pip`, `uv`, or `poetry`
+* Python 3.11 or higher
+* [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-## Base installation
-
-The base package includes the core framework, schemas, and metrics that only require an LLM (Context, Conversational, BestOf):
+## Basic Installation
 
 <CodeGroup>
+  ```bash uv (Recommended)
+  uv add gaussia
+  ```
 
-```bash pip
-pip install gaussia
-```
+  ```bash pip
+  pip install gaussia
+  ```
 
-```bash uv
-uv add gaussia
-```
-
-```bash poetry
-poetry add gaussia
-```
-
+  ```bash poetry
+  poetry add gaussia
+  ```
 </CodeGroup>
 
-## Optional extras
+## Optional Dependencies
 
-Some metrics require additional dependencies for ML models, embeddings, or statistical analysis. Install only what you need:
+Gaussia provides optional dependency groups for each metric and feature:
 
-<CodeGroup>
+### Metrics
 
-```bash Toxicity
-pip install "gaussia[toxicity]"
-```
-
-```bash Bias
-pip install "gaussia[bias]"
-```
-
-```bash Vision
-pip install "gaussia[vision]"
-```
-
-```bash Humanity
-pip install "gaussia[humanity]"
-```
-
-```bash Regulatory
-pip install "gaussia[regulatory]"
-```
-
-```bash Explainability
-pip install "gaussia[explainability]"
-```
-
-```bash All metrics
-pip install "gaussia[all]"
-```
-
-</CodeGroup>
-
-### What each extra includes
-
-| Extra | Additional dependencies | Used by |
+| Extra | Description | Dependencies |
 |---|---|---|
-| `toxicity` | nltk, numpy, pandas, scikit-learn, sentence-transformers, hdbscan, umap-learn, torch | Toxicity metric |
-| `bias` | torch | Bias metric |
-| `vision` | numpy, sentence-transformers, torch | VisionSimilarity, VisionHallucination |
-| `humanity` | numpy, pandas | Humanity metric |
-| `regulatory` | torch, accelerate | Regulatory metric |
-| `explainability` | interpreto, torch, transformers | Token attribution analysis |
-| `generators` | *(no extra deps)* | Synthetic dataset generation |
-| `prompt-optimizer` | optuna | Prompt optimization |
-| `metrics` | All metric extras combined | All metrics |
-| `all` | Everything above | Full installation |
+| `toxicity` | Toxicity metric with clustering | sentence-transformers, hdbscan, umap-learn, nltk, numpy, pandas |
+| `bias` | Bias metric with guardian models | torch |
+| `vision` | Vision similarity and hallucination | numpy, sentence-transformers, torch |
+| `humanity` | Humanity metric with NRC lexicon | numpy, pandas |
+| `regulatory` | Regulatory compliance metric | torch, accelerate |
 
-## Verify installation
+### Features
+
+| Extra | Description | Dependencies |
+|---|---|---|
+| `generators` | Synthetic dataset generation | langchain-core |
+| `explainability` | Token attribution analysis | interpreto, torch, transformers |
+| `prompt-optimizer` | Prompt optimization | optuna |
+
+### Combined Extras
+
+| Extra | Description |
+|---|---|
+| `metrics` | All metric extras combined |
+| `all` | All metrics and features |
+
+## Installation Examples
+
+<CodeGroup>
+  ```bash Single Metric
+  # Install with toxicity metric support
+  uv add "gaussia[toxicity]"
+  ```
+
+  ```bash Multiple Metrics
+  # Install multiple metrics
+  uv add "gaussia[toxicity,bias,vision]"
+  ```
+
+  ```bash Full Installation
+  # Install everything
+  uv add "gaussia[all]"
+  ```
+</CodeGroup>
+
+## LLM Provider Dependencies
+
+Several metrics require LangChain-compatible chat models. Install your preferred provider:
+
+<CodeGroup>
+  ```bash OpenAI
+  uv add langchain-openai
+  ```
+
+  ```bash Groq (Fast & Free Tier)
+  uv add langchain-groq
+  ```
+
+  ```bash Google Gemini
+  uv add langchain-google-genai
+  ```
+
+  ```bash Anthropic
+  uv add langchain-anthropic
+  ```
+
+  ```bash Ollama (Local)
+  uv add langchain-ollama
+  ```
+</CodeGroup>
+
+## Verifying Installation
 
 ```python
 import gaussia
-print(gaussia.__version__)
+
+# Check version
+print(f"Gaussia version: {gaussia.__version__}")
+
+# Verify imports
+from gaussia.metrics.toxicity import Toxicity
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
+
+print("Installation successful!")
 ```
 
-<Tip>
-  For development, we recommend using [uv](https://docs.astral.sh/uv/) for fast dependency resolution: `uv add "gaussia[all]"`.
-</Tip>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ImportError: No module named 'sentence_transformers'">
+    Install the toxicity extras:
+
+    ```bash
+    uv add "gaussia[toxicity]"
+    ```
+  </Accordion>
+
+  <Accordion title="ImportError: No module named 'langchain_openai'">
+    Install your preferred LLM provider:
+
+    ```bash
+    uv add langchain-openai
+    ```
+  </Accordion>
+
+  <Accordion title="CUDA/GPU issues with sentence-transformers">
+    For CPU-only installation:
+
+    ```bash
+    uv add torch --index-url https://download.pytorch.org/whl/cpu
+    uv add "gaussia[toxicity]"
+    ```
+  </Accordion>
+
+  <Accordion title="Python version incompatibility">
+    Ensure you're using Python 3.11+:
+
+    ```bash
+    python --version
+    # If needed, use pyenv to install a compatible version
+    pyenv install 3.11.0
+    pyenv local 3.11.0
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="quickstart">
+    Run your first evaluation
+  </Card>
+
+  <Card title="Core Concepts" icon="lightbulb" href="concepts/architecture">
+    Understand the architecture
+  </Card>
+</CardGroup>

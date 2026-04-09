@@ -1,65 +1,332 @@
 ---
 title: "Conversational"
-description: "Evaluate dialogue quality across seven dimensions using Grice's maxims"
+description: "Evaluate dialogue quality using Grice's Maxims with session-level aggregation and pluggable statistical modes"
 ---
+
+# Conversational Metric
+
+The Conversational metric evaluates dialogue quality using **Grice's Maxims** — principles of cooperative conversation that define effective communication. It accumulates scores across all interactions in a session and emits one session-level result, with optional uncertainty quantification via Bayesian mode.
 
 ## Overview
 
-The **Conversational** metric evaluates dialogue quality across seven dimensions grounded in Grice's Cooperative Principle. An LLM judge scores each interaction, and scores are aggregated per session.
+The metric assesses seven dimensions:
 
-## Dimensions
+| Dimension | Description | Scale |
+|---|---|---|
+| **Quality Maxim** | Truthfulness and evidence-based responses | 0-10 |
+| **Quantity Maxim** | Appropriate amount of information | 0-10 |
+| **Relation Maxim** | Relevance to the conversation | 0-10 |
+| **Manner Maxim** | Clarity and organization | 0-10 |
+| **Memory** | Ability to recall previous context | 0-10 |
+| **Language** | Appropriateness of language style | 0-10 |
+| **Sensibleness** | Overall coherence and logic | 0-10 |
 
-| Dimension | What it measures |
-|---|---|
-| `memory` | Consistent reference to prior conversation context |
-| `language` | Appropriate use of the preferred language |
-| `quality_maxim` | Truthfulness and evidence-backed responses |
-| `quantity_maxim` | Information sufficiency — not too little, not too much |
-| `relation_maxim` | Relevance to the user's query |
-| `manner_maxim` | Clarity, structure, and lack of ambiguity |
-| `sensibleness` | Overall logical coherence of the response |
+Each dimension produces a session-level `ConversationalScore` with a `mean` and optional credible interval (`ci_low`, `ci_high`) in Bayesian mode. The `interactions` list preserves per-QA scores for debugging.
 
-## Usage
+## Installation
 
-```python
-from langchain_openai import ChatOpenAI
-from gaussia.metrics.conversational import Conversational
-
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-results = Conversational.run(MyRetriever, model=model)
-
-for r in results:
-    print(f"Quality maxim: {r.conversational_quality_maxim.mean:.2f}")
-    print(f"Sensibleness:  {r.conversational_sensibleness.mean:.2f}")
+```bash
+uv add gaussia
+uv add langchain-openai  # Or your preferred LLM provider
 ```
 
-## Parameters
+## Basic Usage
+
+<CodeGroup>
+  ```python Frequentist (default)
+  from gaussia.metrics.conversational import Conversational
+  from langchain_openai import ChatOpenAI
+  from your_retriever import MyRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Conversational.run(MyRetriever, model=judge_model, verbose=True)
+
+  for metric in metrics:
+      print(f"Session: {metric.session_id}  ({metric.n_interactions} interactions)")
+      print(f"  Quality:      {metric.conversational_quality_maxim.mean:.1f}/10")
+      print(f"  Memory:       {metric.conversational_memory.mean:.1f}/10")
+      print(f"  Sensibleness: {metric.conversational_sensibleness.mean:.1f}/10")
+
+      for interaction in metric.interactions:
+          print(f"  [{interaction.qa_id}] quality={interaction.quality_maxim:.1f} memory={interaction.memory:.1f}")
+  ```
+
+  ```python Bayesian
+  from gaussia.metrics.conversational import Conversational
+  from gaussia.statistical import BayesianMode
+  from langchain_openai import ChatOpenAI
+  from your_retriever import MyRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Conversational.run(
+      MyRetriever,
+      model=judge_model,
+      statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+      verbose=True,
+  )
+
+  for metric in metrics:
+      q = metric.conversational_quality_maxim
+      print(f"Quality: {q.mean:.1f}  [{q.ci_low:.1f}, {q.ci_high:.1f}]")
+  ```
+</CodeGroup>
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `retriever` | `Type[Retriever]` | Data source class |
+| `model` | `BaseChatModel` | LangChain-compatible judge model |
+
+### Optional Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `retriever` | `type[Retriever]` | *required* | Retriever class |
-| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
 | `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
-| `use_structured_output` | `bool` | `False` | Use structured output |
-| `strict` | `bool` | `True` | Strict schema validation |
+| `use_structured_output` | `bool` | `False` | Use LangChain structured output |
+| `bos_json_clause` | `str` | `` ```json `` | JSON block start marker |
+| `eos_json_clause` | `str` | `` ``` `` | JSON block end marker |
+| `verbose` | `bool` | `False` | Enable verbose logging |
 
-## Output schema
+## Statistical Modes
+
+<Tabs>
+  <Tab title="Frequentist">
+    Returns a weighted mean per dimension. `ci_low` and `ci_high` are `None`.
+
+    ```python
+    metric.conversational_quality_maxim.mean   # 7.8
+    metric.conversational_quality_maxim.ci_low  # None
+    ```
+  </Tab>
+
+  <Tab title="Bayesian">
+    Bootstraps the weighted mean across interactions to produce a credible interval — useful when you have few interactions and want to express uncertainty honestly.
+
+    ```python
+    metric.conversational_quality_maxim.mean   # 7.8
+    metric.conversational_quality_maxim.ci_low  # 6.2
+    metric.conversational_quality_maxim.ci_high # 9.1
+    ```
+  </Tab>
+</Tabs>
+
+## Interaction Weights
+
+Each `Batch` can carry an optional `weight` to control its contribution to the session aggregate:
+
+```python
+Batch(qa_id="q1", query="...", assistant="...", ground_truth_assistant="...", weight=0.5),
+Batch(qa_id="q2", query="...", assistant="...", ground_truth_assistant="...", weight=0.3),
+Batch(qa_id="q3", query="...", assistant="...", ground_truth_assistant="...", weight=0.2),
+```
+
+| Case | Behavior |
+|---|---|
+| All weights provided, sum = 1.0 | Used as-is |
+| All weights provided, sum ≠ 1.0 | Warning emitted, equal weights applied |
+| Some weights provided | Remaining weight split equally among unweighted interactions |
+| No weights provided | Equal weights (1/n each) |
+
+## Output Schema
 
 ### ConversationalMetric
 
-Each dimension is returned as a `ConversationalScore` with `mean`, `ci_low`, and `ci_high`:
+```python
+class ConversationalMetric(BaseMetric):
+    session_id: str
+    assistant_id: str
+    n_interactions: int
+    conversational_memory: ConversationalScore
+    conversational_language: ConversationalScore
+    conversational_quality_maxim: ConversationalScore
+    conversational_quantity_maxim: ConversationalScore
+    conversational_relation_maxim: ConversationalScore
+    conversational_manner_maxim: ConversationalScore
+    conversational_sensibleness: ConversationalScore
+    interactions: list[ConversationalInteraction]
+```
 
-| Field | Type |
+### ConversationalScore
+
+```python
+class ConversationalScore(BaseModel):
+    mean: float           # Session-level weighted mean
+    ci_low: float | None  # Lower credible bound — Bayesian mode only
+    ci_high: float | None # Upper credible bound — Bayesian mode only
+```
+
+### ConversationalInteraction
+
+```python
+class ConversationalInteraction(BaseModel):
+    qa_id: str
+    memory: float
+    language: float
+    quality_maxim: float
+    quantity_maxim: float
+    relation_maxim: float
+    manner_maxim: float
+    sensibleness: float
+```
+
+## Grice's Maxims Explained
+
+### Quality Maxim
+**Be truthful**: Don't say what you believe to be false or lack evidence for.
+
+```
+High (8-10): "The capital of France is Paris." (Verifiable fact)
+Low  (0-4):  "France doesn't have a capital." (False)
+```
+
+### Quantity Maxim
+**Be informative**: Provide enough information, but not more than required.
+
+```
+High (8-10): "Paris is the capital of France."
+Low  (0-4):  "Paris." (Too brief) or a 3-paragraph essay (Too much)
+```
+
+### Relation Maxim
+**Be relevant**: Make your contribution relevant to the conversation.
+
+```
+High (8-10): Q: "What's your return policy?" A: "Returns accepted within 30 days."
+Low  (0-4):  Q: "What's your return policy?" A: "Our company was founded in 1998."
+```
+
+### Manner Maxim
+**Be clear**: Avoid obscurity and ambiguity.
+
+```
+High (8-10): "You can return items within 30 days at any store location."
+Low  (0-4):  "So basically, if you want to, you could possibly maybe return the thing..."
+```
+
+## Score Interpretation
+
+| Score Range | Interpretation |
 |---|---|
-| `session_id` | `str` |
-| `assistant_id` | `str` |
-| `n_interactions` | `int` |
-| `conversational_memory` | `ConversationalScore` |
-| `conversational_language` | `ConversationalScore` |
-| `conversational_quality_maxim` | `ConversationalScore` |
-| `conversational_quantity_maxim` | `ConversationalScore` |
-| `conversational_relation_maxim` | `ConversationalScore` |
-| `conversational_manner_maxim` | `ConversationalScore` |
-| `conversational_sensibleness` | `ConversationalScore` |
-| `interactions` | `list[ConversationalInteraction]` |
+| 8-10 | Excellent — high-quality dialogue |
+| 6-8 | Good — meets expectations with minor issues |
+| 4-6 | Moderate — noticeable quality issues |
+| 2-4 | Poor — significant problems |
+| 0-2 | Very poor — fails basic criteria |
+
+## Complete Example
+
+```python
+import os
+from gaussia.metrics.conversational import Conversational
+from gaussia.statistical import BayesianMode
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
+from langchain_openai import ChatOpenAI
+
+class ConversationalRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        return [
+            Dataset(
+                session_id="conv-eval-001",
+                assistant_id="support-bot",
+                language="english",
+                context="You are a helpful, professional customer service assistant.",
+                conversation=[
+                    Batch(
+                        qa_id="q1",
+                        query="Hi, I need help with my order.",
+                        assistant="Hello! I'd be happy to help. Could you share your order number?",
+                        ground_truth_assistant="Greet and ask for order number.",
+                        observation="Opening interaction - should be professional and helpful",
+                    ),
+                    Batch(
+                        qa_id="q2",
+                        query="It's ORDER-12345. I haven't received it yet.",
+                        assistant="Thank you! ORDER-12345 was shipped Monday, expected Friday.",
+                        ground_truth_assistant="Find order, provide shipping status and ETA.",
+                    ),
+                    Batch(
+                        qa_id="q3",
+                        query="Can you change the delivery address?",
+                        assistant="For security, please confirm your email address first.",
+                        ground_truth_assistant="Offer to help, verify identity first.",
+                    ),
+                ]
+            )
+        ]
+
+judge = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"), temperature=0.0)
+
+metrics = Conversational.run(
+    ConversationalRetriever,
+    model=judge,
+    statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+    use_structured_output=True,
+    verbose=True,
+)
+
+for metric in metrics:
+    print(f"Session: {metric.session_id}  ({metric.n_interactions} interactions)")
+    print()
+
+    dimensions = [
+        ("Quality",      metric.conversational_quality_maxim),
+        ("Quantity",     metric.conversational_quantity_maxim),
+        ("Relation",     metric.conversational_relation_maxim),
+        ("Manner",       metric.conversational_manner_maxim),
+        ("Memory",       metric.conversational_memory),
+        ("Language",     metric.conversational_language),
+        ("Sensibleness", metric.conversational_sensibleness),
+    ]
+
+    for name, score in dimensions:
+        ci = f"  [{score.ci_low:.1f}, {score.ci_high:.1f}]" if score.ci_low is not None else ""
+        print(f"  {name:<14} {score.mean:.1f}/10{ci}")
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Bayesian Mode for Small Sessions">
+    If a session has fewer than 5-10 interactions, the frequentist mean can be misleading. Bayesian mode shows a CI, making it clear when more data is needed.
+  </Accordion>
+
+  <Accordion title="Include Observations">
+    Add `observation` to guide the judge on what to evaluate:
+
+    ```python
+    Batch(
+        qa_id="q2",
+        observation="Follow-up — assistant should remember the order number from q1",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Test Multi-Turn Conversations">
+    Include sequences that test memory:
+
+    ```python
+    Batch(qa_id="q1", query="My name is John..."),
+    Batch(qa_id="q2", query="What's my name?"),  # Should remember
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Statistical Modes" icon="chart-line" href="/concepts/statistical-modes">
+    Frequentist vs Bayesian — when each matters
+  </Card>
+
+  <Card title="Context Metric" icon="bullseye" href="/metrics/context">
+    Evaluate context alignment
+  </Card>
+
+  <Card title="Humanity Metric" icon="heart" href="/metrics/humanity">
+    Emotional analysis of responses
+  </Card>
+</CardGroup>

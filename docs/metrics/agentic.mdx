@@ -1,108 +1,302 @@
 ---
 title: "Agentic"
-description: "Evaluate agent conversations with pass@K/pass^K formulas and tool correctness scoring"
+description: "Evaluate AI agent responses with pass@K metrics, tool correctness, and pluggable statistical modes"
 ---
 
-## Overview
+# Agentic Metric
 
-The **Agentic** metric evaluates complete agent conversations as units. A conversation is considered correct only if **all** its interactions pass the correctness threshold. It computes:
+The Agentic metric evaluates AI agent performance by measuring complete conversation correctness. A conversation is correct only if **ALL** its interactions are correct. It supports pluggable **statistical modes** — frequentist returns point estimates for pass@K, Bayesian propagates the uncertainty in the estimated success rate through the pass@K formula to produce credible intervals.
 
-- **pass@K**: Probability of ≥1 correct conversation in K attempts
-- **pass^K**: Probability of K consecutive correct conversations
-- **Tool correctness**: Evaluates correct tool usage (selection, parameters, sequence, utilization)
-
-## Formulas
+* **Conversation Correctness**: A conversation is correct only if ALL interactions are correct
+* **pass@K**: Probability of ≥1 correct conversation when attempting k conversations (0.0–1.0)
+* **pass^K**: Probability of all k conversations being correct (0.0–1.0)
+* **Tool Correctness**: Evaluates tool selection, parameter accuracy, execution sequence, and result utilization per interaction
 
 ```
-pass@k = 1 - (1 - p)^k    # P(≥1 correct in k attempts)
-pass^k = p^k               # P(all k correct)
+pass@k = 1 - (1 - p)^k   # Probability of ≥1 correct in k independent attempts
+pass^k = p^k              # Probability of all k attempts correct
 
-where p = correct_interactions / total_interactions
+Where p = estimated success rate from evaluation
 ```
 
-## Usage
+**Frequentist**: `p = c/n` — a point estimate
+**Bayesian**: `p` is a Beta-Binomial posterior distribution — the pass@K formula is applied across all posterior samples, yielding a credible interval for pass@K and pass^K
 
-```python
-from langchain_openai import ChatOpenAI
-from gaussia.metrics.agentic import Agentic
+<Note>
+  `k` is a **required** parameter. pass@K and pass^K are computed per conversation using `n = total_interactions` and `c = correct_interactions`. The default `tool_threshold=1.0` requires perfect tool usage — lower it (e.g. `0.75`) to allow minor deviations.
+</Note>
 
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+## Installation
 
-results = Agentic.run(
-    MyRetriever,
-    model=model,
-    k=3,
-    threshold=0.7,
-)
-
-for r in results:
-    print(f"Session: {r.session_id}")
-    print(f"pass@3: {r.pass_at_k:.3f}")
-    print(f"pass^3: {r.pass_pow_k:.3f}")
-    print(f"Fully correct: {r.is_fully_correct}")
+```bash
+uv add gaussia
+uv add langchain-openai  # Or your preferred LLM provider
 ```
 
-## Parameters
+## Basic Usage
+
+<CodeGroup>
+  ```python Frequentist (default)
+  from gaussia.metrics.agentic import Agentic
+  from langchain_openai import ChatOpenAI
+  from your_retriever import AgenticRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Agentic.run(
+      AgenticRetriever,
+      model=judge_model,
+      k=3,
+      threshold=0.7,
+      verbose=True,
+  )
+
+  for metric in metrics:
+      print(f"{metric.session_id}:")
+      print(f"  pass@{metric.k} = {metric.pass_at_k:.3f}")
+      print(f"  pass^{metric.k} = {metric.pass_pow_k:.3f}")
+  ```
+
+  ```python Bayesian
+  from gaussia.metrics.agentic import Agentic
+  from gaussia.statistical import BayesianMode
+  from langchain_openai import ChatOpenAI
+  from your_retriever import AgenticRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Agentic.run(
+      AgenticRetriever,
+      model=judge_model,
+      k=3,
+      threshold=0.7,
+      statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+      verbose=True,
+  )
+
+  for metric in metrics:
+      print(f"{metric.session_id}:")
+      print(f"  pass@{metric.k} = {metric.pass_at_k:.3f}  [{metric.pass_at_k_ci_low:.3f}, {metric.pass_at_k_ci_high:.3f}]")
+      print(f"  pass^{metric.k} = {metric.pass_pow_k:.3f}  [{metric.pass_pow_k_ci_low:.3f}, {metric.pass_pow_k_ci_high:.3f}]")
+  ```
+</CodeGroup>
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `retriever` | `Type[Retriever]` | Data source class — each Dataset = 1 conversation |
+| `model` | `BaseChatModel` | LangChain-compatible model for LLM-as-judge evaluation |
+| `k` | `int` | Number of independent attempts for pass@K/pass^K computation |
+
+### Optional Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `retriever` | `type[Retriever]` | *required* | Retriever class |
-| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
-| `k` | `int` | *required* | Number of attempts for pass@K/pass^K |
-| `threshold` | `float` | `0.7` | Correctness threshold for answers |
-| `tool_threshold` | `float` | `1.0` | Threshold for tool correctness |
-| `tool_weights` | `dict` | Equal (0.25 each) | Weights for tool correctness components |
 | `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
-| `use_structured_output` | `bool` | `True` | Use structured output |
+| `threshold` | `float` | `0.7` | Answer correctness threshold (0.0–1.0) |
+| `tool_threshold` | `float` | `1.0` | Tool correctness threshold (0.0–1.0) |
+| `tool_weights` | `dict[str, float]` | `0.25` each | Weights for tool aspects (selection, parameters, sequence, utilization) |
+| `use_structured_output` | `bool` | `True` | Use LangChain structured output |
+| `verbose` | `bool` | `False` | Enable verbose logging |
 
-## Tool correctness
+## Statistical Modes
 
-When `Batch.agentic` and `Batch.ground_truth_agentic` are provided, tool usage is evaluated across four dimensions:
+<Tabs>
+  <Tab title="Frequentist">
+    Computes `p = c/n` as a point estimate and plugs it directly into the pass@K formulas. Simple and fast.
 
-| Dimension | Weight | What it measures |
-|---|---|---|
-| `selection` | 0.25 | Were the right tools selected? |
-| `parameters` | 0.25 | Were tool parameters correct? |
-| `sequence` | 0.25 | Were tools called in the right order? |
-| `utilization` | 0.25 | Were tool results used in the final answer? |
+    ```python
+    # With 7 correct out of 10 interactions, k=3:
+    # p = 7/10 = 0.70
+    # pass@3 = 1 - (1 - 0.70)^3 = 0.973
+    # pass^3 = 0.70^3 = 0.343
+    ```
 
-### Agentic data format
+    `pass_at_k_ci_low`, `pass_at_k_ci_high`, `pass_pow_k_ci_low`, `pass_pow_k_ci_high` are all `None`.
+  </Tab>
+
+  <Tab title="Bayesian">
+    Uses a **Beta-Binomial posterior** over `p`. The pass@K formula is applied vectorized across all MC samples, yielding a full posterior distribution for both pass@K and pass^K.
+
+    ```python
+    # With 7 correct out of 10 interactions, k=3, Beta(1,1) prior:
+    # Posterior for p: Beta(8, 4) — centered at 0.67 but with uncertainty
+    # pass@3 samples: 1 - (1 - p_samples)^3  → mean=0.960, CI=[0.820, 0.998]
+    # pass^3 samples: p_samples^3            → mean=0.330, CI=[0.126, 0.570]
+    ```
+
+    The CI tells you: with only 10 observations, your true pass@3 could plausibly be anywhere in that range.
+  </Tab>
+</Tabs>
+
+<Note>
+  **Why Bayesian matters for agentic evaluation:** A pass@3 of 0.90 sounds great — but if it comes from only 5 conversations, the 95% CI might be [0.55, 0.99]. With 100 conversations, the same rate gives [0.84, 0.95], which is much more trustworthy. Use Bayesian mode when you have few test conversations and need to communicate reliability honestly.
+</Note>
+
+## Data Requirements
+
+Each `Dataset` represents one complete conversation. A conversation is correct only if ALL interactions are correct:
 
 ```python
-Batch(
-    qa_id="q1",
-    query="What's the weather in Paris?",
-    assistant="It's 22°C in Paris.",
-    ground_truth_assistant="The weather in Paris is 22°C.",
-    agentic={
-        "tools_used": [
-            {"tool_name": "weather_api", "parameters": {"city": "Paris"}, "step": 1}
-        ],
-        "final_answer_uses_tools": True,
-    },
-    ground_truth_agentic={
-        "expected_tools": [
-            {"tool_name": "weather_api", "parameters": {"city": "Paris"}, "step": 1}
-        ],
-        "tool_sequence_matters": True,
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
+
+class AgenticRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        return [
+            Dataset(
+                session_id="conversation_001",
+                assistant_id="agent_v1",
+                language="english",
+                context="Math calculator conversation",
+                conversation=[
+                    Batch(
+                        qa_id="q1_interaction1",
+                        query="What is 5 + 3?",
+                        assistant="The result is 8.",
+                        ground_truth_assistant="8",
+                        agentic={
+                            "tools_used": [{
+                                "tool_name": "calculator",
+                                "parameters": {"a": 5, "b": 3},
+                                "result": 8,
+                                "step": 1
+                            }],
+                            "final_answer_uses_tools": True
+                        },
+                        ground_truth_agentic={
+                            "expected_tools": [{
+                                "tool_name": "calculator",
+                                "parameters": {"a": 5, "b": 3},
+                                "step": 1
+                            }],
+                            "tool_sequence_matters": False
+                        }
+                    ),
+                    Batch(
+                        qa_id="q1_interaction2",
+                        query="What is 100 / 4?",
+                        assistant="100 divided by 4 is 25.",
+                        ground_truth_assistant="25"
+                    ),
+                ],
+            ),
+        ]
+```
+
+## Output Schema
+
+### AgenticMetric
+
+```python
+class AgenticMetric(BaseMetric):
+    session_id: str
+    total_interactions: int
+    correct_interactions: int
+    is_fully_correct: bool
+    threshold: float
+    correctness_scores: list[float]
+    correct_indices: list[int]
+    tool_correctness_scores: list[ToolCorrectnessScore | None]
+    k: int
+    pass_at_k: float
+    pass_at_k_ci_low: float | None    # Bayesian only
+    pass_at_k_ci_high: float | None   # Bayesian only
+    pass_pow_k: float
+    pass_pow_k_ci_low: float | None   # Bayesian only
+    pass_pow_k_ci_high: float | None  # Bayesian only
+```
+
+### ToolCorrectnessScore
+
+```python
+class ToolCorrectnessScore(BaseModel):
+    tool_selection_correct: float   # 0-1: Correct tools chosen
+    parameter_accuracy: float       # 0-1: Correct parameters passed
+    sequence_correct: float         # 0-1: Correct order (if required)
+    result_utilization: float       # 0-1: Tool results used in answer
+    overall_correctness: float      # Weighted average
+    is_correct: bool                # overall >= tool_threshold
+    reasoning: str | None           # Explanation
+```
+
+### Quality Assessment
+
+| pass@K | pass^K | Assessment |
+|---|---|---|
+| {">"}0.95 | {">"}0.70 | ✅ **Reliable** — High success and consistency |
+| {">"}0.95 | {"<"}0.50 | ⚠️ **Inconsistent** — Can succeed but unreliable |
+| {"<"}0.70 | any | ❌ **Needs Improvement** — Low success rate |
+
+## Custom Tool Weights
+
+```python
+metrics = Agentic.run(
+    AgenticRetriever,
+    model=judge_model,
+    k=3,
+    tool_weights={
+        "selection": 0.4,
+        "parameters": 0.2,
+        "sequence": 0.1,
+        "utilization": 0.3,
     },
 )
 ```
 
-## Output schema
+## Best Practices
 
-### AgenticMetric
+<AccordionGroup>
+  <Accordion title="Use Bayesian Mode for Small Test Suites">
+    If you have fewer than 30 conversations, frequentist pass@K estimates can be misleading. Bayesian mode shows you the credible interval, making it clear when more data is needed before drawing conclusions.
+  </Accordion>
 
-| Field | Type | Description |
-|---|---|---|
-| `session_id` | `str` | Session identifier |
-| `assistant_id` | `str` | Assistant identifier |
-| `total_interactions` | `int` | Total interactions in the conversation |
-| `correct_interactions` | `int` | Interactions that passed the threshold |
-| `is_fully_correct` | `bool` | Whether all interactions were correct |
-| `pass_at_k` | `float` | pass@K probability |
-| `pass_pow_k` | `float` | pass^K probability |
-| `k` | `int` | K value used |
-| `threshold` | `float` | Correctness threshold used |
-| `correctness_scores` | `list[float]` | Per-interaction correctness scores |
-| `tool_correctness_scores` | `list[ToolCorrectnessScore]` | Per-interaction tool scores |
+  <Accordion title="Choose Appropriate K Values">
+    * **K=1**: Evaluate single conversation success rate
+    * **K=3–5**: Balance between reliability and cost (recommended)
+    * **K=10+**: High-stakes scenarios requiring high confidence
+  </Accordion>
+
+  <Accordion title="Set Meaningful Thresholds">
+    * **Strict (0.8–0.9)**: Factual accuracy matters (medical, legal)
+    * **Moderate (0.7)**: General purpose — recommended default
+    * **Lenient (0.6)**: Creative or subjective tasks
+  </Accordion>
+
+  <Accordion title="Define Clear Tool Expectations">
+    Provide complete `ground_truth_agentic` per interaction with expected tool names, required parameters, whether sequence matters, and whether tool results should influence the final answer.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Judge Returns Low Scores for Correct Answers">
+    Lower the `threshold` parameter (try 0.6–0.65), use a more capable judge model, or ensure ground truth is clear and unambiguous. Check verbose logs to see judge reasoning.
+  </Accordion>
+
+  <Accordion title="Tool Correctness Always Fails">
+    The default `tool_threshold=1.0` requires perfect tool correctness. Lower it with `tool_threshold=0.75` to allow minor deviations. Verify tool names match exactly (case-sensitive) and check parameter structure.
+  </Accordion>
+
+  <Accordion title="Bayesian CI is Very Wide">
+    A wide CI means there is not enough data to estimate the true success rate precisely. This is intentional — collect more test conversations to narrow the interval.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Statistical Modes" icon="chart-line" href="/concepts/statistical-modes">
+    Deep dive into Frequentist vs Bayesian approaches
+  </Card>
+
+  <Card title="BestOf Metric" icon="trophy" href="/metrics/best-of">
+    Compare multiple agents in tournament-style evaluation
+  </Card>
+
+  <Card title="Context Metric" icon="book" href="/metrics/context">
+    Evaluate context alignment
+  </Card>
+</CardGroup>

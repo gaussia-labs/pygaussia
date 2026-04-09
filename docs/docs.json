@@ -37,6 +37,12 @@
         "tab": "Metrics",
         "groups": [
           {
+            "group": "Overview",
+            "pages": [
+              "metrics/overview"
+            ]
+          },
+          {
             "group": "Evaluation metrics",
             "pages": [
               "metrics/context",

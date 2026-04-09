@@ -1,82 +1,331 @@
 ---
 title: "Toxicity"
-description: "Detect toxic language and measure demographic bias using cluster profiling and DIDT analysis"
+description: "Measure toxic language with clustering and demographic group profiling"
 ---
+
+# Toxicity Metric
+
+The Toxicity metric measures toxic language in AI responses using clustering and the DIDT (Directed Toxicity, Demographic Representation, Associated Sentiment Bias) framework.
 
 ## Overview
 
-The **Toxicity** metric provides comprehensive toxicity analysis through two complementary approaches:
+The metric provides:
 
-1. **Cluster profiling**: HDBSCAN + UMAP clustering of response embeddings, with per-cluster toxicity scoring via HurtLex lexicons
-2. **Group profiling (DIDT)**: Demographic Impact and Directed Toxicity analysis across demographic groups
+* **Cluster profiling**: Groups similar responses using HDBSCAN+UMAP and measures toxicity per cluster
+* **DIDT framework** with three components:
+  * **DR (Demographic Representation)**: Distribution divergence of group mention rates
+  * **DTO (Directed Toxicity per Group)**: Toxicity rate dispersion across demographic groups
+  * **ASB (Associated Sentiment Bias)**: Sentiment deviation across groups
 
-## DIDT components
+## Installation
 
-| Component | Full name | What it measures |
-|---|---|---|
-| **DR** | Demographic Representation | Distribution divergence from a reference distribution |
-| **ASB** | Associated Sentiment Bias | Sentiment deviation across demographic groups |
-| **DTO** | Directed Toxicity per Group | Toxicity rate dispersion across groups |
-| **DIDT** | Aggregated | Weighted combination of DR, ASB, and DTO |
-
-## Usage
-
-```python
-from gaussia.metrics.toxicity import Toxicity
-from gaussia.embedders import SentenceTransformerEmbedder
-
-embedder = SentenceTransformerEmbedder(model="all-mpnet-base-v2")
-
-results = Toxicity.run(
-    MyRetriever,
-    embedder=embedder,
-    group_prototypes={
-        "male": ["he", "him", "man", "boy"],
-        "female": ["she", "her", "woman", "girl"],
-    },
-)
+```bash
+uv add "gaussia[toxicity]"
 ```
 
-## Parameters
+## Basic Usage
+
+```python
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.metrics.toxicity import Toxicity
+from gaussia.statistical import FrequentistMode
+from your_retriever import MyRetriever
+
+# Define group prototypes for demographic detection
+group_prototypes = {
+    "gender": ["women", "men", "female", "male", "woman", "man"],
+    "race": ["Asian", "African", "European", "Hispanic", "Black", "White"],
+    "religion": ["Christian", "Muslim", "Jewish", "Hindu", "Buddhist"],
+    "sexuality": ["LGBTQ+", "gay", "lesbian", "bisexual", "heterosexual"],
+}
+
+# Run the metric
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=SentenceTransformerEmbedder("all-MiniLM-L6-v2"),
+    group_prototypes=group_prototypes,
+    group_default_threshold=0.40,
+    statistical_mode=FrequentistMode(),
+    verbose=True,
+)
+
+# Analyze results
+for metric in metrics:
+    print(f"Session: {metric.session_id}")
+
+    # Cluster profiling
+    print("Cluster Profiling:")
+    for cluster_id, toxicity in metric.cluster_profiling.items():
+        print(f"  Cluster {cluster_id}: {toxicity:.4f}")
+
+    # Group profiling
+    if metric.group_profiling:
+        gp = metric.group_profiling.frequentist
+        print(f"DIDT: {gp.DIDT:.4f}")
+        print(f"  DR: {gp.DR:.4f}")
+        print(f"  ASB: {gp.ASB:.4f}")
+        print(f"  DTO: {gp.DTO:.4f}")
+```
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `retriever` | `Type[Retriever]` | Data source class |
+
+### Group Detection Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `retriever` | `type[Retriever]` | *required* | Retriever class |
-| `embedder` | `Embedder` | *required* | Text embedder instance |
-| `toxicity_loader` | `type[ToxicityLoader]` | `HurtlexLoader` | Toxicity lexicon loader |
-| `group_prototypes` | `dict[str, list[str]]` | `None` | Prototype words per demographic group |
-| `group_extractor` | `BaseGroupExtractor` | `None` | Custom group extractor (overrides prototypes) |
-| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
-| `sentiment_analyzer` | `SentimentAnalyzer` | `None` | Sentiment analyzer for ASB (optional) |
-| `w_DR`, `w_ASB`, `w_DTO` | `float` | `1/3` each | DIDT component weights |
+| `group_prototypes` | `dict[str, list[str]]` | `None` | Prototype phrases for each demographic group |
+| `group_thresholds` | `dict[str, float]` | `None` | Per-group similarity thresholds |
+| `group_default_threshold` | `float` | `0.50` | Default threshold for group detection |
+| `group_toxicity_threshold` | `float` | `0.5` | Threshold for toxic classification |
+| `group_extractor` | `BaseGroupExtractor` | Auto | Custom group extractor (overrides prototypes) |
 
-### Clustering parameters
+### Embedding Parameters
 
-| Parameter | Default | Description |
-|---|---|---|
-| `toxicity_min_cluster_size` | `5` | Minimum cluster size for HDBSCAN |
-| `toxicity_cluster_selection_epsilon` | `0.01` | Cluster selection epsilon |
-| `toxicity_cluster_use_latent_space` | `True` | Cluster on UMAP latent space |
-| `umap_n_components` | `2` | UMAP dimensions |
-| `umap_n_neighbors` | `15` | UMAP neighbors |
-| `umap_min_dist` | `0.1` | UMAP minimum distance |
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `embedder` | `Embedder` | *(required)* | Embedder instance for encoding text |
 
-## Output schema
+### Clustering Parameters (HDBSCAN)
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `toxicity_min_cluster_size` | `int` | `5` | Minimum cluster size |
+| `toxicity_cluster_selection_epsilon` | `float` | `0.0` | Cluster selection epsilon |
+| `toxicity_cluster_selection_method` | `str` | `"eom"` | Selection method ("eom" or "leaf") |
+| `toxicity_cluster_use_latent_space` | `bool` | `True` | Use UMAP latent space for clustering |
+
+### UMAP Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `umap_n_components` | `int` | `2` | Number of UMAP dimensions |
+| `umap_n_neighbors` | `int` | `15` | Number of neighbors |
+| `umap_min_dist` | `float` | `0.1` | Minimum distance |
+| `umap_random_state` | `int` | `42` | Random seed |
+| `umap_metric` | `str` | `"cosine"` | Distance metric |
+
+### DIDT Weight Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `w_DR` | `float` | `1/3` | Weight for DR component |
+| `w_ASB` | `float` | `1/3` | Weight for ASB component |
+| `w_DTO` | `float` | `1/3` | Weight for DTO component |
+
+### Other Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical analysis mode |
+| `toxicity_loader` | `Type[ToxicityLoader]` | `HurtlexLoader` | Toxicity lexicon loader |
+| `sentiment_analyzer` | `SentimentAnalyzer` | `None` | Optional sentiment analyzer for ASB |
+| `verbose` | `bool` | `False` | Enable verbose logging |
+
+## Statistical Modes
+
+### Frequentist Mode
+
+```python
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.statistical import FrequentistMode
+
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=SentenceTransformerEmbedder("all-MiniLM-L6-v2"),
+    group_prototypes=group_prototypes,
+    statistical_mode=FrequentistMode(),
+)
+
+# Returns point estimates
+gp = metrics[0].group_profiling.frequentist
+print(f"DIDT: {gp.DIDT}")  # Single float value
+```
+
+### Bayesian Mode
+
+```python
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.statistical import BayesianMode
+
+bayesian = BayesianMode(
+    mc_samples=5000,
+    ci_level=0.95,
+    dirichlet_prior=1.0,
+    beta_prior_a=1.0,
+    beta_prior_b=1.0,
+    rng_seed=42,
+)
+
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=SentenceTransformerEmbedder("all-MiniLM-L6-v2"),
+    group_prototypes=group_prototypes,
+    statistical_mode=bayesian,
+)
+
+# Returns distributions with credible intervals
+summary = metrics[0].group_profiling.bayesian.summary
+print(f"DIDT: {summary['DIDT'].mean:.4f} [{summary['DIDT'].ci_low:.4f}, {summary['DIDT'].ci_high:.4f}]")
+```
+
+## DIDT Components
+
+### DR (Demographic Representation)
+
+Measures how evenly different demographic groups are mentioned in responses.
+
+* **0**: Perfect balance — all groups mentioned equally
+* **1**: Complete imbalance — only one group mentioned
+
+### ASB (Associated Sentiment Bias)
+
+Measures sentiment differences when discussing different groups.
+
+* **0**: Consistent sentiment across all groups
+* **1**: Extreme sentiment variation between groups
+
+<Note>
+  ASB requires a `sentiment_analyzer` to be provided. Without it, ASB defaults to 0.
+</Note>
+
+### DTO (Directed Toxicity per Group)
+
+Measures toxicity rate variation across groups.
+
+* **0**: Equal toxicity rates across all groups
+* **1**: Toxicity concentrated in specific groups
+
+### DIDT (Aggregate Score)
+
+Weighted combination of DR, ASB, and DTO:
+
+```
+DIDT = w_DR * DR + w_ASB * ASB + w_DTO * DTO
+```
+
+Default weights are equal (1/3 each).
+
+## Output Schema
 
 ### ToxicityMetric
 
-| Field | Type | Description |
-|---|---|---|
-| `session_id` | `str` | Session identifier (global for accumulated) |
-| `assistant_id` | `str` | Assistant identifier |
-| `cluster_profiling` | `dict[int, float]` | Toxicity score per cluster |
-| `assistant_space` | `AssistantSpace` | Embeddings, latent space, cluster labels |
-| `group_profiling` | `dict` | Full DIDT breakdown (DR, ASB, DTO, DIDT) |
+```python
+class ToxicityMetric(BaseMetric):
+    session_id: str
+    assistant_id: str
+    cluster_profiling: dict[float, float]  # cluster_id -> toxicity_score
+    group_profiling: GroupProfiling | None
+    assistant_space: AssistantSpace
+```
+
+### GroupProfiling
+
+```python
+class GroupProfiling(BaseModel):
+    mode: Literal["frequentist", "bayesian"]
+    groups: list[str]           # Detected groups
+    N_i: dict[str, int]         # Mention counts per group
+    K_i: dict[str, int]         # Toxic mention counts per group
+    frequentist: FrequentistGroupProfiling | None
+    bayesian: BayesianGroupProfiling | None
+```
+
+## Advanced Usage
+
+### Custom Group Prototypes
+
+```python
+# Define prototypes relevant to your domain
+group_prototypes = {
+    "age": ["young", "old", "elderly", "teenager", "millennial", "boomer"],
+    "occupation": ["doctor", "lawyer", "teacher", "engineer", "artist"],
+    "socioeconomic": ["wealthy", "poor", "middle-class", "homeless"],
+}
+
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=SentenceTransformerEmbedder("all-MiniLM-L6-v2"),
+    group_prototypes=group_prototypes,
+)
+```
+
+### Custom Group Extractor
+
+```python
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.extractors.embedding import EmbeddingGroupExtractor
+
+embedder = SentenceTransformerEmbedder("paraphrase-multilingual-MiniLM-L12-v2")
+extractor = EmbeddingGroupExtractor(
+    embedder=embedder,
+    group_prototypes=group_prototypes,
+    thresholds={"gender": 0.35, "race": 0.40},
+    default_threshold=0.45,
+)
+
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=embedder,
+    group_extractor=extractor,
+)
+```
+
+### Custom Clustering
+
+```python
+# Fine-tune clustering for your data
+metrics = Toxicity.run(
+    MyRetriever,
+    embedder=SentenceTransformerEmbedder("all-MiniLM-L6-v2"),
+    group_prototypes=group_prototypes,
+    toxicity_min_cluster_size=10,
+    toxicity_cluster_selection_method="leaf",
+    umap_n_neighbors=30,
+    umap_min_dist=0.05,
+)
+```
+
+### Visualizing Clusters
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+metric = metrics[0]
+latent_space = np.array(metric.assistant_space.latent_space)
+labels = np.array(metric.assistant_space.cluster_labels)
+
+plt.figure(figsize=(10, 8))
+scatter = plt.scatter(
+    latent_space[:, 0],
+    latent_space[:, 1],
+    c=labels,
+    cmap='tab10',
+    alpha=0.7
+)
+plt.colorbar(scatter, label='Cluster')
+plt.xlabel('UMAP Dimension 1')
+plt.ylabel('UMAP Dimension 2')
+plt.title('Response Clusters (Toxicity Analysis)')
+plt.show()
+```
 
 <Warning>
   Mixed-language datasets are **not supported**. Toxic word sets differ per language, so accumulating toxicity flags across languages produces unreliable results. A warning is emitted if multiple languages are detected.
 </Warning>
 
-<Note>
-  Requires the `toxicity` extra: `pip install "gaussia[toxicity]"`.
-</Note>
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Bias Metric" icon="scale-balanced" href="/metrics/bias">
+    Learn about bias detection
+  </Card>
+
+  <Card title="Statistical Modes" icon="calculator" href="/concepts/statistical-modes">
+    Understand Frequentist vs Bayesian
+  </Card>
+</CardGroup>

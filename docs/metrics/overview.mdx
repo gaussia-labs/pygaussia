@@ -1,0 +1,223 @@
+---
+title: "Metrics Overview"
+description: "Overview of all available metrics in Gaussia"
+---
+
+# Metrics Overview
+
+Gaussia provides nine specialized metrics for comprehensive AI evaluation. Each metric focuses on a different aspect of AI behavior and quality.
+
+## Available Metrics
+
+<CardGroup cols={3}>
+  <Card title="Context" icon="book" href="/metrics/context">
+    Evaluates how well responses align with provided context and instructions.
+  </Card>
+
+  <Card title="Conversational" icon="comments" href="/metrics/conversational">
+    Evaluates dialogue quality using Grice's Maxims (Quality, Quantity, Relation, Manner).
+  </Card>
+
+  <Card title="Toxicity" icon="flask" href="/metrics/toxicity">
+    Measures toxic language with clustering and demographic group profiling using the DIDT framework.
+  </Card>
+
+  <Card title="Bias" icon="scale-balanced" href="/metrics/bias">
+    Detects bias across protected attributes (gender, race, religion, nationality, sexual orientation).
+  </Card>
+
+  <Card title="Humanity" icon="heart" href="/metrics/humanity">
+    Analyzes emotional depth and human-likeness using the NRC Emotion Lexicon.
+  </Card>
+
+  <Card title="BestOf" icon="trophy" href="/metrics/best-of">
+    Tournament-style evaluation to compare multiple assistants head-to-head.
+  </Card>
+
+  <Card title="Agentic" icon="robot" href="/metrics/agentic">
+    Evaluate AI agent responses with pass@K metrics and tool correctness.
+  </Card>
+
+  <Card title="Vision" icon="eye" href="/metrics/vision">
+    Evaluate VLM scene descriptions using semantic similarity and hallucination detection.
+  </Card>
+
+  <Card title="Regulatory" icon="scale-balanced" href="/metrics/regulatory">
+    Evaluate responses against regulatory compliance using RAG-based retrieval.
+  </Card>
+</CardGroup>
+
+## Comparison Table
+
+| Metric | Purpose | Output Type | LLM Required |
+|---|---|---|---|
+| **Context** | Measure context alignment | Per-session scores | Yes (Judge) |
+| **Conversational** | Evaluate dialogue quality | Per-session scores | Yes (Judge) |
+| **Toxicity** | Detect toxic language patterns | Per-session metrics | No |
+| **Bias** | Identify biased responses | Per-session metrics | Yes (Guardian) |
+| **Humanity** | Analyze emotional expression | Per-interaction scores | No |
+| **BestOf** | Compare multiple assistants | Tournament results | Yes (Judge) |
+| **Agentic** | Agent correctness with pass@K | Per-session metrics | Yes (Judge) |
+| **Vision** | VLM similarity / hallucination | Per-session metrics | No |
+| **Regulatory** | Regulatory compliance | Per-session scores | No |
+
+## Common Usage Pattern
+
+All metrics follow the same usage pattern:
+
+```python
+from gaussia.metrics.<metric> import <Metric>
+from gaussia.core.retriever import Retriever
+
+# 1. Define your retriever
+class MyRetriever(Retriever):
+    def load_dataset(self):
+        # Return list[Dataset]
+        pass
+
+# 2. Run the metric
+results = <Metric>.run(
+    MyRetriever,
+    **metric_specific_parameters,
+    verbose=True,
+)
+
+# 3. Analyze results
+for result in results:
+    # Process metric-specific output
+    pass
+```
+
+## Metric Categories
+
+### Lexicon-Based Metrics
+
+These metrics use predefined lexicons and don't require external LLMs:
+
+* **Toxicity**: Uses Hurtlex toxicity lexicon + HDBSCAN clustering
+* **Humanity**: Uses NRC Emotion Lexicon for emotion detection
+* **Vision**: Uses embedding-based similarity scoring
+
+```python
+# No LLM required
+from gaussia.metrics.toxicity import Toxicity
+
+results = Toxicity.run(
+    MyRetriever,
+    group_prototypes={...},
+    verbose=True,
+)
+```
+
+### LLM-Judge Metrics
+
+These metrics use an LLM as a judge to evaluate responses:
+
+* **Context**: Evaluates context alignment
+* **Conversational**: Evaluates dialogue quality
+* **BestOf**: Compares assistants in tournaments
+* **Agentic**: Evaluates agent correctness
+
+```python
+# Requires LangChain-compatible model
+from gaussia.metrics.context import Context
+from langchain_openai import ChatOpenAI
+
+judge = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+results = Context.run(
+    MyRetriever,
+    model=judge,
+    use_structured_output=True,
+    verbose=True,
+)
+```
+
+### Guardian-Based Metrics
+
+These metrics use specialized guardian models for detection:
+
+* **Bias**: Uses guardian models for bias detection
+
+```python
+from gaussia.metrics.bias import Bias
+
+results = Bias.run(
+    MyRetriever,
+    guardian=MyGuardian,
+    verbose=True,
+)
+```
+
+### RAG-Based Metrics
+
+These metrics use retrieval-augmented generation:
+
+* **Regulatory**: Retrieves and cross-references regulatory documents
+
+```python
+from gaussia.metrics.regulatory import Regulatory
+
+results = Regulatory.run(
+    MyRetriever,
+    corpus_connector=corpus,
+    embedder=embedder,
+    reranker=reranker,
+)
+```
+
+## Choosing a Metric
+
+<AccordionGroup>
+  <Accordion title="I want to detect harmful language">
+    Use **Toxicity** for detecting toxic language patterns and demographic targeting.
+  </Accordion>
+
+  <Accordion title="I want to check for bias">
+    Use **Bias** for detecting discrimination across protected attributes.
+  </Accordion>
+
+  <Accordion title="I want to ensure responses follow instructions">
+    Use **Context** for measuring alignment with system context.
+  </Accordion>
+
+  <Accordion title="I want to evaluate conversation quality">
+    Use **Conversational** for assessing dialogue using Grice's Maxims.
+  </Accordion>
+
+  <Accordion title="I want to measure emotional expression">
+    Use **Humanity** for analyzing emotional depth and human-likeness.
+  </Accordion>
+
+  <Accordion title="I want to compare multiple assistants">
+    Use **BestOf** for tournament-style head-to-head comparisons.
+  </Accordion>
+
+  <Accordion title="I want to evaluate an AI agent">
+    Use **Agentic** for pass@K metrics and tool correctness scoring.
+  </Accordion>
+
+  <Accordion title="I want to evaluate a vision model">
+    Use **Vision** for VLM hallucination detection and similarity scoring.
+  </Accordion>
+
+  <Accordion title="I want to check regulatory compliance">
+    Use **Regulatory** for evaluating responses against a regulatory corpus.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Context" icon="book" href="/metrics/context">
+    Start with context evaluation
+  </Card>
+
+  <Card title="Toxicity" icon="flask" href="/metrics/toxicity">
+    Learn about toxicity detection
+  </Card>
+
+  <Card title="Agentic" icon="robot" href="/metrics/agentic">
+    Evaluate AI agents
+  </Card>
+</CardGroup>

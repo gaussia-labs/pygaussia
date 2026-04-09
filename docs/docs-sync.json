@@ -27,6 +27,7 @@
       {
         "group": "Metrics",
         "pages": [
+          "sdks/python/metrics/overview",
           "sdks/python/metrics/context",
           "sdks/python/metrics/conversational",
           "sdks/python/metrics/toxicity",

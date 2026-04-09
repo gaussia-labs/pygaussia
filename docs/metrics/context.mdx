@@ -1,67 +1,307 @@
 ---
 title: "Context"
-description: "Evaluate how well AI responses align with provided context using LLM-as-a-judge scoring"
+description: "Evaluate how well AI responses align with provided context, with session-level aggregation and pluggable statistical modes"
 ---
+
+# Context Metric
+
+The Context metric evaluates how well an AI assistant's responses align with the provided system context. It accumulates `context_awareness` scores across all interactions in a session and emits one session-level result, with optional uncertainty quantification via Bayesian mode. The `interactions` list preserves per-QA scores for debugging.
 
 ## Overview
 
-The **Context** metric measures how accurately an AI assistant's responses align with the provided context. It uses an LLM judge to score each interaction's `context_awareness` on a 0–1 scale, then aggregates across the session.
+* **Context Awareness**: How closely the response follows the given context (0.0–1.0)
+* **Session aggregate**: Weighted mean across all interactions
+* **Per-interaction detail**: Each QA pair's score accessible via `interactions`
+* **Bayesian mode**: Bootstrapped credible interval around the session mean
 
-## Usage
+## Installation
 
-```python
-from langchain_openai import ChatOpenAI
-from gaussia.metrics.context import Context
-
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-results = Context.run(
-    MyRetriever,
-    model=model,
-    statistical_mode=FrequentistMode(),  # default
-)
+```bash
+uv add gaussia
+uv add langchain-openai  # Or your preferred LLM provider
 ```
 
-## Parameters
+## Basic Usage
+
+<CodeGroup>
+  ```python Frequentist (default)
+  from gaussia.metrics.context import Context
+  from langchain_openai import ChatOpenAI
+  from your_retriever import MyRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Context.run(MyRetriever, model=judge_model, verbose=True)
+
+  for metric in metrics:
+      print(f"Session: {metric.session_id}  ({metric.n_interactions} interactions)")
+      print(f"  Context awareness: {metric.context_awareness:.2f}")
+
+      for interaction in metric.interactions:
+          status = "✅" if interaction.context_awareness >= 0.8 else "❌"
+          print(f"  {status} [{interaction.qa_id}] {interaction.context_awareness:.2f}")
+  ```
+
+  ```python Bayesian
+  from gaussia.metrics.context import Context
+  from gaussia.statistical import BayesianMode
+  from langchain_openai import ChatOpenAI
+  from your_retriever import MyRetriever
+
+  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+
+  metrics = Context.run(
+      MyRetriever,
+      model=judge_model,
+      statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+      verbose=True,
+  )
+
+  for metric in metrics:
+      print(f"Context awareness: {metric.context_awareness:.2f}  "
+            f"[{metric.context_awareness_ci_low:.2f}, {metric.context_awareness_ci_high:.2f}]")
+  ```
+</CodeGroup>
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `retriever` | `Type[Retriever]` | Data source class |
+| `model` | `BaseChatModel` | LangChain-compatible judge model |
+
+### Optional Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `retriever` | `type[Retriever]` | *required* | Retriever class for loading datasets |
-| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
 | `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
 | `use_structured_output` | `bool` | `False` | Use LangChain structured output |
-| `strict` | `bool` | `True` | Enforce strict schema validation |
-| `bos_json_clause` | `str` | `` ```json `` | Opening JSON marker |
-| `eos_json_clause` | `str` | `` ``` `` | Closing JSON marker |
+| `bos_json_clause` | `str` | `` ```json `` | JSON block start marker |
+| `eos_json_clause` | `str` | `` ``` `` | JSON block end marker |
+| `verbose` | `bool` | `False` | Enable verbose logging |
 
-## Output schema
+## Statistical Modes
+
+<Tabs>
+  <Tab title="Frequentist">
+    Returns the weighted mean of per-interaction scores. CI fields are `None`.
+
+    ```python
+    metric.context_awareness          # 0.78
+    metric.context_awareness_ci_low   # None
+    metric.context_awareness_ci_high  # None
+    ```
+  </Tab>
+
+  <Tab title="Bayesian">
+    Bootstraps the weighted mean to produce a credible interval. A wide CI means more interactions are needed before drawing conclusions.
+
+    ```python
+    metric.context_awareness          # 0.78
+    metric.context_awareness_ci_low   # 0.61
+    metric.context_awareness_ci_high  # 0.91
+    ```
+  </Tab>
+</Tabs>
+
+## Interaction Weights
+
+Each `Batch` can carry an optional `weight` to control its contribution to the session aggregate:
+
+```python
+# Weight critical interactions more heavily
+Batch(qa_id="q1", ..., weight=0.5),   # Most important
+Batch(qa_id="q2", ..., weight=0.3),
+Batch(qa_id="q3", ..., weight=0.2),   # Least important
+```
+
+| Case | Behavior |
+|---|---|
+| All weights provided, sum = 1.0 | Used as-is |
+| All weights provided, sum ≠ 1.0 | Warning emitted, equal weights applied |
+| Some weights provided | Remaining weight split equally among unweighted |
+| No weights provided | Equal weights (1/n each) |
+
+## Output Schema
 
 ### ContextMetric
 
-| Field | Type | Description |
-|---|---|---|
-| `session_id` | `str` | Session identifier |
-| `assistant_id` | `str` | Assistant identifier |
-| `n_interactions` | `int` | Number of interactions evaluated |
-| `context_awareness` | `float` | Aggregated context awareness score (0–1) |
-| `context_awareness_ci_low` | `float \| None` | Lower bound of confidence interval (Bayesian only) |
-| `context_awareness_ci_high` | `float \| None` | Upper bound of confidence interval (Bayesian only) |
-| `interactions` | `list[ContextInteraction]` | Per-interaction breakdown |
+```python
+class ContextMetric(BaseMetric):
+    session_id: str
+    assistant_id: str
+    n_interactions: int                    # Number of interactions evaluated
+    context_awareness: float               # Weighted mean (0.0-1.0)
+    context_awareness_ci_low: float | None # Lower credible bound — Bayesian only
+    context_awareness_ci_high: float | None # Upper credible bound — Bayesian only
+    interactions: list[ContextInteraction]  # Per-QA scores
+```
 
 ### ContextInteraction
 
-| Field | Type | Description |
-|---|---|---|
-| `qa_id` | `str` | Interaction identifier |
-| `context_awareness` | `float` | Context awareness score for this interaction (0–1) |
+```python
+class ContextInteraction(BaseModel):
+    qa_id: str
+    context_awareness: float   # Per-interaction score (0.0-1.0)
+```
 
-## How it works
+| Score Range | Interpretation |
+|---|---|
+| 0.8–1.0 | Excellent — response fully follows context |
+| 0.6–0.8 | Good — mostly follows context with minor deviations |
+| 0.4–0.6 | Moderate — partially follows context |
+| 0.2–0.4 | Poor — significant deviations |
+| 0.0–0.2 | Very poor — ignores or contradicts context |
 
-1. For each interaction, the judge receives the context, the assistant's answer, and either the ground truth or observation
-2. The judge evaluates whether the response is grounded in the provided context
-3. Scores are accumulated per session
-4. In `on_process_complete()`, scores are aggregated using the configured statistical mode
+## Complete Example
 
-<Note>
-  When an interaction has an `observation` field, the judge uses an alternative prompt that evaluates against the observation rather than `ground_truth_assistant`.
-</Note>
+```python
+import os
+from gaussia.metrics.context import Context
+from gaussia.statistical import BayesianMode
+from gaussia.core.retriever import Retriever
+from gaussia.schemas.common import Dataset, Batch
+from langchain_openai import ChatOpenAI
+
+class ContextTestRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        context = """You are a helpful customer service assistant for TechStore.
+        Key policies:
+        - Returns accepted within 30 days with receipt
+        - Free shipping on orders over $50
+        - Support hours: Mon-Fri 9am-5pm EST
+        Always be polite and offer to help further."""
+
+        return [
+            Dataset(
+                session_id="context-eval-001",
+                assistant_id="techstore-bot",
+                language="english",
+                context=context,
+                conversation=[
+                    Batch(
+                        qa_id="q1",
+                        query="What's your return policy?",
+                        assistant="Returns within 30 days with a receipt. Anything else I can help with?",
+                        ground_truth_assistant="Returns within 30 days with receipt.",
+                    ),
+                    Batch(
+                        qa_id="q2",
+                        query="Do you offer free shipping?",
+                        assistant="Yes, free shipping on orders over $50.",
+                        ground_truth_assistant="Free shipping on orders over $50.",
+                    ),
+                    Batch(
+                        qa_id="q3",
+                        query="What are your hours?",
+                        assistant="We're open 24/7!",  # Wrong — context says Mon-Fri 9-5
+                        ground_truth_assistant="Mon-Fri 9am-5pm EST.",
+                    ),
+                ]
+            )
+        ]
+
+judge = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"), temperature=0.0)
+
+metrics = Context.run(
+    ContextTestRetriever,
+    model=judge,
+    statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
+    use_structured_output=True,
+    verbose=True,
+)
+
+for metric in metrics:
+    print(f"Session: {metric.session_id}  ({metric.n_interactions} interactions)")
+    ci = f"  [{metric.context_awareness_ci_low:.2f}, {metric.context_awareness_ci_high:.2f}]" \
+         if metric.context_awareness_ci_low is not None else ""
+    print(f"  Context awareness: {metric.context_awareness:.2f}{ci}")
+    print()
+    print("  Per-interaction:")
+    for interaction in metric.interactions:
+        status = "✅ PASS" if interaction.context_awareness >= 0.8 else "❌ FAIL"
+        print(f"    [{interaction.qa_id}] {status}  score={interaction.context_awareness:.2f}")
+```
+
+## LLM Provider Options
+
+<CodeGroup>
+  ```python OpenAI
+  from langchain_openai import ChatOpenAI
+  judge = ChatOpenAI(model="gpt-4o-mini", api_key="your-api-key", temperature=0.0)
+  ```
+
+  ```python Groq
+  from langchain_groq import ChatGroq
+  judge = ChatGroq(model="llama-3.3-70b-versatile", api_key="your-api-key", temperature=0.0)
+  ```
+
+  ```python Anthropic
+  from langchain_anthropic import ChatAnthropic
+  judge = ChatAnthropic(model="claude-sonnet-4-20250514", api_key="your-api-key", temperature=0.0)
+  ```
+
+  ```python Ollama (Local)
+  from langchain_ollama import ChatOllama
+  judge = ChatOllama(model="llama3.1:70b", temperature=0.0)
+  ```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Bayesian Mode for Small Sessions">
+    A session with 3 interactions gives a very uncertain mean. Bayesian mode expresses this with a wide CI, preventing overconfident conclusions.
+  </Accordion>
+
+  <Accordion title="Provide Clear Context">
+    Include specific, actionable instructions:
+
+    ```python
+    context = """You are a support assistant for Acme Corp.
+    Rules:
+    1. Always greet customers by name if available
+    2. Never discuss competitors
+    3. Escalate billing issues to human support"""
+    ```
+  </Accordion>
+
+  <Accordion title="Include Ground Truth">
+    Provide `ground_truth_assistant` for better evaluation:
+
+    ```python
+    Batch(
+        qa_id="q1",
+        query="What's your refund policy?",
+        assistant="Refunds take 5-7 business days...",
+        ground_truth_assistant="Refunds processed within 5-7 business days to original payment method.",
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Weight Critical Interactions">
+    If some QA pairs test more important context rules, give them higher weights:
+
+    ```python
+    Batch(qa_id="policy_question",   ..., weight=0.6),  # High-stakes
+    Batch(qa_id="greeting",          ..., weight=0.2),
+    Batch(qa_id="general_question",  ..., weight=0.2),
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Statistical Modes" icon="chart-line" href="/concepts/statistical-modes">
+    Frequentist vs Bayesian approaches
+  </Card>
+
+  <Card title="Conversational Metric" icon="comments" href="/metrics/conversational">
+    Evaluate dialogue quality with Grice's maxims
+  </Card>
+
+  <Card title="Regulatory Metric" icon="scale-balanced" href="/metrics/regulatory">
+    Compliance against a regulatory corpus
+  </Card>
+</CardGroup>
