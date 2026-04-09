@@ -1,0 +1,112 @@
+---
+title: "Datasets and batches"
+description: "Understand the Dataset and Batch data models that structure conversation data for evaluation"
+---
+
+## Overview
+
+All conversation data in Gaussia is represented using two Pydantic models: `Dataset` for sessions and `Batch` for individual interactions.
+
+## Dataset
+
+A `Dataset` represents one complete conversation session between a user and an assistant.
+
+```python
+from gaussia.schemas.common import Dataset, Batch
+
+dataset = Dataset(
+    session_id="session-001",
+    assistant_id="assistant-v2",
+    language="english",
+    context="Product documentation for the Acme Widget.",
+    conversation=[
+        Batch(
+            qa_id="q1",
+            query="How do I install the widget?",
+            assistant="Run pip install acme-widget.",
+            ground_truth_assistant="Install with: pip install acme-widget",
+        ),
+    ],
+)
+```
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Unique identifier for the conversation session |
+| `assistant_id` | `str` | Identifier for the AI assistant being evaluated |
+| `language` | `str \| None` | Language of the conversation (default: `"english"`) |
+| `context` | `str` | Background context provided to the assistant |
+| `conversation` | `list[Batch]` | Ordered list of interactions in this session |
+
+## Batch
+
+A `Batch` represents a single question–answer interaction.
+
+```python
+batch = Batch(
+    qa_id="q1",
+    query="What is the return policy?",
+    assistant="You can return items within 30 days.",
+    ground_truth_assistant="Items can be returned within 30 days of purchase.",
+    observation="The assistant correctly identified the return window.",
+    weight=0.5,
+)
+```
+
+### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `qa_id` | `str` | *required* | Unique identifier for this interaction |
+| `query` | `str` | *required* | The user's question or input |
+| `assistant` | `str` | *required* | The assistant's actual response |
+| `ground_truth_assistant` | `str` | *required* | The expected or reference response |
+| `observation` | `str \| None` | `None` | Additional notes about the interaction |
+| `weight` | `float \| None` | `None` | Importance weight for aggregation (must be ≥ 0) |
+| `agentic` | `dict \| None` | `{}` | Tool usage metadata (for the Agentic metric) |
+| `ground_truth_agentic` | `dict \| None` | `{}` | Expected tool usage (for the Agentic metric) |
+| `logprobs` | `dict \| None` | `{}` | Token log probabilities |
+
+## Streamed batch
+
+For stream-based processing (`STREAM_BATCHES`), individual interactions are wrapped in `StreamedBatch`:
+
+```python
+from gaussia.schemas.common import StreamedBatch, SessionMetadata
+
+streamed = StreamedBatch(
+    metadata=SessionMetadata(
+        session_id="session-001",
+        assistant_id="assistant-v2",
+        language="english",
+        context="Product documentation.",
+    ),
+    batch=Batch(
+        qa_id="q1",
+        query="How do I install?",
+        assistant="Run pip install.",
+        ground_truth_assistant="Install with pip install.",
+    ),
+)
+```
+
+## Weighting
+
+The `weight` field on `Batch` controls how much each interaction contributes to the aggregated score:
+
+- **No weights set**: Equal weight (`1/n`) for all interactions
+- **All weights set**: Must sum to 1.0, otherwise Gaussia falls back to equal weights
+- **Partial weights**: Remaining budget is distributed equally among unweighted interactions
+
+```python
+conversation = [
+    Batch(qa_id="q1", weight=0.6, ...),  # Critical question
+    Batch(qa_id="q2", weight=0.4, ...),  # Less important
+]
+```
+
+<Note>
+  The `observation` field is used by some metrics (Context, Conversational) as an alternative to `ground_truth_assistant`. When present, the judge prompt is adjusted to evaluate against the observation rather than the ground truth.
+</Note>

@@ -1,0 +1,35 @@
+---
+title: "Prompt optimizer"
+description: "Optimize LLM prompts using GEPA and MIPROv2 algorithms"
+---
+
+## Overview
+
+The **Prompt Optimizer** module provides algorithms for automatically improving LLM prompts based on evaluation metrics. It uses [Optuna](https://optuna.org/) for hyperparameter optimization.
+
+## Available algorithms
+
+| Algorithm | Description |
+|---|---|
+| **GEPA** | Genetic Evolution Prompt Algorithm — evolves prompts through selection and mutation |
+| **MIPROv2** | Multi-Instance Prompt Optimization v2 — generates and evaluates prompt candidates |
+
+## Usage
+
+```python
+from gaussia.prompt_optimizer import PromptOptimizer
+
+optimizer = PromptOptimizer(
+    algorithm="gepa",
+    n_trials=50,
+)
+
+best_prompt = optimizer.optimize(
+    initial_prompt="You are a helpful assistant.",
+    evaluation_fn=my_evaluation_function,
+)
+```
+
+<Note>
+  Requires the `prompt-optimizer` extra: `pip install "gaussia[prompt-optimizer]"`.
+</Note>

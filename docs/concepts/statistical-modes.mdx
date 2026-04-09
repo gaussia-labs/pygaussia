@@ -1,0 +1,119 @@
+---
+title: "Statistical modes"
+description: "Choose between frequentist point estimates and Bayesian credible intervals for metric aggregation"
+---
+
+## Overview
+
+Every Gaussia metric supports two statistical computation modes. You pass a `StatisticalMode` instance when running a metric to control how scores are aggregated.
+
+| Mode | Returns | Best for |
+|---|---|---|
+| `FrequentistMode` | Single point estimate (weighted mean) | Quick analysis, dashboards |
+| `BayesianMode` | Mean + credible interval (bootstrapped) | Research, uncertainty quantification |
+
+## Frequentist mode (default)
+
+Returns a single value — the weighted mean of all interaction scores.
+
+```python
+from gaussia.statistical import FrequentistMode
+from gaussia.metrics.context import Context
+
+results = Context.run(
+    MyRetriever,
+    model=model,
+    statistical_mode=FrequentistMode(),
+)
+
+for r in results:
+    print(f"Context awareness: {r.context_awareness:.3f}")
+    # context_awareness_ci_low and context_awareness_ci_high are None
+```
+
+### Primitives
+
+| Method | Returns |
+|---|---|
+| `rate_estimation(successes, trials)` | `float` — simple ratio `successes / trials` |
+| `aggregate_metrics(metrics, weights)` | `float` — weighted sum |
+| `dispersion_metric(values, center)` | `float` — mean absolute deviation |
+| `distribution_divergence(observed, reference)` | `float` — total variation distance |
+
+## Bayesian mode
+
+Returns a mean with a credible interval, computed via bootstrap resampling.
+
+```python
+from gaussia.statistical import BayesianMode
+
+results = Context.run(
+    MyRetriever,
+    model=model,
+    statistical_mode=BayesianMode(
+        mc_samples=5000,   # Number of Monte Carlo samples
+        ci_level=0.95,     # 95% credible interval
+    ),
+)
+
+for r in results:
+    print(f"Context awareness: {r.context_awareness:.3f}")
+    print(f"95% CI: [{r.context_awareness_ci_low:.3f}, {r.context_awareness_ci_high:.3f}]")
+```
+
+### Configuration
+
+| Parameter | Default | Description |
+|---|---|---|
+| `mc_samples` | `5000` | Number of Monte Carlo bootstrap samples |
+| `ci_level` | `0.95` | Credible interval level (e.g., 0.95 for 95%) |
+| `dirichlet_prior` | `1.0` | Dirichlet prior concentration for distribution divergence |
+
+### Primitives
+
+| Method | Returns |
+|---|---|
+| `rate_estimation(successes, trials)` | `dict` with `mean`, `ci_low`, `ci_high`, `samples` |
+| `aggregate_metrics(metrics, weights)` | `dict` with `mean`, `ci_low`, `ci_high` |
+| `dispersion_metric(values, center)` | `dict` with `mean`, `ci_low`, `ci_high` |
+| `distribution_divergence(observed, reference)` | `dict` with `mean`, `ci_low`, `ci_high` |
+
+## When to use which
+
+<Columns cols={2}>
+  <Card title="Use FrequentistMode when..." icon="bolt">
+    - You need fast, simple results
+    - You're building dashboards or CI pipelines
+    - Sample sizes are large enough for stable estimates
+  </Card>
+  <Card title="Use BayesianMode when..." icon="flask">
+    - You need uncertainty quantification
+    - Sample sizes are small
+    - You're comparing metrics across experiments
+    - You're writing research papers
+  </Card>
+</Columns>
+
+## Custom modes
+
+You can implement your own `StatisticalMode` by subclassing the abstract base class:
+
+```python
+from gaussia.statistical.base import StatisticalMode
+
+class MyCustomMode(StatisticalMode):
+    def rate_estimation(self, successes, trials):
+        ...
+
+    def aggregate_metrics(self, metrics, weights):
+        ...
+
+    def dispersion_metric(self, values, center="mean"):
+        ...
+
+    def distribution_divergence(self, observed, reference, divergence_type="total_variation"):
+        ...
+
+    def get_result_type(self) -> str:
+        return "point_estimate"  # or "distribution"
+```

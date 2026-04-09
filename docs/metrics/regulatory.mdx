@@ -1,0 +1,81 @@
+---
+title: "Regulatory"
+description: "Evaluate AI response compliance against a regulatory document corpus"
+---
+
+## Overview
+
+The **Regulatory** metric evaluates whether AI responses comply with a regulatory corpus (laws, policies, guidelines). It uses a RAG-based pipeline to:
+
+1. Retrieve relevant regulatory chunks for each interaction
+2. Check for contradictions between the response and the retrieved chunks
+3. Score compliance per interaction and aggregate per session
+
+## Verdicts
+
+| Verdict | Meaning |
+|---|---|
+| `COMPLIANT` | Response supports regulatory requirements |
+| `NON_COMPLIANT` | Response contradicts regulatory requirements |
+| `IRRELEVANT` | No relevant regulatory content found |
+
+## Usage
+
+```python
+from gaussia.metrics.regulatory import Regulatory
+from gaussia.connectors import MyCorpusConnector
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.rerankers import MyReranker
+
+embedder = SentenceTransformerEmbedder(model="all-mpnet-base-v2")
+reranker = MyReranker()
+corpus = MyCorpusConnector(path="./regulations/")
+
+results = Regulatory.run(
+    MyRetriever,
+    corpus_connector=corpus,
+    embedder=embedder,
+    reranker=reranker,
+)
+
+for r in results:
+    print(f"Compliance: {r.compliance_score:.2f} ({r.verdict})")
+    print(f"Supporting: {r.total_supporting_chunks}, Contradicting: {r.total_contradicting_chunks}")
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `corpus_connector` | `CorpusConnector` | *required* | Loader for regulatory documents |
+| `embedder` | `Embedder` | *required* | Text embedder for retrieval |
+| `reranker` | `Reranker` | *required* | Reranker for contradiction detection |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+| `chunk_size` | `int` | `1000` | Characters per chunk |
+| `chunk_overlap` | `int` | `100` | Overlap between chunks |
+| `top_k` | `int` | `10` | Max chunks to retrieve |
+| `similarity_threshold` | `float` | `0.3` | Minimum cosine similarity for retrieval |
+| `contradiction_threshold` | `float` | `0.6` | Score below which a chunk contradicts |
+| `compliance_threshold` | `float` | `0.5` | Minimum score for COMPLIANT verdict |
+
+## Output schema
+
+### RegulatoryMetric
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier |
+| `assistant_id` | `str` | Assistant identifier |
+| `n_interactions` | `int` | Interactions evaluated |
+| `compliance_score` | `float` | Aggregated compliance score |
+| `compliance_score_ci_low` | `float \| None` | Lower CI (Bayesian only) |
+| `compliance_score_ci_high` | `float \| None` | Upper CI (Bayesian only) |
+| `verdict` | `str` | Session-level verdict |
+| `total_supporting_chunks` | `int` | Total supporting evidence |
+| `total_contradicting_chunks` | `int` | Total contradicting evidence |
+| `interactions` | `list[RegulatoryInteraction]` | Per-interaction breakdown |
+
+<Note>
+  Requires the `regulatory` extra: `pip install "gaussia[regulatory]"`.
+</Note>

@@ -1,0 +1,78 @@
+---
+title: "Humanity"
+description: "Measure emotional profiling and entropy of AI assistant responses using NRC emotion lexicons"
+---
+
+## Overview
+
+The **Humanity** metric analyzes the emotional profile of assistant responses using the NRC Emotion Lexicon. It computes emotion distributions, emotional entropy, and Spearman correlation against ground truth responses.
+
+## Dimensions
+
+For each interaction, the metric computes distribution scores across eight emotions:
+
+| Emotion | Description |
+|---|---|
+| Anger | Frustration or hostility expressions |
+| Anticipation | Forward-looking or expectant language |
+| Disgust | Aversion or repulsion indicators |
+| Fear | Anxiety or threat-related language |
+| Joy | Positive or happy expressions |
+| Sadness | Sorrow or melancholy indicators |
+| Surprise | Unexpected or astonishing content |
+| Trust | Reliability and confidence markers |
+
+Additionally, it computes:
+
+- **Emotional entropy**: How diverse the emotional range is (higher = more diverse)
+- **Ground truth Spearman correlation**: How closely the emotional profile matches the expected response
+
+## Usage
+
+```python
+from gaussia.metrics.humanity import Humanity
+
+results = Humanity.run(MyRetriever)
+
+for r in results:
+    print(f"QA: {r.qa_id}")
+    print(f"Emotional entropy: {r.humanity_assistant_emotional_entropy:.3f}")
+    print(f"Spearman correlation: {r.humanity_ground_truth_spearman:.3f}")
+    print(f"Joy: {r.humanity_assistant_joy:.3f}")
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+
+<Note>
+  The Humanity metric does **not** require an LLM — it uses lexicon-based analysis.
+</Note>
+
+## Output schema
+
+### HumanityMetric
+
+One result per interaction (not per session):
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier |
+| `qa_id` | `str` | Interaction identifier |
+| `assistant_id` | `str` | Assistant identifier |
+| `humanity_assistant_emotional_entropy` | `float` | Emotional diversity (Shannon entropy) |
+| `humanity_ground_truth_spearman` | `float` | Correlation with ground truth emotion profile |
+| `humanity_assistant_anger` | `float` | Anger score (0–1) |
+| `humanity_assistant_anticipation` | `float` | Anticipation score (0–1) |
+| `humanity_assistant_disgust` | `float` | Disgust score (0–1) |
+| `humanity_assistant_fear` | `float` | Fear score (0–1) |
+| `humanity_assistant_joy` | `float` | Joy score (0–1) |
+| `humanity_assistant_sadness` | `float` | Sadness score (0–1) |
+| `humanity_assistant_surprise` | `float` | Surprise score (0–1) |
+| `humanity_assistant_trust` | `float` | Trust score (0–1) |
+
+<Note>
+  Requires the `humanity` extra: `pip install "gaussia[humanity]"`.
+</Note>

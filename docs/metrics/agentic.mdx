@@ -1,0 +1,108 @@
+---
+title: "Agentic"
+description: "Evaluate agent conversations with pass@K/pass^K formulas and tool correctness scoring"
+---
+
+## Overview
+
+The **Agentic** metric evaluates complete agent conversations as units. A conversation is considered correct only if **all** its interactions pass the correctness threshold. It computes:
+
+- **pass@K**: Probability of ≥1 correct conversation in K attempts
+- **pass^K**: Probability of K consecutive correct conversations
+- **Tool correctness**: Evaluates correct tool usage (selection, parameters, sequence, utilization)
+
+## Formulas
+
+```
+pass@k = 1 - (1 - p)^k    # P(≥1 correct in k attempts)
+pass^k = p^k               # P(all k correct)
+
+where p = correct_interactions / total_interactions
+```
+
+## Usage
+
+```python
+from langchain_openai import ChatOpenAI
+from gaussia.metrics.agentic import Agentic
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+results = Agentic.run(
+    MyRetriever,
+    model=model,
+    k=3,
+    threshold=0.7,
+)
+
+for r in results:
+    print(f"Session: {r.session_id}")
+    print(f"pass@3: {r.pass_at_k:.3f}")
+    print(f"pass^3: {r.pass_pow_k:.3f}")
+    print(f"Fully correct: {r.is_fully_correct}")
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
+| `k` | `int` | *required* | Number of attempts for pass@K/pass^K |
+| `threshold` | `float` | `0.7` | Correctness threshold for answers |
+| `tool_threshold` | `float` | `1.0` | Threshold for tool correctness |
+| `tool_weights` | `dict` | Equal (0.25 each) | Weights for tool correctness components |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+| `use_structured_output` | `bool` | `True` | Use structured output |
+
+## Tool correctness
+
+When `Batch.agentic` and `Batch.ground_truth_agentic` are provided, tool usage is evaluated across four dimensions:
+
+| Dimension | Weight | What it measures |
+|---|---|---|
+| `selection` | 0.25 | Were the right tools selected? |
+| `parameters` | 0.25 | Were tool parameters correct? |
+| `sequence` | 0.25 | Were tools called in the right order? |
+| `utilization` | 0.25 | Were tool results used in the final answer? |
+
+### Agentic data format
+
+```python
+Batch(
+    qa_id="q1",
+    query="What's the weather in Paris?",
+    assistant="It's 22°C in Paris.",
+    ground_truth_assistant="The weather in Paris is 22°C.",
+    agentic={
+        "tools_used": [
+            {"tool_name": "weather_api", "parameters": {"city": "Paris"}, "step": 1}
+        ],
+        "final_answer_uses_tools": True,
+    },
+    ground_truth_agentic={
+        "expected_tools": [
+            {"tool_name": "weather_api", "parameters": {"city": "Paris"}, "step": 1}
+        ],
+        "tool_sequence_matters": True,
+    },
+)
+```
+
+## Output schema
+
+### AgenticMetric
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier |
+| `assistant_id` | `str` | Assistant identifier |
+| `total_interactions` | `int` | Total interactions in the conversation |
+| `correct_interactions` | `int` | Interactions that passed the threshold |
+| `is_fully_correct` | `bool` | Whether all interactions were correct |
+| `pass_at_k` | `float` | pass@K probability |
+| `pass_pow_k` | `float` | pass^K probability |
+| `k` | `int` | K value used |
+| `threshold` | `float` | Correctness threshold used |
+| `correctness_scores` | `list[float]` | Per-interaction correctness scores |
+| `tool_correctness_scores` | `list[ToolCorrectnessScore]` | Per-interaction tool scores |

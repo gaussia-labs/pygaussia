@@ -1,0 +1,65 @@
+---
+title: "Conversational"
+description: "Evaluate dialogue quality across seven dimensions using Grice's maxims"
+---
+
+## Overview
+
+The **Conversational** metric evaluates dialogue quality across seven dimensions grounded in Grice's Cooperative Principle. An LLM judge scores each interaction, and scores are aggregated per session.
+
+## Dimensions
+
+| Dimension | What it measures |
+|---|---|
+| `memory` | Consistent reference to prior conversation context |
+| `language` | Appropriate use of the preferred language |
+| `quality_maxim` | Truthfulness and evidence-backed responses |
+| `quantity_maxim` | Information sufficiency — not too little, not too much |
+| `relation_maxim` | Relevance to the user's query |
+| `manner_maxim` | Clarity, structure, and lack of ambiguity |
+| `sensibleness` | Overall logical coherence of the response |
+
+## Usage
+
+```python
+from langchain_openai import ChatOpenAI
+from gaussia.metrics.conversational import Conversational
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+results = Conversational.run(MyRetriever, model=model)
+
+for r in results:
+    print(f"Quality maxim: {r.conversational_quality_maxim.mean:.2f}")
+    print(f"Sensibleness:  {r.conversational_sensibleness.mean:.2f}")
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+| `use_structured_output` | `bool` | `False` | Use structured output |
+| `strict` | `bool` | `True` | Strict schema validation |
+
+## Output schema
+
+### ConversationalMetric
+
+Each dimension is returned as a `ConversationalScore` with `mean`, `ci_low`, and `ci_high`:
+
+| Field | Type |
+|---|---|
+| `session_id` | `str` |
+| `assistant_id` | `str` |
+| `n_interactions` | `int` |
+| `conversational_memory` | `ConversationalScore` |
+| `conversational_language` | `ConversationalScore` |
+| `conversational_quality_maxim` | `ConversationalScore` |
+| `conversational_quantity_maxim` | `ConversationalScore` |
+| `conversational_relation_maxim` | `ConversationalScore` |
+| `conversational_manner_maxim` | `ConversationalScore` |
+| `conversational_sensibleness` | `ConversationalScore` |
+| `interactions` | `list[ConversationalInteraction]` |

@@ -1,0 +1,87 @@
+---
+title: "LLM judge"
+description: "Use any LangChain-compatible model as an evaluation judge for metric scoring"
+---
+
+## Overview
+
+Several Gaussia metrics (Context, Conversational, BestOf, Agentic) use an **LLM-as-a-Judge** pattern to evaluate AI responses. The `Judge` class handles prompt rendering, model invocation, and response parsing.
+
+## How it works
+
+The `Judge` supports two evaluation modes:
+
+| Mode | How it works | Best for |
+|---|---|---|
+| **Structured output** | Uses LangChain's `create_agent` with `response_format` for schema-validated responses | Models that support structured outputs (GPT-4o, Gemini) |
+| **Regex extraction** | Embeds JSON schema in the prompt, extracts from markdown code blocks | Any model, including open-source |
+
+## Configuration
+
+You configure the judge through the metric's constructor parameters:
+
+```python
+from langchain_openai import ChatOpenAI
+from gaussia.metrics.context import Context
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# Structured output mode (recommended for supported models)
+results = Context.run(
+    MyRetriever,
+    model=model,
+    use_structured_output=True,
+    strict=True,
+)
+
+# Regex extraction mode (works with any model)
+results = Context.run(
+    MyRetriever,
+    model=model,
+    use_structured_output=False,
+    bos_json_clause="```json",
+    eos_json_clause="```",
+)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `model` | *required* | Any LangChain `BaseChatModel` instance |
+| `use_structured_output` | `False` | Use schema-validated structured output |
+| `strict` | `True` | Enforce strict schema validation |
+| `bos_json_clause` | `` ```json `` | Opening marker for JSON extraction (regex mode only) |
+| `eos_json_clause` | `` ``` `` | Closing marker for JSON extraction (regex mode only) |
+
+## Compatible models
+
+The `Judge` works with any LangChain-compatible chat model:
+
+```python
+# OpenAI
+from langchain_openai import ChatOpenAI
+model = ChatOpenAI(model="gpt-4o-mini")
+
+# Anthropic
+from langchain_anthropic import ChatAnthropic
+model = ChatAnthropic(model="claude-sonnet-4-20250514")
+
+# Groq
+from langchain_groq import ChatGroq
+model = ChatGroq(model="llama-3.3-70b-versatile")
+
+# Google
+from langchain_google_genai import ChatGoogleGenerativeAI
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+```
+
+## Reasoning extraction
+
+When available, the Judge automatically extracts reasoning content from the model's response. This is supported by models that provide chain-of-thought reasoning (e.g., OpenAI's reasoning models, Anthropic's extended thinking).
+
+The reasoning is returned as the first element of the tuple from `judge.check()` and is used internally for logging and debugging.
+
+<Tip>
+  For best results with `use_structured_output=True`, use models that natively support structured outputs like GPT-4o or Gemini. For open-source models, `use_structured_output=False` with regex extraction is more reliable.
+</Tip>

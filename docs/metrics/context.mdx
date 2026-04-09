@@ -1,0 +1,67 @@
+---
+title: "Context"
+description: "Evaluate how well AI responses align with provided context using LLM-as-a-judge scoring"
+---
+
+## Overview
+
+The **Context** metric measures how accurately an AI assistant's responses align with the provided context. It uses an LLM judge to score each interaction's `context_awareness` on a 0–1 scale, then aggregates across the session.
+
+## Usage
+
+```python
+from langchain_openai import ChatOpenAI
+from gaussia.metrics.context import Context
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+results = Context.run(
+    MyRetriever,
+    model=model,
+    statistical_mode=FrequentistMode(),  # default
+)
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class for loading datasets |
+| `model` | `BaseChatModel` | *required* | LangChain model for evaluation |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+| `use_structured_output` | `bool` | `False` | Use LangChain structured output |
+| `strict` | `bool` | `True` | Enforce strict schema validation |
+| `bos_json_clause` | `str` | `` ```json `` | Opening JSON marker |
+| `eos_json_clause` | `str` | `` ``` `` | Closing JSON marker |
+
+## Output schema
+
+### ContextMetric
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier |
+| `assistant_id` | `str` | Assistant identifier |
+| `n_interactions` | `int` | Number of interactions evaluated |
+| `context_awareness` | `float` | Aggregated context awareness score (0–1) |
+| `context_awareness_ci_low` | `float \| None` | Lower bound of confidence interval (Bayesian only) |
+| `context_awareness_ci_high` | `float \| None` | Upper bound of confidence interval (Bayesian only) |
+| `interactions` | `list[ContextInteraction]` | Per-interaction breakdown |
+
+### ContextInteraction
+
+| Field | Type | Description |
+|---|---|---|
+| `qa_id` | `str` | Interaction identifier |
+| `context_awareness` | `float` | Context awareness score for this interaction (0–1) |
+
+## How it works
+
+1. For each interaction, the judge receives the context, the assistant's answer, and either the ground truth or observation
+2. The judge evaluates whether the response is grounded in the provided context
+3. Scores are accumulated per session
+4. In `on_process_complete()`, scores are aggregated using the configured statistical mode
+
+<Note>
+  When an interaction has an `observation` field, the judge uses an alternative prompt that evaluates against the observation rather than `ground_truth_assistant`.
+</Note>

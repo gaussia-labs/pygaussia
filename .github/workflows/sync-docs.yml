@@ -1,0 +1,68 @@
+name: Sync docs to central repo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout pygaussia
+        uses: actions/checkout@v4
+
+      - name: Checkout central docs
+        uses: actions/checkout@v4
+        with:
+          repository: gaussia-labs/docs
+          token: ${{ secrets.DOCS_REPO_PAT }}
+          path: central-docs
+
+      - name: Read sync manifest
+        id: manifest
+        run: |
+          TARGET_DIR=$(jq -r '.target_dir' docs/docs-sync.json)
+          echo "target_dir=${TARGET_DIR}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync documentation files
+        run: |
+          TARGET_DIR="${{ steps.manifest.outputs.target_dir }}"
+
+          # Clean previous SDK docs
+          rm -rf "central-docs/${TARGET_DIR}"
+          mkdir -p "central-docs/${TARGET_DIR}"
+
+          # Copy all mdx files preserving directory structure
+          cd docs
+          find . -name '*.mdx' -not -path './node_modules/*' | while read -r f; do
+            dir=$(dirname "$f")
+            mkdir -p "../central-docs/${TARGET_DIR}/${dir}"
+            cp "$f" "../central-docs/${TARGET_DIR}/$f"
+          done
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.DOCS_REPO_PAT }}
+          path: central-docs
+          branch: docs/sync-python-sdk
+          delete-branch: true
+          title: "docs(python): sync SDK docs from pygaussia@${{ github.sha }}"
+          body: |
+            Automated sync of Python SDK documentation from [pygaussia](https://github.com/gaussia-labs/pygaussia).
+
+            **Commit**: ${{ github.sha }}
+            **Branch**: ${{ github.ref_name }}
+            **Triggered by**: ${{ github.actor }}
+
+            ---
+            This PR was created automatically by the `sync-docs` workflow.
+          commit-message: "docs(python): sync SDK docs from pygaussia@${{ github.sha }}"
+          labels: |
+            documentation
+            automated

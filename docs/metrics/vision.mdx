@@ -1,0 +1,99 @@
+---
+title: "Vision"
+description: "Evaluate vision-language model descriptions for similarity and hallucination detection"
+---
+
+## Overview
+
+The **Vision** module provides two complementary metrics for evaluating Vision Language Models (VLMs):
+
+- **VisionSimilarity**: How accurately the VLM describes scenes compared to human ground truth
+- **VisionHallucination**: How often the VLM describes content not present in the scene
+
+Both metrics use a pluggable `SimilarityScorer` (defaulting to cosine similarity with `all-mpnet-base-v2`).
+
+## VisionSimilarity
+
+Measures semantic similarity between VLM descriptions and human annotations.
+
+```python
+from gaussia.metrics.vision import VisionSimilarity
+
+results = VisionSimilarity.run(MyRetriever)
+
+for r in results:
+    print(f"Mean similarity: {r.mean_similarity:.0%}")
+    print(f"Range: [{r.min_similarity:.0%}, {r.max_similarity:.0%}]")
+    print(r.summary)
+```
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `mean_similarity` | `float` | Average similarity across all frames |
+| `min_similarity` | `float` | Minimum similarity score |
+| `max_similarity` | `float` | Maximum similarity score |
+| `summary` | `str` | Human-readable summary |
+| `interactions` | `list[VisionSimilarityInteraction]` | Per-frame scores |
+
+## VisionHallucination
+
+Flags frames where similarity falls below a threshold as hallucinations.
+
+```python
+from gaussia.metrics.vision import VisionHallucination
+
+results = VisionHallucination.run(
+    MyRetriever,
+    threshold=0.75,
+)
+
+for r in results:
+    print(f"Hallucination rate: {r.hallucination_rate:.0%}")
+    print(f"Hallucinations: {r.n_hallucinations}/{r.n_frames}")
+```
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `hallucination_rate` | `float` | Fraction of hallucinated frames |
+| `n_hallucinations` | `int` | Number of hallucinated frames |
+| `n_frames` | `int` | Total frames evaluated |
+| `threshold` | `float` | Threshold used |
+| `summary` | `str` | Human-readable summary |
+| `interactions` | `list[VisionHallucinationInteraction]` | Per-frame results |
+
+## Parameters (both metrics)
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `scorer` | `SimilarityScorer` | Cosine + mpnet | Similarity scoring strategy |
+| `threshold` | `float` | `0.75` | Hallucination threshold |
+
+## Custom scorer
+
+```python
+from gaussia.embedders import SentenceTransformerEmbedder
+from gaussia.scorers import CosineSimilarity
+
+scorer = CosineSimilarity(SentenceTransformerEmbedder(model="all-MiniLM-L6-v2"))
+results = VisionSimilarity.run(MyRetriever, scorer=scorer)
+```
+
+### Expected batch format
+
+```python
+Batch(
+    qa_id="frame-001",
+    query="Describe the scene",
+    assistant="A person walking a dog in a park",        # VLM output
+    ground_truth_assistant="A woman jogging with her golden retriever",  # Human annotation
+)
+```
+
+<Note>
+  Requires the `vision` extra: `pip install "gaussia[vision]"`.
+</Note>

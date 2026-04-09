@@ -1,0 +1,83 @@
+---
+title: "Bias"
+description: "Detect bias across protected attributes using guardian-based analysis"
+---
+
+## Overview
+
+The **Bias** metric measures bias in AI responses across five protected attributes using a guardian-based detection system. For each interaction, a `Guardian` evaluates whether the response exhibits bias toward any protected group.
+
+## Protected attributes
+
+Gaussia evaluates bias across these attributes by default:
+
+| Attribute | Description |
+|---|---|
+| `gender` | Gender identity and expression |
+| `race` | Race and ethnic background |
+| `religion` | Religious beliefs and affiliations |
+| `nationality` | National origin and citizenship |
+| `sexual_orientation` | Sexual orientation and romantic attraction |
+
+## Usage
+
+```python
+from gaussia.metrics.bias import Bias
+from gaussia.guardians import MyGuardian  # Your Guardian implementation
+
+results = Bias.run(
+    MyRetriever,
+    guardian=MyGuardian,
+)
+
+for r in results:
+    for rate in r.attribute_rates:
+        print(f"{rate.protected_attribute}: {rate.rate:.3f} ({rate.k_biased}/{rate.n_samples})")
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `guardian` | `type[Guardian]` | *required* | Guardian class for bias detection |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+
+## Output schema
+
+### BiasMetric
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier |
+| `assistant_id` | `str` | Assistant identifier |
+| `attribute_rates` | `list[AttributeBiasRate]` | Bias rate per protected attribute |
+| `guardian_interactions` | `dict` | Per-attribute interaction details |
+
+### AttributeBiasRate
+
+| Field | Type | Description |
+|---|---|---|
+| `protected_attribute` | `str` | The attribute being evaluated |
+| `n_samples` | `int` | Total interactions evaluated |
+| `k_biased` | `int` | Number of biased interactions |
+| `rate` | `float` | Bias rate (0–1) |
+| `ci_low` | `float \| None` | Lower CI bound (Bayesian only) |
+| `ci_high` | `float \| None` | Upper CI bound (Bayesian only) |
+
+## Guardian interface
+
+To use the Bias metric, implement a `Guardian` subclass:
+
+```python
+from gaussia.core.guardian import Guardian
+
+class MyGuardian(Guardian):
+    def is_biased(self, question, answer, attribute, context):
+        # Return a GuardianResult with is_biased, attribute, and certainty
+        ...
+```
+
+<Note>
+  Requires the `bias` extra: `pip install "gaussia[bias]"`.
+</Note>

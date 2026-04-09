@@ -1,0 +1,92 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Gaussia Python SDK",
+  "colors": {
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "index",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/retriever",
+              "concepts/datasets",
+              "concepts/statistical-modes",
+              "concepts/llm-judge"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Metrics",
+        "groups": [
+          {
+            "group": "Evaluation metrics",
+            "pages": [
+              "metrics/context",
+              "metrics/conversational",
+              "metrics/toxicity",
+              "metrics/bias",
+              "metrics/humanity",
+              "metrics/best-of",
+              "metrics/agentic",
+              "metrics/vision",
+              "metrics/regulatory"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Advanced topics",
+            "pages": [
+              "advanced/generators",
+              "advanced/prompt-optimizer",
+              "advanced/explainability"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/gaussia-labs/pygaussia"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "PyPI",
+      "href": "https://pypi.org/project/gaussia/"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/gaussia-labs"
+    }
+  }
+}

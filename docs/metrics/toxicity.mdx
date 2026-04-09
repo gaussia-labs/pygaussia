@@ -1,0 +1,82 @@
+---
+title: "Toxicity"
+description: "Detect toxic language and measure demographic bias using cluster profiling and DIDT analysis"
+---
+
+## Overview
+
+The **Toxicity** metric provides comprehensive toxicity analysis through two complementary approaches:
+
+1. **Cluster profiling**: HDBSCAN + UMAP clustering of response embeddings, with per-cluster toxicity scoring via HurtLex lexicons
+2. **Group profiling (DIDT)**: Demographic Impact and Directed Toxicity analysis across demographic groups
+
+## DIDT components
+
+| Component | Full name | What it measures |
+|---|---|---|
+| **DR** | Demographic Representation | Distribution divergence from a reference distribution |
+| **ASB** | Associated Sentiment Bias | Sentiment deviation across demographic groups |
+| **DTO** | Directed Toxicity per Group | Toxicity rate dispersion across groups |
+| **DIDT** | Aggregated | Weighted combination of DR, ASB, and DTO |
+
+## Usage
+
+```python
+from gaussia.metrics.toxicity import Toxicity
+from gaussia.embedders import SentenceTransformerEmbedder
+
+embedder = SentenceTransformerEmbedder(model="all-mpnet-base-v2")
+
+results = Toxicity.run(
+    MyRetriever,
+    embedder=embedder,
+    group_prototypes={
+        "male": ["he", "him", "man", "boy"],
+        "female": ["she", "her", "woman", "girl"],
+    },
+)
+```
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `retriever` | `type[Retriever]` | *required* | Retriever class |
+| `embedder` | `Embedder` | *required* | Text embedder instance |
+| `toxicity_loader` | `type[ToxicityLoader]` | `HurtlexLoader` | Toxicity lexicon loader |
+| `group_prototypes` | `dict[str, list[str]]` | `None` | Prototype words per demographic group |
+| `group_extractor` | `BaseGroupExtractor` | `None` | Custom group extractor (overrides prototypes) |
+| `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
+| `sentiment_analyzer` | `SentimentAnalyzer` | `None` | Sentiment analyzer for ASB (optional) |
+| `w_DR`, `w_ASB`, `w_DTO` | `float` | `1/3` each | DIDT component weights |
+
+### Clustering parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `toxicity_min_cluster_size` | `5` | Minimum cluster size for HDBSCAN |
+| `toxicity_cluster_selection_epsilon` | `0.01` | Cluster selection epsilon |
+| `toxicity_cluster_use_latent_space` | `True` | Cluster on UMAP latent space |
+| `umap_n_components` | `2` | UMAP dimensions |
+| `umap_n_neighbors` | `15` | UMAP neighbors |
+| `umap_min_dist` | `0.1` | UMAP minimum distance |
+
+## Output schema
+
+### ToxicityMetric
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Session identifier (global for accumulated) |
+| `assistant_id` | `str` | Assistant identifier |
+| `cluster_profiling` | `dict[int, float]` | Toxicity score per cluster |
+| `assistant_space` | `AssistantSpace` | Embeddings, latent space, cluster labels |
+| `group_profiling` | `dict` | Full DIDT breakdown (DR, ASB, DTO, DIDT) |
+
+<Warning>
+  Mixed-language datasets are **not supported**. Toxic word sets differ per language, so accumulating toxicity flags across languages produces unreliable results. A warning is emitted if multiple languages are detected.
+</Warning>
+
+<Note>
+  Requires the `toxicity` extra: `pip install "gaussia[toxicity]"`.
+</Note>

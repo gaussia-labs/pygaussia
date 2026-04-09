@@ -1,0 +1,51 @@
+{
+  "target_repo": "gaussia-labs/docs",
+  "target_branch": "main",
+  "source_dir": "docs",
+  "target_dir": "sdks/python",
+  "navigation": {
+    "tab": "Python SDK",
+    "groups": [
+      {
+        "group": "Getting started",
+        "pages": [
+          "sdks/python/index",
+          "sdks/python/installation",
+          "sdks/python/quickstart"
+        ]
+      },
+      {
+        "group": "Core concepts",
+        "pages": [
+          "sdks/python/concepts/architecture",
+          "sdks/python/concepts/retriever",
+          "sdks/python/concepts/datasets",
+          "sdks/python/concepts/statistical-modes",
+          "sdks/python/concepts/llm-judge"
+        ]
+      },
+      {
+        "group": "Metrics",
+        "pages": [
+          "sdks/python/metrics/context",
+          "sdks/python/metrics/conversational",
+          "sdks/python/metrics/toxicity",
+          "sdks/python/metrics/bias",
+          "sdks/python/metrics/humanity",
+          "sdks/python/metrics/best-of",
+          "sdks/python/metrics/agentic",
+          "sdks/python/metrics/vision",
+          "sdks/python/metrics/regulatory"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "sdks/python/advanced/generators",
+          "sdks/python/advanced/prompt-optimizer",
+          "sdks/python/advanced/explainability"
+        ]
+      }
+    ]
+  }
+}

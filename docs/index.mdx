@@ -1,0 +1,53 @@
+---
+title: "Gaussia Python SDK"
+description: "A modular framework for measuring fairness, quality, and safety of AI assistant responses"
+---
+
+## What is gaussia?
+
+Gaussia is an AI evaluation framework that provides metrics for measuring fairness, toxicity, bias, conversational quality, and more for AI models and assistants. The Python SDK (`gaussia`) is the reference implementation.
+
+<CardGroup cols={2}>
+  <Card title="Install" icon="download" href="installation">
+    Install the SDK and optional dependencies for your use case.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="quickstart">
+    Run your first metric evaluation in under 5 minutes.
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="concepts/architecture">
+    Understand the pipeline: Retriever → Dataset → Metric → Results.
+  </Card>
+  <Card title="Metrics" icon="chart-bar" href="metrics/context">
+    Explore the full suite of evaluation metrics.
+  </Card>
+</CardGroup>
+
+## Available metrics
+
+Gaussia provides a comprehensive suite of evaluation metrics across multiple dimensions:
+
+| Metric | What it measures | Requires LLM |
+|---|---|---|
+| [Context](/metrics/context) | Response alignment with provided context | ✅ |
+| [Conversational](/metrics/conversational) | Dialogue quality via Grice's maxims | ✅ |
+| [Toxicity](/metrics/toxicity) | Toxic language and demographic bias (DIDT) | ❌ |
+| [Bias](/metrics/bias) | Bias across protected attributes | ✅ |
+| [Humanity](/metrics/humanity) | Emotional profile and entropy | ❌ |
+| [BestOf](/metrics/best-of) | Tournament-style assistant comparison | ✅ |
+| [Agentic](/metrics/agentic) | Agent correctness with pass@K | ✅ |
+| [Vision](/metrics/vision) | VLM hallucination and similarity | ❌ |
+| [Regulatory](/metrics/regulatory) | Compliance against regulatory corpus | ❌ |
+
+## Key features
+
+<Columns cols={3}>
+  <Card title="Pluggable statistics" icon="chart-line">
+    Switch between frequentist point estimates and Bayesian credible intervals.
+  </Card>
+  <Card title="Streaming support" icon="wave-pulse">
+    Process datasets in full, by session, or by individual QA batch.
+  </Card>
+  <Card title="LLM-as-a-Judge" icon="gavel">
+    Use any LangChain-compatible model as an evaluation judge.
+  </Card>
+</Columns>

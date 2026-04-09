@@ -1,0 +1,79 @@
+---
+title: "Generators"
+description: "Generate synthetic evaluation datasets from context documents using LLM-powered generation"
+---
+
+## Overview
+
+The **Generators** module creates synthetic `Dataset` objects from context documents. This is useful for bootstrapping evaluations when you don't have real conversation data.
+
+## How it works
+
+1. A **context loader** reads and chunks your documents
+2. A **chunk selection strategy** picks which chunks to process
+3. The **generator** uses an LLM to create realistic QA pairs from each chunk
+
+## Usage
+
+```python
+from langchain_openai import ChatOpenAI
+from gaussia.generators import BaseGenerator, create_markdown_loader
+
+model = ChatOpenAI(model="gpt-4o-mini")
+generator = BaseGenerator(model=model)
+
+loader = create_markdown_loader()
+datasets = await generator.generate_dataset(
+    context_loader=loader,
+    source="./docs/knowledge_base.md",
+    assistant_id="my-assistant",
+)
+```
+
+## Context loaders
+
+### LocalMarkdownLoader
+
+Reads markdown files and splits them into chunks based on headers and size:
+
+```python
+from gaussia.generators import create_markdown_loader
+
+loader = create_markdown_loader(
+    max_chunk_size=2000,   # Max characters per chunk
+    min_chunk_size=200,    # Min characters per chunk
+    overlap=100,           # Overlap between size-based chunks
+    header_levels=[1, 2],  # Split on H1 and H2
+)
+```
+
+### Custom loader
+
+Implement `BaseContextLoader` for custom document sources:
+
+```python
+from gaussia.generators import BaseContextLoader, Chunk
+
+class MyLoader(BaseContextLoader):
+    def load(self, source: str) -> list[Chunk]:
+        # Return list of Chunk objects
+        ...
+```
+
+## Chunk selection strategies
+
+| Strategy | Description |
+|---|---|
+| `SequentialStrategy` | Process all chunks in order (default) |
+| `RandomSamplingStrategy` | Randomly sample chunks multiple times |
+
+```python
+from gaussia.generators import RandomSamplingStrategy
+
+datasets = await generator.generate_dataset(
+    context_loader=loader,
+    source="./docs/",
+    assistant_id="my-assistant",
+    strategy=RandomSamplingStrategy(n_samples=10, seed=42),
+)
+```

@@ -1,0 +1,38 @@
+---
+title: "Explainability"
+description: "Analyze token-level attributions to understand which input tokens drive model outputs"
+---
+
+## Overview
+
+The **Explainability** module provides token attribution analysis to understand which parts of the input influence model outputs. It uses the [interpreto](https://github.com/gaussia-labs/interpreto) library for token-level attribution.
+
+## Use case
+
+Explainability helps you understand:
+
+- Which tokens in the input have the most influence on the output
+- Whether the model is attending to the right parts of the context
+- Potential biases in token-level attention patterns
+
+## Usage
+
+```python
+from gaussia.explainability import TokenAttribution
+
+attribution = TokenAttribution(
+    model_name="bert-base-uncased",
+)
+
+results = attribution.analyze(
+    text="The weather in Paris is sunny today.",
+    target="sunny",
+)
+
+for token, score in results.attributions:
+    print(f"{token}: {score:.4f}")
+```
+
+<Note>
+  Requires the `explainability` extra: `pip install "gaussia[explainability]"`.
+</Note>

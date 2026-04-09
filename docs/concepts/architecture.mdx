@@ -1,0 +1,104 @@
+---
+title: "Architecture"
+description: "Understand the Gaussia evaluation pipeline from data loading to metric results"
+---
+
+## Pipeline overview
+
+Every Gaussia evaluation follows a single pipeline. Data flows through four stages:
+
+```mermaid
+flowchart TD
+    A["Retriever"] -->|"load_dataset()"| B["Dataset[]"]
+    B -->|"_process()"| C["Gaussia Metric"]
+    C -->|"batch()"| D["Per-interaction scoring"]
+    D -->|"on_process_complete()"| E["Aggregated results"]
+```
+
+### 1. Retriever
+
+The `Retriever` is an abstract class you implement to load conversation data from any source — a database, API, CSV file, or in-memory data. It returns a list of `Dataset` objects (or an iterator for streaming).
+
+### 2. Dataset
+
+A `Dataset` represents a complete conversation session. It contains metadata (session ID, assistant ID, language, context) and a list of `Batch` objects — each one a single user–assistant interaction.
+
+### 3. Metric processing
+
+The `Gaussia` base class orchestrates iteration. It calls your metric's `batch()` method for each conversation, passing the session metadata and the list of interactions.
+
+### 4. Aggregation
+
+After all conversations are processed, `on_process_complete()` runs. Metrics that accumulate data across sessions (like Toxicity) use this hook to compute global results.
+
+## Iteration levels
+
+The pipeline supports three iteration strategies, configured via the `Retriever.iteration_level` property:
+
+| Level | Description | Use case |
+|---|---|---|
+| `FULL_DATASET` | Loads everything into memory, iterates by session | Small to medium datasets |
+| `STREAM_SESSIONS` | Yields one `Dataset` at a time via generator | Large datasets that don't fit in memory |
+| `STREAM_BATCHES` | Yields one `StreamedBatch` at a time | Real-time or event-driven evaluation |
+
+```python
+from gaussia.schemas.common import IterationLevel
+
+class StreamingRetriever(Retriever):
+    @property
+    def iteration_level(self) -> IterationLevel:
+        return IterationLevel.STREAM_SESSIONS
+
+    def load_dataset(self):
+        for session in fetch_sessions():
+            yield Dataset(...)
+```
+
+## Class hierarchy
+
+```mermaid
+classDiagram
+    class Gaussia {
+        <<abstract>>
+        +run(retriever, **kwargs) list
+        +batch(session_id, context, assistant_id, batch, language)*
+        +on_process_complete()
+        -_process() list
+        -_resolve_weights(batch) dict
+        -_aggregate_scores(scores, batches, weights, mode) tuple
+    }
+
+    class Retriever {
+        <<abstract>>
+        +load_dataset()* list~Dataset~ | Iterator
+        +iteration_level IterationLevel
+    }
+
+    class StatisticalMode {
+        <<abstract>>
+        +rate_estimation(successes, trials)*
+        +aggregate_metrics(metrics, weights)*
+        +dispersion_metric(values, center)*
+        +distribution_divergence(observed, reference)*
+        +get_result_type()* str
+    }
+
+    Gaussia --> Retriever : uses
+    Gaussia --> StatisticalMode : uses
+    Context --|> Gaussia
+    Conversational --|> Gaussia
+    Toxicity --|> Gaussia
+    Bias --|> Gaussia
+    FrequentistMode --|> StatisticalMode
+    BayesianMode --|> StatisticalMode
+```
+
+## Weight resolution
+
+Gaussia supports per-interaction weighting. When a `Batch` has a `weight` field:
+
+- **All weights provided**: Must sum to 1.0, otherwise falls back to equal weights
+- **Some weights provided**: Remaining weight is distributed equally among unweighted interactions
+- **No weights**: All interactions receive equal weight (`1/n`)
+
+This applies to all metrics that use `_aggregate_scores()`.
