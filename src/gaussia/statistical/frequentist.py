@@ -1,5 +1,7 @@
 """Frequentist statistical mode implementation."""
 
+from typing import Any
+
 import numpy as np
 
 from .base import StatisticalMode
@@ -27,7 +29,7 @@ class FrequentistMode(StatisticalMode):
         """Simple proportion."""
         return float(successes / trials) if trials > 0 else 0.0
 
-    def aggregate_metrics(self, metrics: dict[str, float], weights: dict[str, float]) -> float:
+    def aggregate_metrics(self, metrics: dict[str, float | dict[str, Any]], weights: dict[str, float]) -> float:
         """Weighted sum."""
         total_weight = sum(weights.values())
         if total_weight == 0:
@@ -36,7 +38,7 @@ class FrequentistMode(StatisticalMode):
         normalized_weights = {k: v / total_weight for k, v in weights.items()}
         return float(sum(metrics[k] * normalized_weights[k] for k in metrics))
 
-    def dispersion_metric(self, values: dict[str, float], center: str = "mean") -> float:
+    def dispersion_metric(self, values: dict[str, float | dict[str, Any]], center: str = "mean") -> float:
         """Mean absolute deviation from center."""
         if not values:
             return 0.0

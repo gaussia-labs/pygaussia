@@ -27,7 +27,7 @@ class HurtlexLoader(ToxicityLoader):
             List of ToxicityDataset entries
         """
         # Use importlib.resources instead of deprecated pkg_resources
-        toxicity_file = files("gaussia").joinpath(f"artifacts/toxicity/hurtlex_{language}.tsv")
+        toxicity_file = str(files("gaussia").joinpath(f"artifacts/toxicity/hurtlex_{language}.tsv"))
         hurtlex_data = pd.read_csv(
             toxicity_file,
             sep="\t",

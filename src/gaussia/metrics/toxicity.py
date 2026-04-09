@@ -141,13 +141,13 @@ class Toxicity(Gaussia):
         self.logger.debug(f"Weights: w_DR={self.w_DR}, w_ASB={self.w_ASB}, w_DTO={self.w_DTO}")
         self.logger.debug(f"Group extractor: {self.group_extractor}")
 
-        self._accumulated_metadata = []
-        self._accumulated_embeddings = []
-        self._accumulated_sentiments = []
-        self._accumulated_group_dets = []
-        self._accumulated_toxic_words = []
-        self._accumulated_total_words = []
-        self._accumulated_toxic_flags = []
+        self._accumulated_metadata: list[dict] = []
+        self._accumulated_embeddings: list[list] = []
+        self._accumulated_sentiments: list[float] = []
+        self._accumulated_group_dets: list[dict] = []
+        self._accumulated_toxic_words: list[int] = []
+        self._accumulated_total_words: list[int] = []
+        self._accumulated_toxic_flags: list[bool] = []
         self._seen_languages: set[str] = set()
 
     # -------------------------

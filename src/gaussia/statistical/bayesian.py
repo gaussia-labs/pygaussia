@@ -38,7 +38,7 @@ class BayesianMode(StatisticalMode):
         self.rng = np.random.default_rng(rng_seed)
 
     def distribution_divergence(
-        self, observed_counts: dict[str, int], reference: dict[str, float], divergence_type: str = "total_variation"
+        self, observed_counts: dict[str, int | float], reference: dict[str, float], divergence_type: str = "total_variation"
     ) -> dict[str, Any]:
         """
         Bayesian divergence with Dirichlet posterior.
@@ -86,7 +86,7 @@ class BayesianMode(StatisticalMode):
         samples = self.rng.beta(a_posterior, b_posterior, size=self.mc_samples)
         return self._summarize(samples)
 
-    def aggregate_metrics(self, metrics: dict[str, dict[str, Any]], weights: dict[str, float]) -> dict[str, Any]:
+    def aggregate_metrics(self, metrics: dict[str, float | dict[str, Any]], weights: dict[str, float]) -> dict[str, Any]:
         """Aggregate by combining samples with weights."""
         total_weight = sum(weights.values())
         if total_weight == 0:
@@ -98,29 +98,30 @@ class BayesianMode(StatisticalMode):
         aggregated_samples = np.zeros(self.mc_samples)
         for name, metric_result in metrics.items():
             weight = normalized_weights.get(name, 0.0)
-            if "samples" in metric_result and len(metric_result["samples"]) == self.mc_samples:
+            if isinstance(metric_result, dict) and "samples" in metric_result and len(metric_result["samples"]) == self.mc_samples:
                 aggregated_samples += weight * metric_result["samples"]
-            else:
-                # Fallback if no samples or wrong size
+            elif isinstance(metric_result, dict):
                 aggregated_samples += weight * metric_result.get("mean", 0.0)
+            else:
+                aggregated_samples += weight * float(metric_result)
 
         return self._summarize(aggregated_samples)
 
-    def dispersion_metric(self, values: dict[str, dict[str, Any]], center: str = "mean") -> dict[str, Any]:
+    def dispersion_metric(self, values: dict[str, float | dict[str, Any]], center: str = "mean") -> dict[str, Any]:
         """Compute dispersion from samples."""
         if not values:
             return self._empty_summary()
 
         # Stack all samples
-        all_samples = []
+        sample_list: list[np.ndarray] = []
         for v in values.values():
-            if "samples" in v and len(v["samples"]) == self.mc_samples:
-                all_samples.append(v["samples"])
+            if isinstance(v, dict) and "samples" in v and len(v["samples"]) == self.mc_samples:
+                sample_list.append(v["samples"])
             else:
-                # Fallback to point estimate if no samples or wrong size
-                all_samples.append(np.full(self.mc_samples, v.get("mean", 0.0)))
+                fallback = v.get("mean", 0.0) if isinstance(v, dict) else float(v)
+                sample_list.append(np.full(self.mc_samples, fallback))
 
-        all_samples = np.array(all_samples)
+        all_samples = np.array(sample_list)
 
         # Compute center for each MC iteration
         if center == "mean":

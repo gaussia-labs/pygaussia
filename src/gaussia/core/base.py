@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -39,7 +39,7 @@ class Gaussia(ABC):
             **kwargs: Additional configuration parameters.
         """
         self.retriever = retriever(**kwargs)
-        self.metrics = []
+        self.metrics: list[Any] = []
         self.verbose = verbose
         self.logger = VerboseLogger(verbose)
 
@@ -57,9 +57,10 @@ class Gaussia(ABC):
             "stream_batches": self._process_qa,
         }
 
-        self._iteration_processor = strategies.get(self.level.value)
-        if not self._iteration_processor:
+        processor = strategies.get(self.level.value)
+        if not processor:
             raise ValueError(f"Unknown iteration_level: {self.level}")
+        self._iteration_processor = processor
 
     @abstractmethod
     def batch(
@@ -168,9 +169,11 @@ class Gaussia(ABC):
         statistical_mode: "StatisticalMode",
     ) -> tuple[float, float | None, float | None]:
         if statistical_mode.get_result_type() == "point_estimate":
-            metrics_dict = {b.qa_id: score for b, score in zip(batches, scores, strict=False)}
+            metrics_dict: dict[str, float | dict[str, Any]] = {
+                b.qa_id: score for b, score in zip(batches, scores, strict=False)
+            }
             result = statistical_mode.aggregate_metrics(metrics_dict, weights)
-            return float(result), None, None
+            return float(result) if not isinstance(result, dict) else float(result.get("mean", 0.0)), None, None
 
         mc_samples = getattr(statistical_mode, "mc_samples", 5000)
         ci_level = getattr(statistical_mode, "ci_level", 0.95)

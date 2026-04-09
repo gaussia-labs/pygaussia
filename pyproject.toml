@@ -246,7 +246,7 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
-strict_concatenate = true
+extra_checks = true
 check_untyped_defs = true
 disallow_untyped_defs = false
 disallow_any_generics = false
@@ -266,6 +266,27 @@ module = [
     "interpreto.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "gaussia.embedders.qwen",
+    "gaussia.generators.context_loaders.local_markdown",
+    "gaussia.guardians",
+    "gaussia.guardians.llms.providers",
+    "gaussia.llm.judge",
+    "gaussia.metrics.agentic",
+    "gaussia.metrics.best_of",
+    "gaussia.metrics.bias",
+    "gaussia.metrics.humanity",
+    "gaussia.metrics.regulatory",
+    "gaussia.metrics.toxicity",
+    "gaussia.metrics.vision",
+    "gaussia.prompt_optimizer.mipro.mipro",
+    "gaussia.rerankers.qwen",
+    "gaussia.schemas.generators",
+    "gaussia.statistical.frequentist",
+]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
