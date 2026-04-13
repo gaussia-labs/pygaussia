@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from functools import partial
+from typing import Any
 
 from pydantic import BaseModel
 from transformers import AutoTokenizer
@@ -109,3 +110,4 @@ class GuardianLLMConfig(BaseModel):
     temperature: float
     logprobs: bool = False
     provider: type[LLMGuardianProvider]
+    overrides: dict[str, Any] = {}
