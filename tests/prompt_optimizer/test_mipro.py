@@ -183,7 +183,7 @@ class TestMIPROv2Optimize:
         assert all(isinstance(d, Demo) for d in result.demos)
 
     @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
-    def test_trials_run_matches_num_trials(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
+    def test_iterations_run_matches_num_trials(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator, num_trials=2)
         result = optimizer._optimize()
