@@ -31,13 +31,14 @@ class IBMGranite(Guardian):
         self.tokenizer = AutoTokenizer.from_pretrained(config.model)
         self.provider = config.provider(
             model=config.model,
-            tokenizer=self.tokenizer,
+            tokenizer=self.tokenizer,  # type: ignore[arg-type]
             api_key=config.api_key,
             url=config.url,
             temperature=config.temperature,
             safe_token="No",
             logprobs=config.logprobs,
             unsafe_token="Yes",
+            overrides=config.overrides,
         )
 
     def is_biased(
@@ -48,7 +49,7 @@ class IBMGranite(Guardian):
             {"role": "assistant", "content": answer},
         ]
         prompt = partial(
-            self.provider.tokenizer.apply_chat_template,
+            self.provider.tokenizer.apply_chat_template,  # type: ignore[attr-defined]
             conversation=messages,
             guardian_config={
                 "risk_name": attribute.attribute.value,
@@ -85,7 +86,7 @@ class LLamaGuard(Guardian):
         self.tokenizer = AutoTokenizer.from_pretrained(config.model)
         self.provider = config.provider(
             model=config.model,
-            tokenizer=self.tokenizer,
+            tokenizer=self.tokenizer,  # type: ignore[arg-type]
             api_key=config.api_key,
             url=config.url,
             temperature=config.temperature,
@@ -93,6 +94,7 @@ class LLamaGuard(Guardian):
             unsafe_token="unsafe",
             logprobs=config.logprobs,
             chat_completions=True,
+            overrides=config.overrides,
         )
 
     def is_biased(
@@ -104,7 +106,7 @@ class LLamaGuard(Guardian):
         ]
         prompt = partial(
             self.tokenizer.apply_chat_template,
-            conversation=messages,
+            conversation=messages,  # type: ignore[arg-type]
             categories={"S1": f"{attribute.attribute.value}.\n{attribute.description}"},
         )
         infer = self.provider.infer(prompt)
