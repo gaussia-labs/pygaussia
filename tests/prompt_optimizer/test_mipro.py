@@ -187,7 +187,7 @@ class TestMIPROv2Optimize:
         mock_proposer_class.return_value.propose.return_value = ["inst1", "inst2"]
         optimizer = _make_optimizer(mock_model, mock_executor, mock_evaluator, num_trials=2)
         result = optimizer._optimize()
-        assert result.trials_run == 2
+        assert result.iterations_run == 2
 
     @patch("gaussia.prompt_optimizer.mipro.mipro.InstructionProposer")
     def test_optimized_instruction_is_string(self, mock_proposer_class, mock_model, mock_executor, mock_evaluator):

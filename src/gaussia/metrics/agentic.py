@@ -154,8 +154,8 @@ class Agentic(Gaussia):
         self.logger.info(f"Statistical mode: {self.statistical_mode.get_result_type()}")
 
     @classmethod
-    def run(cls, retriever: type[Retriever], k: int, **kwargs) -> list[AgenticMetric]:
-        return cls(retriever, k=k, **kwargs)._process()
+    def run(cls, retriever: type[Retriever], **kwargs) -> list[AgenticMetric]:
+        return cls(retriever, **kwargs)._process()
 
     def batch(
         self,
@@ -366,7 +366,10 @@ Examples:
 
     def _process(self) -> list[AgenticMetric]:
         """Evaluate each conversation (dataset) as a complete unit."""
-        self.logger.info(f"[Agentic] Evaluating {len(self.dataset)} conversations")
+        from gaussia.schemas.common import Dataset
+
+        datasets = [d for d in self.dataset if isinstance(d, Dataset)]
+        self.logger.info(f"[Agentic] Evaluating {len(datasets)} conversations")
 
         judge = Judge(
             model=self.model,
@@ -377,16 +380,16 @@ Examples:
             verbose=self.verbose,
         )
 
-        for dataset_idx, dataset in enumerate(self.dataset, 1):
+        for dataset_idx, dataset in enumerate(datasets, 1):
             total_interactions = len(dataset.conversation)
             self.logger.info(
-                f"[Agentic] Evaluating conversation {dataset_idx}/{len(self.dataset)}: "
+                f"[Agentic] Evaluating conversation {dataset_idx}/{len(datasets)}: "
                 f"{dataset.session_id} ({total_interactions} interactions)"
             )
 
-            correctness_scores = []
-            correct_indices = []
-            tool_correctness_scores = []
+            correctness_scores: list[float] = []
+            correct_indices: list[int] = []
+            tool_correctness_scores: list[ToolCorrectnessScore | None] = []
 
             # Evaluate each interaction in the conversation
             for i, batch in enumerate(dataset.conversation):
@@ -452,7 +455,8 @@ Examples:
                     pass_pow_k=pass_pow_k(total_interactions, correct_interactions, self.k),
                 )
             else:
-                p_samples = p_result["samples"]
+                p_result_dict = p_result
+                p_samples = p_result_dict["samples"]  # type: ignore[index]
                 pass_at_k_samples = 1.0 - (1.0 - p_samples) ** self.k
                 pass_pow_k_samples = p_samples**self.k
 

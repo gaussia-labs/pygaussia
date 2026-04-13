@@ -21,7 +21,7 @@ def _default_scorer() -> SimilarityScorer:
     from gaussia.embedders import SentenceTransformerEmbedder
     from gaussia.scorers import CosineSimilarity
 
-    return CosineSimilarity(SentenceTransformerEmbedder(model=_DEFAULT_MODEL))
+    return CosineSimilarity(SentenceTransformerEmbedder(model_name=_DEFAULT_MODEL))
 
 
 class _VisionBase(Gaussia):

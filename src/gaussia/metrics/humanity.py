@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr  # type: ignore[import-untyped]
 
 from gaussia.core import Gaussia, Retriever
 from gaussia.schemas import Batch
@@ -44,7 +44,7 @@ class Humanity(Gaussia):
         nrc = pd.read_csv(str(path), sep=separator, encoding="utf-8")
         lexicon = {}
         for _index, row in nrc.iterrows():
-            word = str(row[language]).lower()
+            word = str(row[language or "english"]).lower()
             emotions = [e for e in self.emotion_columns if row[e] == 1]
             lexicon[word] = emotions
         return lexicon
@@ -53,7 +53,7 @@ class Humanity(Gaussia):
         return re.findall(r"\b\w+\b", text.lower())
 
     def _get_emotion_distribution(self, text: str, lexicon, emotion_list):
-        counts = defaultdict(int)  ## Creates a  dictionary that if no index found returns 0
+        counts: defaultdict[str, int] = defaultdict(int)
         total = 0
         for word in self._tokenize(text):
             if word in lexicon:
