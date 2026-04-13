@@ -211,6 +211,7 @@ class Regulatory(Gaussia):
             total_supporting = sum(i.supporting_chunks for i in interactions)
             total_contradicting = sum(i.contradicting_chunks for i in interactions)
 
+            session_verdict: Literal["COMPLIANT", "NON_COMPLIANT", "IRRELEVANT"]
             if all(i.verdict == "IRRELEVANT" for i in interactions):
                 session_verdict = "IRRELEVANT"
             elif mean >= self.compliance_threshold:

@@ -123,7 +123,7 @@ class BaseContextLoader(ABC):
         self.kwargs = kwargs
 
     @abstractmethod
-    def load(self, source: str) -> list[Chunk]:
+    def load(self, source: str | list[str]) -> list[Chunk]:
         """Load and chunk a context document.
 
         Args:
@@ -274,10 +274,10 @@ class BaseGenerator:
         if self.use_structured_output:
             structured_model = self.model.with_structured_output(GeneratedQueriesOutput)
             chain = chat_prompt | structured_model
-            return chain.invoke({})
+            return chain.invoke({})  # type: ignore[return-value]
         chain = chat_prompt | self.model
         response = chain.invoke({})
-        content = str(response.content)
+        content = str(response.content)  # type: ignore[union-attr]
         return self._parse_json_response(content)
 
     async def _call_llm_conversation(
@@ -304,10 +304,10 @@ class BaseGenerator:
         if self.use_structured_output:
             structured_model = self.model.with_structured_output(GeneratedConversationOutput)
             chain = chat_prompt | structured_model
-            return chain.invoke({})
+            return chain.invoke({})  # type: ignore[return-value]
         chain = chat_prompt | self.model
         response = chain.invoke({})
-        content = str(response.content)
+        content = str(response.content)  # type: ignore[union-attr]
         return self._parse_conversation_response(content)
 
     def _parse_json_response(self, content: str) -> GeneratedQueriesOutput:

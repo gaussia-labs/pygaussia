@@ -89,9 +89,9 @@ class MIPROv2Optimizer(BaseOptimizer):
     def _score_examples(self, prompt: str, examples: list[tuple[str, object]]) -> float:
         scores = [
             self._evaluator(
-                self._executor(prompt, batch.query, context),  # type: ignore[union-attr]
-                batch.ground_truth_assistant,  # type: ignore[union-attr]
-                batch.query,  # type: ignore[union-attr]
+                self._executor(prompt, batch.query, context),  # type: ignore[attr-defined]
+                batch.ground_truth_assistant,  # type: ignore[attr-defined]
+                batch.query,  # type: ignore[attr-defined]
                 context,
             )
             for context, batch in examples
@@ -178,7 +178,7 @@ class MIPROv2Optimizer(BaseOptimizer):
             optimized_instruction=best_instruction,
             initial_score=initial_score,
             final_score=study.best_value,
-            trials_run=len(study.trials),
+            iterations_run=len(study.trials),
             n_examples=n_examples,
             demos=best_demos,
             trials=trial_results,

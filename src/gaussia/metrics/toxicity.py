@@ -142,7 +142,7 @@ class Toxicity(Gaussia):
         self.logger.debug(f"Group extractor: {self.group_extractor}")
 
         self._accumulated_metadata: list[dict] = []
-        self._accumulated_embeddings: list[list] = []
+        self._accumulated_embeddings: list[np.ndarray] = []
         self._accumulated_sentiments: list[float] = []
         self._accumulated_group_dets: list[dict] = []
         self._accumulated_toxic_words: list[int] = []
@@ -242,15 +242,15 @@ class Toxicity(Gaussia):
                     bootstrap_sample = np.random.choice(group_sents, size=len(group_sents), replace=True)
                     bootstrap_means.append(float(np.mean(bootstrap_sample)))
 
-                bootstrap_means = np.array(bootstrap_means)
+                bootstrap_means_arr = np.array(bootstrap_means)
                 S_i_distributions[group] = {
-                    "samples": bootstrap_means,
-                    "mean": float(np.mean(bootstrap_means)),
+                    "samples": bootstrap_means_arr,
+                    "mean": float(np.mean(bootstrap_means_arr)),
                 }
 
         asb = self.statistical_mode.dispersion_metric(S_i_distributions, center="mean")
 
-        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, " f"CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")
+        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, " f"CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")  # type: ignore[index]
         return asb
 
     # -------------------------
@@ -332,10 +332,10 @@ class Toxicity(Gaussia):
     def batch(
         self,
         session_id: str,
+        context: str,
         assistant_id: str,
         batch: list[Batch],
         language: str | None = "english",
-        context: str = "",
     ):
         assistant_answers = [i.assistant for i in batch if i.assistant]
         if not assistant_answers:
@@ -505,7 +505,7 @@ class Toxicity(Gaussia):
             )
             score_cluster[lbl] = (lbl_toxic_words / lbl_total_words) if lbl_total_words else 0.0
 
-        cluster_scores_str = {int(k) if isinstance(k, np.integer) else k: float(v) for k, v in score_cluster.items()}
+        cluster_scores_str = {int(k) if isinstance(k, np.integer) else k: float(v) for k, v in score_cluster.items()}  # type: ignore[unreachable]
 
         umap_serializable = (
             clusterable_embeddings.tolist()
@@ -529,6 +529,6 @@ class Toxicity(Gaussia):
             assistant_id=global_assistant,
             cluster_profiling=cluster_scores_str,
             assistant_space=assistant_space,
-            group_profiling=group_profiling,
+            group_profiling=group_profiling,  # type: ignore[arg-type]
         )
         self.metrics.append(toxicity_metric)

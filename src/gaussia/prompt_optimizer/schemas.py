@@ -30,7 +30,7 @@ class OptimizationResult(BaseModel):
     final_score: float
     iterations_run: int
     n_examples: int
-    history: list[IterationResult]
+    history: list[IterationResult] = []
 
 
 class Demo(BaseModel):
@@ -45,12 +45,7 @@ class TrialResult(BaseModel):
     score: float
 
 
-class MIPROv2Result(BaseModel):
-    optimized_prompt: str
+class MIPROv2Result(OptimizationResult):
     optimized_instruction: str
-    initial_score: float
-    final_score: float
-    trials_run: int
-    n_examples: int
-    demos: list[Demo]
-    trials: list[TrialResult]
+    demos: list[Demo] = []
+    trials: list[TrialResult] = []
