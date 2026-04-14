@@ -5,7 +5,7 @@ from enum import StrEnum
 from functools import partial
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
 
 from .metrics import BaseMetric
@@ -110,4 +110,4 @@ class GuardianLLMConfig(BaseModel):
     temperature: float
     logprobs: bool = False
     provider: type[LLMGuardianProvider]
-    overrides: dict[str, Any] = {}
+    overrides: dict[str, Any] = Field(default_factory=dict)

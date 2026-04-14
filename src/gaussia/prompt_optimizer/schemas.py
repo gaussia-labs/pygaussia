@@ -1,6 +1,6 @@
 """Shared schemas for prompt optimization results."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FailingExample(BaseModel):
@@ -30,7 +30,7 @@ class OptimizationResult(BaseModel):
     final_score: float
     iterations_run: int
     n_examples: int
-    history: list[IterationResult] = []
+    history: list[IterationResult] = Field(default_factory=list)
 
 
 class Demo(BaseModel):
@@ -47,5 +47,5 @@ class TrialResult(BaseModel):
 
 class MIPROv2Result(OptimizationResult):
     optimized_instruction: str
-    demos: list[Demo] = []
-    trials: list[TrialResult] = []
+    demos: list[Demo] = Field(default_factory=list)
+    trials: list[TrialResult] = Field(default_factory=list)

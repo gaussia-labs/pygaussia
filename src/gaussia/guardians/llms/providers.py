@@ -22,7 +22,7 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
     ):
         super().__init__(
             model=model,
-            tokenizer=None,  # type: ignore[arg-type]
+            tokenizer=AutoTokenizer.from_pretrained(model),  # type: ignore[arg-type]
             api_key=api_key,
             url=url,
             temperature=temperature,
@@ -78,7 +78,8 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
 
         model = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
         prompt = partial(prompt, return_tensors="pt")
-        input_ids = prompt().to(self.model.device)  # type: ignore[attr-defined]
+        model_device = next(model.parameters()).device
+        input_ids = prompt().to(model_device)
         input_len = input_ids.shape[1]
         model.eval()
 
