@@ -1,9 +1,9 @@
 """Qwen3 embedding model implementation."""
 
 import numpy as np
-import torch  # type: ignore[import-not-found]
-from torch.nn import functional as torch_functional  # type: ignore[import-not-found]
-from transformers import AutoModel, AutoTokenizer
+import torch
+from torch.nn import functional as torch_functional
+from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
 
 from gaussia.core.embedder import Embedder
 
@@ -31,27 +31,29 @@ class QwenEmbedder(Embedder):
         self._max_length = max_length
         self._batch_size = batch_size
         self._task = task
-        self._tokenizer: AutoTokenizer | None = None
-        self._model: AutoModel | None = None
+        self._tokenizer: PreTrainedTokenizerBase | None = None
+        self._model: PreTrainedModel | None = None
 
     @property
-    def tokenizer(self) -> AutoTokenizer:
+    def tokenizer(self) -> PreTrainedTokenizerBase:
         if self._tokenizer is None:
-            self._tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[assignment]
+            self._tokenizer = AutoTokenizer.from_pretrained(
                 self._model_name,
                 padding_side="left",
             )
-        return self._tokenizer  # type: ignore[return-value]
+        assert self._tokenizer is not None
+        return self._tokenizer
 
     @property
-    def model(self) -> AutoModel:
+    def model(self) -> PreTrainedModel:
         if self._model is None:
             self._model = AutoModel.from_pretrained(
                 self._model_name,
                 torch_dtype=torch.float16,
                 device_map="auto",
             )
-            self._model.eval()  # type: ignore[union-attr]
+            self._model.eval()
+        assert self._model is not None
         return self._model
 
     def _last_token_pool(
@@ -70,24 +72,25 @@ class QwenEmbedder(Embedder):
         ]
 
     def _encode_batch(self, texts: list[str]) -> np.ndarray:
-        batch = self.tokenizer(  # type: ignore[operator]
+        batch = self.tokenizer(
             texts,
             padding=True,
             truncation=True,
             max_length=self._max_length,
             return_tensors="pt",
         )
-        batch = {k: v.to(self.model.device) for k, v in batch.items()}  # type: ignore[attr-defined]
+        batch = {k: v.to(self.model.device) for k, v in batch.items()}
 
         with torch.no_grad():
-            outputs = self.model(**batch)  # type: ignore[operator]
+            outputs = self.model(**batch)
             embeddings = self._last_token_pool(
                 outputs.last_hidden_state,
                 batch["attention_mask"],
             )
             embeddings = torch_functional.normalize(embeddings, p=2, dim=1)
 
-        return embeddings.cpu().numpy()  # type: ignore[no-any-return]
+        result: np.ndarray = embeddings.cpu().numpy()
+        return result
 
     def encode(self, sentences: list[str]) -> np.ndarray:
         all_embeddings = []

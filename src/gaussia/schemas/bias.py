@@ -6,7 +6,7 @@ from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizerBase
 
 from .metrics import BaseMetric
 
@@ -76,7 +76,7 @@ class LLMGuardianProvider(ABC):
     def __init__(
         self,
         model: str,
-        tokenizer: AutoTokenizer,
+        tokenizer: PreTrainedTokenizerBase,
         api_key: str | None = None,
         url: str | None = None,
         temperature: float = 0.0,

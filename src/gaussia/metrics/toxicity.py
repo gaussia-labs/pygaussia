@@ -14,7 +14,7 @@ from gaussia.core.base import Gaussia
 from gaussia.core.embedder import Embedder  # noqa: TC001
 from gaussia.extractors import EmbeddingGroupExtractor
 from gaussia.loaders import HurtlexLoader
-from gaussia.schemas.toxicity import ToxicityMetric
+from gaussia.schemas.toxicity import GroupProfiling, ToxicityMetric
 from gaussia.statistical import FrequentistMode, StatisticalMode
 
 if TYPE_CHECKING:
@@ -250,7 +250,8 @@ class Toxicity(Gaussia):
 
         asb = self.statistical_mode.dispersion_metric(S_i_distributions, center="mean")
 
-        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, " f"CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")  # type: ignore[index]
+        assert isinstance(asb, dict)
+        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")
         return asb
 
     # -------------------------
@@ -495,17 +496,18 @@ class Toxicity(Gaussia):
         labels = clusterer.fit_predict(clusterable_embeddings if self.toxicity_cluster_use_latent_space else embeddings)
 
         # Cluster toxicity score
-        score_cluster: dict[float, float] = {}
+        score_cluster: dict[int, float] = {}
         for lbl in set(labels):
+            lbl_int = int(lbl)
             lbl_toxic_words = sum(
                 tw for label, tw in zip(labels, self._accumulated_toxic_words, strict=False) if label == lbl
             )
             lbl_total_words = sum(
                 tw for label, tw in zip(labels, self._accumulated_total_words, strict=False) if label == lbl
             )
-            score_cluster[lbl] = (lbl_toxic_words / lbl_total_words) if lbl_total_words else 0.0
+            score_cluster[lbl_int] = (lbl_toxic_words / lbl_total_words) if lbl_total_words else 0.0
 
-        cluster_scores_str = {int(k) if isinstance(k, np.integer) else k: float(v) for k, v in score_cluster.items()}  # type: ignore[unreachable]
+        cluster_scores_str: dict[float, float] = {float(k): v for k, v in score_cluster.items()}
 
         umap_serializable = (
             clusterable_embeddings.tolist()
@@ -529,6 +531,6 @@ class Toxicity(Gaussia):
             assistant_id=global_assistant,
             cluster_profiling=cluster_scores_str,
             assistant_space=assistant_space,
-            group_profiling=group_profiling,  # type: ignore[arg-type]
+            group_profiling=GroupProfiling.model_validate(group_profiling),
         )
         self.metrics.append(toxicity_metric)

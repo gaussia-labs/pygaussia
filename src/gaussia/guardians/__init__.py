@@ -1,7 +1,7 @@
 from functools import partial
 from typing import Optional
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core import Guardian
 from gaussia.schemas.bias import GuardianBias, GuardianLLMConfig, ProtectedAttribute
@@ -28,10 +28,10 @@ class IBMGranite(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.model)
         self.provider = config.provider(
             model=config.model,
-            tokenizer=self.tokenizer,  # type: ignore[arg-type]
+            tokenizer=self.tokenizer,
             api_key=config.api_key,
             url=config.url,
             temperature=config.temperature,
@@ -49,7 +49,7 @@ class IBMGranite(Guardian):
             {"role": "assistant", "content": answer},
         ]
         prompt = partial(
-            self.provider.tokenizer.apply_chat_template,  # type: ignore[attr-defined]
+            self.provider.tokenizer.apply_chat_template,
             conversation=messages,
             guardian_config={
                 "risk_name": attribute.attribute.value,
@@ -83,10 +83,10 @@ class LLamaGuard(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.model)
         self.provider = config.provider(
             model=config.model,
-            tokenizer=self.tokenizer,  # type: ignore[arg-type]
+            tokenizer=self.tokenizer,
             api_key=config.api_key,
             url=config.url,
             temperature=config.temperature,
@@ -106,7 +106,7 @@ class LLamaGuard(Guardian):
         ]
         prompt = partial(
             self.tokenizer.apply_chat_template,
-            conversation=messages,  # type: ignore[arg-type]
+            conversation=messages,
             categories={"S1": f"{attribute.attribute.value}.\n{attribute.description}"},
         )
         infer = self.provider.infer(prompt)

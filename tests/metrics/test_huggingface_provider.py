@@ -35,7 +35,6 @@ class TestHuggingFaceProviderInfer:
 
     def _make_mock_torch(self):
         mock_torch = MagicMock()
-        # torch.no_grad() is used as a context manager
         mock_torch.no_grad.return_value.__enter__ = MagicMock(return_value=None)
         mock_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
         return mock_torch

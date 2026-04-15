@@ -14,6 +14,7 @@ from gaussia.prompt_optimizer.schemas import Demo, MIPROv2Result, TrialResult
 
 if TYPE_CHECKING:
     from gaussia.core.retriever import Retriever
+    from gaussia.schemas.common import Batch
 
 
 class MIPROv2Optimizer(BaseOptimizer):
@@ -79,19 +80,19 @@ class MIPROv2Optimizer(BaseOptimizer):
 
         return _execute
 
-    def _collect_examples(self) -> list[tuple[str, object]]:
+    def _collect_examples(self) -> list[tuple[str, "Batch"]]:
         return [
             (dataset.context, batch)
             for dataset in self.dataset
             for batch in dataset.conversation
         ]
 
-    def _score_examples(self, prompt: str, examples: list[tuple[str, object]]) -> float:
+    def _score_examples(self, prompt: str, examples: list[tuple[str, "Batch"]]) -> float:
         scores = [
             self._evaluator(
-                self._executor(prompt, batch.query, context),  # type: ignore[attr-defined]
-                batch.ground_truth_assistant,  # type: ignore[attr-defined]
-                batch.query,  # type: ignore[attr-defined]
+                self._executor(prompt, batch.query, context),
+                batch.ground_truth_assistant,
+                batch.query,
                 context,
             )
             for context, batch in examples
