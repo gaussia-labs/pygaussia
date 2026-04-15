@@ -455,8 +455,8 @@ Examples:
                     pass_pow_k=pass_pow_k(total_interactions, correct_interactions, self.k),
                 )
             else:
-                p_result_dict = p_result
-                p_samples = p_result_dict["samples"]  # type: ignore[index]
+                assert isinstance(p_result, dict)
+                p_samples = p_result["samples"]
                 pass_at_k_samples = 1.0 - (1.0 - p_samples) ** self.k
                 pass_pow_k_samples = p_samples**self.k
 

@@ -258,12 +258,23 @@ pretty = true
 
 [[tool.mypy.overrides]]
 module = [
-    "nltk.*",
+    "torch",
+    "torch.*",
+    "transformers",
     "transformers.*",
+    "langchain.*",
+    "langchain_core.*",
+]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
+    "nltk.*",
     "sentence_transformers.*",
     "hdbscan.*",
     "umap.*",
     "interpreto.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 

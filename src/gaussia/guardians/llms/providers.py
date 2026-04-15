@@ -22,7 +22,7 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
     ):
         super().__init__(
             model=model,
-            tokenizer=AutoTokenizer.from_pretrained(model),  # type: ignore[arg-type]
+            tokenizer=AutoTokenizer.from_pretrained(model),
             api_key=api_key,
             url=url,
             temperature=temperature,
@@ -33,7 +33,7 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
         )
 
     def _parse_output(self, output: Any, input_len: int) -> tuple[bool, float]:
-        import torch  # type: ignore[import-not-found]
+        import torch
 
         nlogprobs = 20
         is_bias, prob_of_bias = False, None
@@ -46,7 +46,7 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
                 prob = self._get_probabilities(list_index_logprobs_i)
                 prob_of_bias = prob[1]
 
-        res = self.tokenizer.decode(output.sequences[:, input_len:][0], skip_special_tokens=True).strip()  # type: ignore[attr-defined]
+        res = self.tokenizer.decode(output.sequences[:, input_len:][0], skip_special_tokens=True).strip()
 
         is_bias = self.unsafe_token.lower() in res.lower()
 
@@ -62,7 +62,7 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
         unsafe_token_prob = 1e-50
         for gen_token_i in logprobs:
             for logprob, index in zip(gen_token_i.values.tolist()[0], gen_token_i.indices.tolist()[0], strict=False):
-                decoded_token = self.tokenizer.convert_ids_to_tokens(index)  # type: ignore[attr-defined]
+                decoded_token = self.tokenizer.convert_ids_to_tokens(index)
                 if self.safe_token.lower() in decoded_token.strip().lower():
                     safe_token_prob += math.exp(logprob)
                 if self.unsafe_token.lower() in decoded_token.strip().lower():
@@ -154,7 +154,8 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
                 **self._overrides,
             },
         )
-        return response.json()  # type: ignore[no-any-return]
+        result: dict[str, Any] = response.json()
+        return result
 
     def _with_completions(self, prompt: partial) -> dict[str, Any]:
         response = requests.post(
@@ -172,7 +173,8 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
                 **self._overrides,
             },
         )
-        return response.json()  # type: ignore[no-any-return]
+        result: dict[str, Any] = response.json()
+        return result
 
     def infer(self, prompt: partial) -> LLMGuardianProviderInfer:
         if self.chat_completions:

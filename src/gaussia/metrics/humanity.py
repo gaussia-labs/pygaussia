@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr  # type: ignore[import-untyped]
+from scipy.stats import spearmanr
 
 from gaussia.core import Gaussia, Retriever
 from gaussia.schemas import Batch

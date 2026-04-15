@@ -274,10 +274,11 @@ class BaseGenerator:
         if self.use_structured_output:
             structured_model = self.model.with_structured_output(GeneratedQueriesOutput)
             chain = chat_prompt | structured_model
-            return chain.invoke({})  # type: ignore[return-value]
+            result: GeneratedQueriesOutput = chain.invoke({})
+            return result
         chain = chat_prompt | self.model
         response = chain.invoke({})
-        content = str(response.content)  # type: ignore[union-attr]
+        content = str(response.content)
         return self._parse_json_response(content)
 
     async def _call_llm_conversation(
@@ -304,10 +305,11 @@ class BaseGenerator:
         if self.use_structured_output:
             structured_model = self.model.with_structured_output(GeneratedConversationOutput)
             chain = chat_prompt | structured_model
-            return chain.invoke({})  # type: ignore[return-value]
+            result: GeneratedConversationOutput = chain.invoke({})
+            return result
         chain = chat_prompt | self.model
         response = chain.invoke({})
-        content = str(response.content)  # type: ignore[union-attr]
+        content = str(response.content)
         return self._parse_conversation_response(content)
 
     def _parse_json_response(self, content: str) -> GeneratedQueriesOutput:

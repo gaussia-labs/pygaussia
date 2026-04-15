@@ -36,7 +36,10 @@ class FrequentistMode(StatisticalMode):
 
         normalized_weights = {k: v / total_weight for k, v in weights.items()}
         return float(
-            sum(float(metrics[k]) * normalized_weights[k] for k in metrics)  # type: ignore[arg-type, misc]
+            sum(
+                (float(v) if isinstance(v, (int, float)) else 0.0) * normalized_weights[k]
+                for k, v in metrics.items()
+            )
         )
 
     def dispersion_metric(
@@ -45,7 +48,7 @@ class FrequentistMode(StatisticalMode):
         if not values:
             return 0.0
 
-        vals = [float(v) for v in values.values()]  # type: ignore[arg-type]
+        vals = [float(v) if isinstance(v, (int, float)) else 0.0 for v in values.values()]
         if center == "mean":
             center_val = sum(vals) / len(vals)
         elif center == "median":

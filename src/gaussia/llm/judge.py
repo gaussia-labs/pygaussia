@@ -125,7 +125,7 @@ Do not include any additional text after the JSON.
         result = None
         for attempt in range(max_retries):
             try:
-                result = agent.invoke({"messages": messages})  # type: ignore[call-overload]
+                result = agent.invoke({"messages": messages})
                 parsed = result.get("structured_response")
 
                 if parsed is None and attempt < max_retries - 1:
@@ -176,7 +176,9 @@ Do not include any additional text after the JSON.
         match = re.search(pattern, text, re.DOTALL)
         if match:
             try:
-                return json.loads(match.group(1).strip())  # type: ignore[no-any-return]
+                result = json.loads(match.group(1).strip())
+                assert isinstance(result, dict)
+                return result
             except json.JSONDecodeError:
                 logging.exception("[FAIR FORGE/JUDGE] JSON decode error")
                 return None

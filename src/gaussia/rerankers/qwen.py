@@ -1,7 +1,7 @@
 """Qwen3 reranker model implementation."""
 
-import torch  # type: ignore[import-not-found]
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core.reranker import Reranker
 
@@ -29,17 +29,18 @@ class QwenReranker(Reranker):
         self._model_name = model_name
         self._max_length = max_length
         self._instruction = instruction
-        self._tokenizer: AutoTokenizer | None = None
+        self._tokenizer: PreTrainedTokenizerBase | None = None
         self._model: AutoModelForCausalLM | None = None
 
     @property
-    def tokenizer(self) -> AutoTokenizer:
+    def tokenizer(self) -> PreTrainedTokenizerBase:
         if self._tokenizer is None:
-            self._tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[assignment]
+            self._tokenizer = AutoTokenizer.from_pretrained(
                 self._model_name,
                 padding_side="left",
             )
-        return self._tokenizer  # type: ignore[return-value]
+        assert self._tokenizer is not None
+        return self._tokenizer
 
     @property
     def model(self) -> AutoModelForCausalLM:
@@ -50,6 +51,7 @@ class QwenReranker(Reranker):
                 device_map="auto",
             )
             self._model.eval()
+        assert self._model is not None
         return self._model
 
     def _format_pair(self, query: str, doc: str) -> str:
@@ -66,13 +68,13 @@ class QwenReranker(Reranker):
         )
         suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
 
-        prefix_tokens = self.tokenizer.encode(prefix, add_special_tokens=False)  # type: ignore[attr-defined]
-        suffix_tokens = self.tokenizer.encode(suffix, add_special_tokens=False)  # type: ignore[attr-defined]
-        token_true_id = self.tokenizer.convert_tokens_to_ids("yes")  # type: ignore[attr-defined]
-        token_false_id = self.tokenizer.convert_tokens_to_ids("no")  # type: ignore[attr-defined]
+        prefix_tokens = self.tokenizer.encode(prefix, add_special_tokens=False)
+        suffix_tokens = self.tokenizer.encode(suffix, add_special_tokens=False)
+        token_true_id = self.tokenizer.convert_tokens_to_ids("yes")
+        token_false_id = self.tokenizer.convert_tokens_to_ids("no")
         effective_max = self._max_length - len(prefix_tokens) - len(suffix_tokens)
 
-        inputs_enc = self.tokenizer(  # type: ignore[operator]
+        inputs_enc = self.tokenizer(
             pairs,
             padding=False,
             truncation=True,
@@ -82,16 +84,16 @@ class QwenReranker(Reranker):
         for i, ids in enumerate(inputs_enc["input_ids"]):
             inputs_enc["input_ids"][i] = prefix_tokens + ids + suffix_tokens
 
-        padded = self.tokenizer.pad(  # type: ignore[attr-defined]
+        padded = self.tokenizer.pad(
             inputs_enc,
             padding=True,
             return_tensors="pt",
             max_length=self._max_length,
         )
-        padded = {k: v.to(self.model.device) for k, v in padded.items()}  # type: ignore[attr-defined]
+        padded = {k: v.to(self.model.device) for k, v in padded.items()}
 
         with torch.no_grad():
-            logits = self.model(**padded).logits[:, -1, :]  # type: ignore[operator]
+            logits = self.model(**padded).logits[:, -1, :]
             true_v = logits[:, token_true_id]
             false_v = logits[:, token_false_id]
             log_probs = torch.nn.functional.log_softmax(
@@ -99,4 +101,5 @@ class QwenReranker(Reranker):
                 dim=1,
             )
 
-        return log_probs[:, 1].exp().tolist()  # type: ignore[no-any-return]
+        scores: list[float] = log_probs[:, 1].exp().tolist()
+        return scores
