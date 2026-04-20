@@ -46,7 +46,7 @@ class TestQwenRerankerLazyInit:
         mock_causal_lm.from_pretrained.return_value = mock_model
 
         reranker = QwenReranker(model_name="test-model")
-        reranker.model
+        _ = reranker.model
 
         mock_model.eval.assert_called_once()
 

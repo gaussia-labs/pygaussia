@@ -46,7 +46,7 @@ class TestQwenEmbedderLazyInit:
         mock_auto_model.from_pretrained.return_value = mock_model
 
         embedder = QwenEmbedder(model_name="test-model")
-        embedder.model
+        _ = embedder.model
 
         mock_model.eval.assert_called_once()
 
