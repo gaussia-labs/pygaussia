@@ -76,4 +76,5 @@ class Dataset(BaseModel):
     assistant_id: str
     language: str | None = "english"
     context: str
+    chatbot_role: str | None = None
     conversation: list[Batch]

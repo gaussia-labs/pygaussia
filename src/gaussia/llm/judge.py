@@ -158,7 +158,9 @@ Do not include any additional text after the JSON.
     ) -> tuple[str, dict | None]:
         if output_schema:
             schema_instruction = self._get_json_schema_for_prompt(output_schema)
-            enhanced_prompt = system_prompt + schema_instruction
+            # Escape JSON braces so LangChain doesn't treat them as template variables
+            schema_instruction_escaped = schema_instruction.replace("{", "{{").replace("}", "}}")
+            enhanced_prompt = system_prompt + schema_instruction_escaped
         else:
             enhanced_prompt = system_prompt
 
@@ -172,15 +174,27 @@ Do not include any additional text after the JSON.
         return reasoning, json_data
 
     def _extract_json(self, text: str) -> dict | None:
+        # Primary: JSON within configured code fences
         pattern = rf"{re.escape(self.bos_json_clause)}\s*(\{{.*?\}})\s*{re.escape(self.eos_json_clause)}"
         match = re.search(pattern, text, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group(1).strip())
-                assert isinstance(result, dict)
-                return result
-            except json.JSONDecodeError:
-                logging.exception("[FAIR FORGE/JUDGE] JSON decode error")
-                return None
-        logging.error(f"[FAIR FORGE/JUDGE] No JSON found between {self.bos_json_clause} and {self.eos_json_clause}")
-        return None
+        candidate = match.group(1).strip() if match else None
+
+        # Fallback: any JSON object in the response (models that skip code fences)
+        if candidate is None:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            candidate = match.group(0).strip() if match else None
+
+        if candidate is None:
+            logging.error(f"[FAIR FORGE/JUDGE] No JSON found in response. Raw text: {text[:300]!r}")
+            return None
+
+        # Repair missing commas between fields (some models omit them)
+        candidate = re.sub(r'(["\d\]truefals])\s*\n(\s*")', r'\1,\n\2', candidate)
+
+        try:
+            result = json.loads(candidate)
+            assert isinstance(result, dict)
+            return result
+        except json.JSONDecodeError:
+            logging.error(f"[FAIR FORGE/JUDGE] JSON decode error. Candidate: {candidate[:300]!r}")
+            return None
