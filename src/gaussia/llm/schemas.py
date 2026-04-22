@@ -27,6 +27,15 @@ class ConversationalJudgeOutput(BaseModel):
     sensibleness: float = Field(ge=0, le=10, description="Sensibleness score (0-10)")
 
 
+class RoleAdherenceJudgeOutput(BaseModel):
+    """Structured output for role adherence evaluation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    score: float = Field(ge=0, le=1, description="Role adherence score (0=violation, 1=adherent)")
+    reason: str = Field(description="Brief justification of the score")
+
+
 class BestOfJudgeOutput(BaseModel):
     """Structured output for best-of evaluation."""
 

@@ -36,6 +36,7 @@ from tests.fixtures.mock_data import (
     create_conversational_dataset,
     create_emotional_dataset,
     create_regulatory_dataset,
+    create_role_adherence_dataset,
     create_sample_batch,
     create_sample_dataset,
     create_toxicity_dataset,
@@ -52,6 +53,7 @@ from tests.fixtures.mock_retriever import (
     MockRetriever,
     MultipleDatasetRetriever,
     RegulatoryDatasetRetriever,
+    RoleAdherenceDatasetRetriever,
     SingleDatasetRetriever,
     ToxicityDatasetRetriever,
     VisionDatasetRetriever,
@@ -200,6 +202,18 @@ def vision_dataset_retriever() -> type[VisionDatasetRetriever]:
 def regulatory_dataset_retriever() -> type[RegulatoryDatasetRetriever]:
     """Fixture providing RegulatoryDatasetRetriever class."""
     return RegulatoryDatasetRetriever
+
+
+@pytest.fixture
+def role_adherence_dataset() -> Dataset:
+    """Fixture providing a role adherence testing dataset."""
+    return create_role_adherence_dataset()
+
+
+@pytest.fixture
+def role_adherence_dataset_retriever() -> type[RoleAdherenceDatasetRetriever]:
+    """Fixture providing RoleAdherenceDatasetRetriever class."""
+    return RoleAdherenceDatasetRetriever
 
 
 @pytest.fixture

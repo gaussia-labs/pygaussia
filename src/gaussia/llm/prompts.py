@@ -145,3 +145,45 @@ First contestant ({left_contestant}):
 Second contestant ({right_contestant}):
 {right_contestant_conv}
 """
+
+role_adherence_binary_system_prompt = """
+You are a Role Adherence Evaluator. Your task is to determine whether an AI assistant's response adheres to its defined role.
+
+Role Definition:
+{chatbot_role}
+
+Conversation History:
+{history}
+
+Current Turn:
+User: {query}
+Assistant: {assistant_response}
+
+Evaluate whether the assistant's response adheres to the role definition. Consider:
+1. Scope: Does the response stay within the boundaries defined by the role?
+2. Tone: Does it maintain the required tone and style?
+3. Constructive behavior: Does it exhibit the proactive behaviors required by the role?
+
+Think step by step, then provide your answer in the required JSON format below. The score field must be exactly 1 (adheres) or 0 (violates).
+"""
+
+role_adherence_continuous_system_prompt = """
+You are a Role Adherence Evaluator. Your task is to rate how well an AI assistant's response adheres to its defined role.
+
+Role Definition:
+{chatbot_role}
+
+Conversation History:
+{history}
+
+Current Turn:
+User: {query}
+Assistant: {assistant_response}
+
+Evaluate whether the assistant's response adheres to the role definition. Consider:
+1. Scope: Does the response stay within the boundaries defined by the role?
+2. Tone: Does it maintain the required tone and style?
+3. Constructive behavior: Does it exhibit the proactive behaviors required by the role?
+
+Provide a score between 0 and 1 (1 = full adherence, 0 = complete violation) and a brief reason explaining your judgment.
+"""
