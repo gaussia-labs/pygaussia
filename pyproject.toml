@@ -58,6 +58,7 @@ context = []
 conversational = []
 bestof = []
 agentic = []
+role-adherence = []
 
 humanity = [
     "numpy>=1.24.0",
