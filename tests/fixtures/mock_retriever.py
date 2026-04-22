@@ -11,6 +11,7 @@ from tests.fixtures.mock_data import (
     create_emotional_dataset,
     create_multiple_datasets,
     create_regulatory_dataset,
+    create_role_adherence_dataset,
     create_sample_dataset,
     create_toxicity_dataset,
     create_vision_dataset,
@@ -132,6 +133,13 @@ class RegulatoryDatasetRetriever(Retriever):
     def load_dataset(self) -> list[Dataset]:
         """Return regulatory testing dataset."""
         return [create_regulatory_dataset()]
+
+
+class RoleAdherenceDatasetRetriever(Retriever):
+    """Mock retriever for RoleAdherence metric testing."""
+
+    def load_dataset(self) -> list[Dataset]:
+        return [create_role_adherence_dataset()]
 
 
 class ErrorRetriever(Retriever):
