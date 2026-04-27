@@ -108,6 +108,13 @@ prompt-optimizer = [
 
 generators = []
 
+evalhub = [
+    "gaussia[metrics]",
+    "eval-hub-sdk[adapter]>=0.1.5,<0.2.0",
+    "langchain-openai>=1.0.0",
+    "requests>=2.33.0",
+]
+
 all = [
     "gaussia[metrics,generators,explainability,prompt-optimizer]",
 ]

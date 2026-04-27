@@ -49,6 +49,7 @@ Gaussia provides optional dependency groups for each metric and feature:
 | `generators` | Synthetic dataset generation | langchain-core |
 | `explainability` | Token attribution analysis | interpreto, torch, transformers |
 | `prompt-optimizer` | Prompt optimization | optuna |
+| `evalhub` | EvalHub BYOF provider adapter | eval-hub-sdk, requests, langchain-openai |
 
 ### Combined Extras
 
@@ -73,6 +74,11 @@ Gaussia provides optional dependency groups for each metric and feature:
   ```bash Full Installation
   # Install everything
   uv add "gaussia[all]"
+  ```
+
+  ```bash EvalHub Provider
+  # Install the EvalHub provider adapter
+  uv add "gaussia[evalhub]"
   ```
 </CodeGroup>
 
