@@ -119,6 +119,7 @@ def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
     assert tag_values["evaluated_model_name"] == "assistant-release-ops"
     inputs = next(call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/log-inputs"))
     assert inputs[3]["datasets"][0]["dataset"]["name"] == "gaussia-gaussia-dataset-v1-session-1"
+    assert len(inputs[3]["datasets"][0]["dataset"]["digest"]) <= 36
     assert inputs[3]["models"] == [{"model_id": "model-123"}]
     metric_calls = [call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/log-metric")]
     assert len(metric_calls) == 2

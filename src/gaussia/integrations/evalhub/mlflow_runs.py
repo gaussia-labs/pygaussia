@@ -540,7 +540,7 @@ def _safe_name(value: str, max_length: int = 250) -> str:
 
 
 def _digest_json(payload: dict[str, Any]) -> str:
-    return hashlib.sha256(_json_dumps(payload).encode("utf-8")).hexdigest()
+    return hashlib.sha256(_json_dumps(payload).encode("utf-8")).hexdigest()[:32]
 
 
 def _json_dumps(payload: dict[str, Any]) -> str:
