@@ -38,6 +38,8 @@ class FakeSession:
                     }
                 }
             )
+        if url.endswith("/logged-models"):
+            return FakeResponse(payload={"model": {"info": {"model_id": "model-123"}}})
         return FakeResponse(payload={})
 
     def put(self, url: str, *, data=None, headers=None, verify=None, timeout=None):
@@ -61,6 +63,14 @@ def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
         provider_id = "gaussia"
         id = "job-123"
         tags = [{"key": "assistant_id", "value": "assistant-1"}]
+        model = type(
+            "Model",
+            (),
+            {
+                "name": "assistant-release-ops",
+                "url": "https://example.invalid/model",
+            },
+        )()
 
     benchmark_input = load_benchmark_input(
         {
@@ -97,10 +107,21 @@ def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
 
     assert run.run_id == "run-123"
     assert run.experiment_id == "3"
+    assert run.dataset_name == "gaussia-gaussia-dataset-v1-session-1"
+    assert run.model_id == "model-123"
     assert session.calls[0][0] == "GET"
     assert session.calls[0][4]["X-MLFLOW-WORKSPACE"] == "redhat-ods-applications"
     assert session.calls[0][4]["Authorization"] == "Bearer token-123"
-    assert any(call[1].endswith("/api/2.0/mlflow/runs/create") for call in session.calls)
-    assert len([call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/log-metric")]) == 2
+    run_create = next(call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/create"))
+    tag_values = {tag["key"]: tag["value"] for tag in run_create[3]["tags"]}
+    assert tag_values["mlflow.source.name"] == "gaussia.integrations.evalhub.adapter"
+    assert tag_values["mlflow.source.type"] == "JOB"
+    assert tag_values["evaluated_model_name"] == "assistant-release-ops"
+    inputs = next(call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/log-inputs"))
+    assert inputs[3]["datasets"][0]["dataset"]["name"] == "gaussia-gaussia-dataset-v1-session-1"
+    assert inputs[3]["models"] == [{"model_id": "model-123"}]
+    metric_calls = [call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/log-metric")]
+    assert len(metric_calls) == 2
+    assert metric_calls[0][3]["dataset_name"] == "gaussia-gaussia-dataset-v1-session-1"
+    assert metric_calls[0][3]["model_id"] == "model-123"
     assert any("/api/2.0/mlflow-artifacts/artifacts/" in call[1] for call in session.calls)
-
