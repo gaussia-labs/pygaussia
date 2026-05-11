@@ -27,7 +27,7 @@ class FakeCallbacks(JobCallbacks):
         self.reported_results.append(results)
 
 
-class FakeMLflowRun:
+class FakeLoggedRun:
     def __init__(self) -> None:
         self.run_id = "run-123"
         self.experiment_id = "exp-123"
@@ -41,12 +41,12 @@ class FakeMLflowRun:
         self.failure_calls.append(exc)
 
 
-class FakeMLflowLogger:
+class FakeRunLogger:
     def __init__(self) -> None:
         self.calls = []
-        self.run = FakeMLflowRun()
+        self.run = FakeLoggedRun()
 
-    def create_run(self, spec: JobSpec, benchmark_input) -> FakeMLflowRun:
+    def create_run(self, spec: JobSpec, benchmark_input) -> FakeLoggedRun:
         self.calls.append((spec, benchmark_input))
         return self.run
 
@@ -100,12 +100,12 @@ def test_provider_accepts_legacy_context_persistance(monkeypatch) -> None:
     assert results.evaluation_metadata["stream_id"] == "stream-legacy"
 
 
-def test_provider_creates_mlflow_run_when_logger_is_available(monkeypatch) -> None:
+def test_provider_creates_logged_run_when_logger_is_available(monkeypatch) -> None:
     adapter = build_adapter()
     callbacks = FakeCallbacks()
-    fake_logger = FakeMLflowLogger()
+    fake_logger = FakeRunLogger()
     monkeypatch.setattr(
-        "gaussia.integrations.evalhub.adapter.build_mlflow_run_logger_from_env",
+        "gaussia.integrations.evalhub.adapter.build_run_logger_from_env",
         lambda: fake_logger,
     )
     monkeypatch.setattr(
@@ -120,6 +120,7 @@ def test_provider_creates_mlflow_run_when_logger_is_available(monkeypatch) -> No
 
     assert len(fake_logger.calls) == 1
     assert fake_logger.run.success_calls[0][0][0][0] == "humanity_assistant_emotional_entropy"
+    assert results.evaluation_metadata["run_logger_run_id"] == "run-123"
     assert results.evaluation_metadata["mlflow_run_id"] == "run-123"
     assert results.mlflow_run_id == "run-123"
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import json
 import os
 from statistics import fmean
+from typing import Any
 
 from gaussia.guardians.llms.providers import OpenAIGuardianProvider
 from gaussia.schemas.bias import GuardianLLMConfig, ProtectedAttribute
 from gaussia.statistical import BayesianMode, FrequentistMode
+
+from .extensions import clean_env, load_dotted_object, load_json_object_env
 
 DEFAULT_TOXICITY_GROUP_PROTOTYPES = {
     "age": ["young person", "old person", "elderly adult", "teenager"],
@@ -22,7 +24,11 @@ class ProviderConfig:
     def __init__(
         self,
         *,
+        judge_connector: object | None = None,
+        judge_connector_class: str | None = None,
+        judge_connector_kwargs: dict[str, Any] | None = None,
         judge_model: str | None = None,
+        judge_model_provider: str | None = None,
         judge_api_key: str | None = None,
         judge_base_url: str | None = None,
         judge_temperature: float = 0.0,
@@ -57,7 +63,11 @@ class ProviderConfig:
         toxicity_bayesian_ci_level: float = 0.95,
         toxicity_group_prototypes: dict[str, list[str]] | None = None,
     ) -> None:
+        self.judge_connector = judge_connector
+        self.judge_connector_class = judge_connector_class
+        self.judge_connector_kwargs = judge_connector_kwargs or {}
         self.judge_model = judge_model
+        self.judge_model_provider = judge_model_provider
         self.judge_api_key = judge_api_key
         self.judge_base_url = judge_base_url
         self.judge_temperature = judge_temperature
@@ -95,9 +105,12 @@ class ProviderConfig:
     @classmethod
     def from_env(cls) -> ProviderConfig:
         return cls(
-            judge_model=_clean_env("GAUSSIA_JUDGE_MODEL"),
-            judge_api_key=_clean_env("GAUSSIA_JUDGE_API_KEY"),
-            judge_base_url=_clean_env("GAUSSIA_JUDGE_BASE_URL"),
+            judge_connector_class=clean_env("GAUSSIA_JUDGE_CONNECTOR_CLASS"),
+            judge_connector_kwargs=load_json_object_env("GAUSSIA_JUDGE_CONNECTOR_KWARGS_JSON"),
+            judge_model=clean_env("GAUSSIA_JUDGE_MODEL"),
+            judge_model_provider=clean_env("GAUSSIA_JUDGE_MODEL_PROVIDER"),
+            judge_api_key=clean_env("GAUSSIA_JUDGE_API_KEY"),
+            judge_base_url=clean_env("GAUSSIA_JUDGE_BASE_URL"),
             judge_temperature=float(os.environ.get("GAUSSIA_JUDGE_TEMPERATURE", "0.0")),
             judge_use_structured_output=_env_bool("GAUSSIA_JUDGE_USE_STRUCTURED_OUTPUT", True),
             judge_bos_json_clause=os.environ.get("GAUSSIA_JUDGE_BOS_JSON_CLAUSE", "```json"),
@@ -105,10 +118,10 @@ class ProviderConfig:
             agentic_k=int(os.environ.get("GAUSSIA_AGENTIC_K", "3")),
             agentic_threshold=float(os.environ.get("GAUSSIA_AGENTIC_THRESHOLD", "0.7")),
             agentic_tool_threshold=float(os.environ.get("GAUSSIA_AGENTIC_TOOL_THRESHOLD", "1.0")),
-            guardian_model=_clean_env("GAUSSIA_GUARDIAN_MODEL"),
-            guardian_tokenizer_model=_clean_env("GAUSSIA_GUARDIAN_TOKENIZER_MODEL"),
-            guardian_api_key=_clean_env("GAUSSIA_GUARDIAN_API_KEY"),
-            guardian_base_url=_clean_env("GAUSSIA_GUARDIAN_BASE_URL"),
+            guardian_model=clean_env("GAUSSIA_GUARDIAN_MODEL"),
+            guardian_tokenizer_model=clean_env("GAUSSIA_GUARDIAN_TOKENIZER_MODEL"),
+            guardian_api_key=clean_env("GAUSSIA_GUARDIAN_API_KEY"),
+            guardian_base_url=clean_env("GAUSSIA_GUARDIAN_BASE_URL"),
             guardian_temperature=float(os.environ.get("GAUSSIA_GUARDIAN_TEMPERATURE", "0.01")),
             guardian_logprobs=_env_bool("GAUSSIA_GUARDIAN_LOGPROBS", False),
             guardian_chat_completions=_env_bool("GAUSSIA_GUARDIAN_CHAT_COMPLETIONS", False),
@@ -118,17 +131,13 @@ class ProviderConfig:
             toxicity_cluster_selection_epsilon=float(
                 os.environ.get("GAUSSIA_TOXICITY_CLUSTER_SELECTION_EPSILON", "0.01")
             ),
-            toxicity_cluster_selection_method=os.environ.get(
-                "GAUSSIA_TOXICITY_CLUSTER_SELECTION_METHOD", "euclidean"
-            ),
+            toxicity_cluster_selection_method=os.environ.get("GAUSSIA_TOXICITY_CLUSTER_SELECTION_METHOD", "euclidean"),
             toxicity_cluster_use_latent_space=_env_bool("GAUSSIA_TOXICITY_CLUSTER_USE_LATENT_SPACE", True),
             toxicity_umap_n_neighbors=int(os.environ.get("GAUSSIA_TOXICITY_UMAP_N_NEIGHBORS", "15")),
             toxicity_umap_n_components=int(os.environ.get("GAUSSIA_TOXICITY_UMAP_N_COMPONENTS", "2")),
             toxicity_umap_min_dist=float(os.environ.get("GAUSSIA_TOXICITY_UMAP_MIN_DIST", "0.1")),
             toxicity_umap_metric=os.environ.get("GAUSSIA_TOXICITY_UMAP_METRIC", "cosine"),
-            toxicity_group_default_threshold=float(
-                os.environ.get("GAUSSIA_TOXICITY_GROUP_DEFAULT_THRESHOLD", "0.5")
-            ),
+            toxicity_group_default_threshold=float(os.environ.get("GAUSSIA_TOXICITY_GROUP_DEFAULT_THRESHOLD", "0.5")),
             toxicity_w_dr=float(os.environ.get("GAUSSIA_TOXICITY_W_DR", str(1.0 / 3.0))),
             toxicity_w_asb=float(os.environ.get("GAUSSIA_TOXICITY_W_ASB", str(1.0 / 3.0))),
             toxicity_w_dto=float(os.environ.get("GAUSSIA_TOXICITY_W_DTO", str(1.0 / 3.0))),
@@ -138,22 +147,38 @@ class ProviderConfig:
         )
 
     def require_judge_model(self) -> object:
+        if self.judge_connector is not None:
+            return self.judge_connector
+
+        kwargs = self._judge_connector_kwargs()
+        if self.judge_connector_class:
+            return load_dotted_object(self.judge_connector_class)(**kwargs)
+
         if not self.judge_model:
-            raise ValueError("GAUSSIA_JUDGE_MODEL is required for context/conversational/agentic benchmarks")
-        if not self.judge_api_key:
-            raise ValueError("GAUSSIA_JUDGE_API_KEY is required for context/conversational/agentic benchmarks")
+            raise ValueError(
+                "GAUSSIA_JUDGE_MODEL or GAUSSIA_JUDGE_CONNECTOR_CLASS is required for "
+                "context/conversational/agentic benchmarks"
+            )
 
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError as exc:
-            raise ValueError("langchain-openai is required for context/conversational/agentic benchmarks") from exc
+        from langchain.chat_models import init_chat_model
 
-        return ChatOpenAI(
-            model=self.judge_model,
-            api_key=self.judge_api_key,
-            temperature=self.judge_temperature,
-            base_url=self.judge_base_url,
-        )
+        init_kwargs = dict(kwargs)
+        init_kwargs.pop("model", None)
+        init_kwargs.pop("model_name", None)
+        if self.judge_model_provider:
+            init_kwargs["model_provider"] = self.judge_model_provider
+        return init_chat_model(self.judge_model, **init_kwargs)
+
+    def _judge_connector_kwargs(self) -> dict[str, Any]:
+        kwargs = dict(self.judge_connector_kwargs)
+        kwargs.setdefault("temperature", self.judge_temperature)
+        if self.judge_model and "model" not in kwargs and "model_name" not in kwargs:
+            kwargs["model"] = self.judge_model
+        if self.judge_api_key and "api_key" not in kwargs:
+            kwargs["api_key"] = self.judge_api_key
+        if self.judge_base_url and "base_url" not in kwargs:
+            kwargs["base_url"] = self.judge_base_url
+        return kwargs
 
     def require_guardian_config(self) -> GuardianLLMConfig:
         if not self.guardian_model:
@@ -219,14 +244,6 @@ class ProviderConfig:
         return round(fmean(attribute_rates), 6)
 
 
-def _clean_env(name: str) -> str | None:
-    value = os.environ.get(name)
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
-
-
 def _env_bool(name: str, default: bool) -> bool:
     value = os.environ.get(name)
     if value is None:
@@ -235,13 +252,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 def _load_group_prototypes() -> dict[str, list[str]]:
-    raw = _clean_env("GAUSSIA_TOXICITY_GROUP_PROTOTYPES_JSON")
-    if not raw:
+    parsed = load_json_object_env("GAUSSIA_TOXICITY_GROUP_PROTOTYPES_JSON")
+    if parsed is None:
         return DEFAULT_TOXICITY_GROUP_PROTOTYPES
-
-    parsed = json.loads(raw)
-    if not isinstance(parsed, dict):
-        raise TypeError("GAUSSIA_TOXICITY_GROUP_PROTOTYPES_JSON must be a JSON object")
 
     normalized: dict[str, list[str]] = {}
     for key, value in parsed.items():

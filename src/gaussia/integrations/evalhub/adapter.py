@@ -22,8 +22,8 @@ from evalhub.adapter import (
 from .artifacts import write_json_artifact
 from .benchmarks import SUPPORTED_BENCHMARK_IDS, run_gaussia_benchmark
 from .config import ProviderConfig
-from .mlflow_runs import build_mlflow_run_logger_from_env
 from .payloads import load_benchmark_input
+from .run_logging import build_run_logger_from_env
 
 
 class GaussiaEvalHubAdapter(FrameworkAdapter):
@@ -46,8 +46,8 @@ class GaussiaEvalHubAdapter(FrameworkAdapter):
 
         benchmark_input = load_benchmark_input(config.parameters)
         provider_config = ProviderConfig.from_env()
-        mlflow_logger = build_mlflow_run_logger_from_env()
-        mlflow_run = mlflow_logger.create_run(config, benchmark_input) if mlflow_logger else None
+        run_logger = build_run_logger_from_env()
+        logged_run = run_logger.create_run(config, benchmark_input) if run_logger else None
 
         try:
             callbacks.report_status(
@@ -68,11 +68,10 @@ class GaussiaEvalHubAdapter(FrameworkAdapter):
                 config=provider_config,
             )
 
-            if mlflow_run is not None:
-                mlflow_run.log_success(
+            if logged_run is not None:
+                logged_run.log_success(
                     metrics=[
-                        (result.metric_name, float(result.metric_value))
-                        for result in execution.evaluation_results
+                        (result.metric_name, float(result.metric_value)) for result in execution.evaluation_results
                     ],
                     artifact_payload=execution.artifact_payload,
                 )
@@ -137,15 +136,17 @@ class GaussiaEvalHubAdapter(FrameworkAdapter):
                     "primary_metric_value": execution.primary_metric_value,
                     "payload_source": benchmark_input.payload_source,
                     "artifact_generated": bool(config.exports and config.exports.oci),
-                    "mlflow_run_id": mlflow_run.run_id if mlflow_run else None,
-                    "mlflow_experiment_id": mlflow_run.experiment_id if mlflow_run else None,
+                    "run_logger_run_id": logged_run.run_id if logged_run else None,
+                    "run_logger_experiment_id": logged_run.experiment_id if logged_run else None,
+                    "mlflow_run_id": logged_run.run_id if logged_run else None,
+                    "mlflow_experiment_id": logged_run.experiment_id if logged_run else None,
                 },
                 oci_artifact=oci_artifact,
-                mlflow_run_id=mlflow_run.run_id if mlflow_run else None,
+                mlflow_run_id=logged_run.run_id if logged_run else None,
             )
         except Exception as exc:
-            if mlflow_run is not None:
-                mlflow_run.log_failure(exc)
+            if logged_run is not None:
+                logged_run.log_failure(exc)
             raise
 
 

@@ -49,7 +49,7 @@ Gaussia provides optional dependency groups for each metric and feature:
 | `generators` | Synthetic dataset generation | langchain-core |
 | `explainability` | Token attribution analysis | interpreto, torch, transformers |
 | `prompt-optimizer` | Prompt optimization | optuna |
-| `evalhub` | EvalHub BYOF provider adapter | eval-hub-sdk, requests, langchain-openai |
+| `evalhub` | EvalHub BYOF provider adapter | eval-hub-sdk, requests |
 
 ### Combined Extras
 
@@ -107,6 +107,20 @@ Several metrics require LangChain-compatible chat models. Install your preferred
   uv add langchain-ollama
   ```
 </CodeGroup>
+
+When running the EvalHub provider adapter as a process, configure the judge with a LangChain-compatible connector. You can either point to a connector class directly:
+
+```bash
+export GAUSSIA_JUDGE_CONNECTOR_CLASS="your_package.YourChatModel"
+export GAUSSIA_JUDGE_CONNECTOR_KWARGS_JSON='{"model": "your-judge-model"}'
+```
+
+Or use LangChain's provider registry:
+
+```bash
+export GAUSSIA_JUDGE_MODEL="your-judge-model"
+export GAUSSIA_JUDGE_MODEL_PROVIDER="your-provider"
+```
 
 ## Verifying Installation
 
