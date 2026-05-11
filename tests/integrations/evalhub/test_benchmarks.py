@@ -68,6 +68,23 @@ def test_agentic_benchmark_requires_ground_truth_assistant() -> None:
         )
 
 
+def test_guardian_config_supports_served_model_and_tokenizer_model() -> None:
+    config = ProviderConfig(
+        guardian_model="granite-guardian-serving",
+        guardian_tokenizer_model="ibm-granite/granite-guardian-3.1-2b",
+        guardian_api_key="test-key",
+        guardian_base_url="https://guardian.example.com/v1",
+        guardian_chat_completions=True,
+    )
+
+    guardian_config = config.require_guardian_config()
+
+    assert guardian_config.model == "granite-guardian-serving"
+    assert guardian_config.tokenizer_model == "ibm-granite/granite-guardian-3.1-2b"
+    assert guardian_config.url == "https://guardian.example.com/v1"
+    assert guardian_config.chat_completions is True
+
+
 def _dataset_payload() -> dict:
     return {
         "dataset": {

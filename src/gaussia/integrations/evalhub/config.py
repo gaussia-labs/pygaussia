@@ -33,10 +33,12 @@ class ProviderConfig:
         agentic_threshold: float = 0.7,
         agentic_tool_threshold: float = 1.0,
         guardian_model: str | None = None,
+        guardian_tokenizer_model: str | None = None,
         guardian_api_key: str | None = None,
         guardian_base_url: str | None = None,
         guardian_temperature: float = 0.01,
         guardian_logprobs: bool = False,
+        guardian_chat_completions: bool = False,
         toxicity_embedding_model: str = "all-MiniLM-L6-v2",
         toxicity_statistical_mode: str = "frequentist",
         toxicity_min_cluster_size: int = 5,
@@ -66,10 +68,12 @@ class ProviderConfig:
         self.agentic_threshold = agentic_threshold
         self.agentic_tool_threshold = agentic_tool_threshold
         self.guardian_model = guardian_model
+        self.guardian_tokenizer_model = guardian_tokenizer_model
         self.guardian_api_key = guardian_api_key
         self.guardian_base_url = guardian_base_url
         self.guardian_temperature = guardian_temperature
         self.guardian_logprobs = guardian_logprobs
+        self.guardian_chat_completions = guardian_chat_completions
         self.toxicity_embedding_model = toxicity_embedding_model
         self.toxicity_statistical_mode = toxicity_statistical_mode
         self.toxicity_min_cluster_size = toxicity_min_cluster_size
@@ -102,10 +106,12 @@ class ProviderConfig:
             agentic_threshold=float(os.environ.get("GAUSSIA_AGENTIC_THRESHOLD", "0.7")),
             agentic_tool_threshold=float(os.environ.get("GAUSSIA_AGENTIC_TOOL_THRESHOLD", "1.0")),
             guardian_model=_clean_env("GAUSSIA_GUARDIAN_MODEL"),
+            guardian_tokenizer_model=_clean_env("GAUSSIA_GUARDIAN_TOKENIZER_MODEL"),
             guardian_api_key=_clean_env("GAUSSIA_GUARDIAN_API_KEY"),
             guardian_base_url=_clean_env("GAUSSIA_GUARDIAN_BASE_URL"),
             guardian_temperature=float(os.environ.get("GAUSSIA_GUARDIAN_TEMPERATURE", "0.01")),
             guardian_logprobs=_env_bool("GAUSSIA_GUARDIAN_LOGPROBS", False),
+            guardian_chat_completions=_env_bool("GAUSSIA_GUARDIAN_CHAT_COMPLETIONS", False),
             toxicity_embedding_model=os.environ.get("GAUSSIA_TOXICITY_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
             toxicity_statistical_mode=os.environ.get("GAUSSIA_TOXICITY_STATISTICAL_MODE", "frequentist"),
             toxicity_min_cluster_size=int(os.environ.get("GAUSSIA_TOXICITY_MIN_CLUSTER_SIZE", "5")),
@@ -157,10 +163,12 @@ class ProviderConfig:
 
         return GuardianLLMConfig(
             model=self.guardian_model,
+            tokenizer_model=self.guardian_tokenizer_model,
             api_key=self.guardian_api_key,
             url=self.guardian_base_url,
             temperature=self.guardian_temperature,
             logprobs=self.guardian_logprobs,
+            chat_completions=self.guardian_chat_completions,
             provider=OpenAIGuardianProvider,
         )
 

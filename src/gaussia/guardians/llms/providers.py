@@ -115,7 +115,14 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
             model, tokenizer, api_key, url, temperature, safe_token, unsafe_token, max_tokens, logprobs, **kwargs
         )
         self._overrides: dict[str, Any] = overrides if overrides is not None else {}
-        self.chat_completions = "chat_completions" in kwargs
+        self.chat_completions = bool(kwargs.get("chat_completions", False))
+
+    def _endpoint(self, path: str) -> str:
+        base_url = (self.url or "").rstrip("/")
+        versioned_path = path.lstrip("/")
+        if base_url.endswith("/v1"):
+            return f"{base_url}/{versioned_path}"
+        return f"{base_url}/v1/{versioned_path}"
 
     def _parse_guardian_response(self, response_json):
         if "error" in response_json or "choices" not in response_json:
@@ -140,7 +147,7 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
     def _with_chat_completions(self, prompt: partial) -> dict[str, Any]:
         messages = [{"role": "user", "content": partial(prompt, tokenize=False)()}]
         response = requests.post(
-            f"{self.url}/v1/chat/completions",
+            self._endpoint("chat/completions"),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",
@@ -159,7 +166,7 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
 
     def _with_completions(self, prompt: partial) -> dict[str, Any]:
         response = requests.post(
-            f"{self.url}/v1/completions",
+            self._endpoint("completions"),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",

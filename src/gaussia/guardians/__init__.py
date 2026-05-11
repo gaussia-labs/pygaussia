@@ -28,7 +28,7 @@ class IBMGranite(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,
@@ -38,6 +38,7 @@ class IBMGranite(Guardian):
             safe_token="No",
             logprobs=config.logprobs,
             unsafe_token="Yes",
+            chat_completions=config.chat_completions,
             overrides=config.overrides,
         )
 
@@ -83,7 +84,7 @@ class LLamaGuard(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,

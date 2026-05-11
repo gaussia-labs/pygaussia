@@ -105,9 +105,11 @@ class GuardianLLMConfig(BaseModel):
     """Configuration for LLM-based guardians."""
 
     model: str
+    tokenizer_model: str | None = None
     api_key: str | None = None
     url: str | None = None
     temperature: float
     logprobs: bool = False
+    chat_completions: bool = False
     provider: type[LLMGuardianProvider]
     overrides: dict[str, Any] = Field(default_factory=dict)
