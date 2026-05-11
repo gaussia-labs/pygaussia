@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from pydantic import BaseModel, Field
 
 from gaussia.llm.judge import Judge
@@ -292,6 +293,20 @@ class TestJudge:
 
         judge = Judge(model=mock_model, use_structured_output=False)
         _thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
+
+        assert result == {"score": 0.7, "insight": "test"}
+
+    def test_check_with_schema_in_regex_mode_escapes_schema_braces(self):
+        """Test schema JSON braces are not treated as prompt variables."""
+        model = FakeListChatModel(responses=['```json\n{"score": 0.7, "insight": "test"}\n```'])
+        judge = Judge(model=model, use_structured_output=False)
+
+        _thought, result = judge.check(
+            "Context: {context}\nAssistant answer: {assistant_answer}",
+            "Query",
+            {"context": "retrieved context", "assistant_answer": "assistant response"},
+            output_schema=ContextJudgeOutput,
+        )
 
         assert result == {"score": 0.7, "insight": "test"}
 
