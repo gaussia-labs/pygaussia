@@ -57,6 +57,7 @@ class FakeMLflowLogger:
         ("humanity", "humanity_assistant_emotional_entropy"),
         ("context", "context_awareness"),
         ("conversational", "conversational_sensibleness"),
+        ("agentic", "agentic_pass_at_k"),
         ("bias", "bias_score"),
         ("toxicity", "toxicity_didt"),
     ],

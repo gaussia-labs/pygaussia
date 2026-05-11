@@ -11,6 +11,7 @@ from evalhub.adapter import EvaluationResult
 
 from gaussia.guardians import IBMGranite
 from gaussia.loaders import HurtlexLoader
+from gaussia.metrics.agentic import Agentic
 from gaussia.metrics.bias import Bias
 from gaussia.metrics.context import Context
 from gaussia.metrics.conversational import Conversational
@@ -28,6 +29,7 @@ SUPPORTED_BENCHMARK_IDS = (
     "humanity",
     "context",
     "conversational",
+    "agentic",
     "bias",
     "toxicity",
 )
@@ -152,6 +154,59 @@ def _run_conversational(context: BenchmarkContext) -> BenchmarkExecution:
     )
 
 
+def _run_agentic(context: BenchmarkContext) -> BenchmarkExecution:
+    missing_ground_truth = [
+        batch.qa_id
+        for batch in context.benchmark_input.dataset.conversation
+        if not batch.ground_truth_assistant.strip()
+    ]
+    if missing_ground_truth:
+        raise ValueError(
+            "Agentic benchmark requires ground_truth_assistant for every interaction; "
+            f"missing: {', '.join(missing_ground_truth)}"
+        )
+
+    metric = _single_metric(
+        Agentic.run(context.retriever_cls, **_agentic_metric_kwargs(context.config)),
+        context.benchmark_id,
+    )
+    primary = round(metric.pass_at_k, 6)
+    correctness_rate = (
+        round(metric.correct_interactions / metric.total_interactions, 6)
+        if metric.total_interactions
+        else 0.0
+    )
+    return _build_execution(
+        context=context,
+        primary_metric_name="agentic_pass_at_k",
+        primary_metric_value=primary,
+        metric_count=1,
+        evaluation_results=[
+            _float_result("agentic_pass_at_k", primary),
+            _float_result("agentic_pass_pow_k", metric.pass_pow_k),
+            _float_result("agentic_correctness_rate", correctness_rate),
+            _float_result("agentic_correct_interactions", metric.correct_interactions),
+            _float_result("agentic_total_interactions", metric.total_interactions),
+        ],
+        metrics=[metric],
+        summary={
+            "session_id": metric.session_id,
+            "k": metric.k,
+            "threshold": metric.threshold,
+            "pass_at_k": primary,
+            "pass_at_k_ci_low": metric.pass_at_k_ci_low,
+            "pass_at_k_ci_high": metric.pass_at_k_ci_high,
+            "pass_pow_k": round(metric.pass_pow_k, 6),
+            "pass_pow_k_ci_low": metric.pass_pow_k_ci_low,
+            "pass_pow_k_ci_high": metric.pass_pow_k_ci_high,
+            "correctness_rate": correctness_rate,
+            "correct_interactions": metric.correct_interactions,
+            "total_interactions": metric.total_interactions,
+            "is_fully_correct": metric.is_fully_correct,
+        },
+    )
+
+
 def _run_bias(context: BenchmarkContext) -> BenchmarkExecution:
     if context.interaction_count < MIN_INTERACTIONS_FOR_BIAS:
         raise ValueError(f"Bias benchmark requires at least {MIN_INTERACTIONS_FOR_BIAS} interactions")
@@ -267,6 +322,15 @@ def _judge_metric_kwargs(config: ProviderConfig) -> dict[str, object]:
     }
 
 
+def _agentic_metric_kwargs(config: ProviderConfig) -> dict[str, object]:
+    return {
+        **_judge_metric_kwargs(config),
+        "k": config.agentic_k,
+        "threshold": config.agentic_threshold,
+        "tool_threshold": config.agentic_tool_threshold,
+    }
+
+
 def _build_execution(
     *,
     context: BenchmarkContext,
@@ -374,6 +438,7 @@ _BENCHMARK_RUNNERS: dict[str, Callable[[BenchmarkContext], BenchmarkExecution]] 
     "humanity": _run_humanity,
     "context": _run_context,
     "conversational": _run_conversational,
+    "agentic": _run_agentic,
     "bias": _run_bias,
     "toxicity": _run_toxicity,
 }

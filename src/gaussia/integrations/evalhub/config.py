@@ -29,6 +29,9 @@ class ProviderConfig:
         judge_use_structured_output: bool = True,
         judge_bos_json_clause: str = "```json",
         judge_eos_json_clause: str = "```",
+        agentic_k: int = 3,
+        agentic_threshold: float = 0.7,
+        agentic_tool_threshold: float = 1.0,
         guardian_model: str | None = None,
         guardian_api_key: str | None = None,
         guardian_base_url: str | None = None,
@@ -59,6 +62,9 @@ class ProviderConfig:
         self.judge_use_structured_output = judge_use_structured_output
         self.judge_bos_json_clause = judge_bos_json_clause
         self.judge_eos_json_clause = judge_eos_json_clause
+        self.agentic_k = agentic_k
+        self.agentic_threshold = agentic_threshold
+        self.agentic_tool_threshold = agentic_tool_threshold
         self.guardian_model = guardian_model
         self.guardian_api_key = guardian_api_key
         self.guardian_base_url = guardian_base_url
@@ -92,6 +98,9 @@ class ProviderConfig:
             judge_use_structured_output=_env_bool("GAUSSIA_JUDGE_USE_STRUCTURED_OUTPUT", True),
             judge_bos_json_clause=os.environ.get("GAUSSIA_JUDGE_BOS_JSON_CLAUSE", "```json"),
             judge_eos_json_clause=os.environ.get("GAUSSIA_JUDGE_EOS_JSON_CLAUSE", "```"),
+            agentic_k=int(os.environ.get("GAUSSIA_AGENTIC_K", "3")),
+            agentic_threshold=float(os.environ.get("GAUSSIA_AGENTIC_THRESHOLD", "0.7")),
+            agentic_tool_threshold=float(os.environ.get("GAUSSIA_AGENTIC_TOOL_THRESHOLD", "1.0")),
             guardian_model=_clean_env("GAUSSIA_GUARDIAN_MODEL"),
             guardian_api_key=_clean_env("GAUSSIA_GUARDIAN_API_KEY"),
             guardian_base_url=_clean_env("GAUSSIA_GUARDIAN_BASE_URL"),
@@ -124,14 +133,14 @@ class ProviderConfig:
 
     def require_judge_model(self) -> object:
         if not self.judge_model:
-            raise ValueError("GAUSSIA_JUDGE_MODEL is required for context/conversational benchmarks")
+            raise ValueError("GAUSSIA_JUDGE_MODEL is required for context/conversational/agentic benchmarks")
         if not self.judge_api_key:
-            raise ValueError("GAUSSIA_JUDGE_API_KEY is required for context/conversational benchmarks")
+            raise ValueError("GAUSSIA_JUDGE_API_KEY is required for context/conversational/agentic benchmarks")
 
         try:
             from langchain_openai import ChatOpenAI
         except ImportError as exc:
-            raise ValueError("langchain-openai is required for context/conversational benchmarks") from exc
+            raise ValueError("langchain-openai is required for context/conversational/agentic benchmarks") from exc
 
         return ChatOpenAI(
             model=self.judge_model,
