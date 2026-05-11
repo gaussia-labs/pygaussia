@@ -316,6 +316,18 @@ class TestJudge:
         result = judge._extract_json('some text ```json\n{"key": "value"}\n``` more text')
         assert result == {"key": "value"}
 
+    def test_extract_json_raw_object(self, mock_model):
+        """Test _extract_json accepts raw JSON without fences."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('{"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
+
+    def test_extract_json_object_with_prefix(self, mock_model):
+        """Test _extract_json accepts a JSON object embedded in prose."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('Result: {"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
+
     def test_extract_json_not_found(self, mock_model):
         """Test _extract_json when no JSON found."""
         judge = Judge(model=mock_model)

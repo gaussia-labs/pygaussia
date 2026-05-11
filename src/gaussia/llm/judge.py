@@ -188,5 +188,13 @@ Do not include any additional text after the JSON.
             except json.JSONDecodeError:
                 logging.exception("[FAIR FORGE/JUDGE] JSON decode error")
                 return None
+        decoder = json.JSONDecoder()
+        for start in (match.start() for match in re.finditer(r"\{", text)):
+            try:
+                result, _end = decoder.raw_decode(text[start:])
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                continue
         logging.error(f"[FAIR FORGE/JUDGE] No JSON found between {self.bos_json_clause} and {self.eos_json_clause}")
         return None
