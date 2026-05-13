@@ -9,7 +9,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
 import requests
@@ -66,7 +66,7 @@ class MLflowRunLogger:
         self.session = session or requests.Session()
 
     def create_run(self, config: JobSpec, benchmark_input: BenchmarkInput) -> MLflowRunContext:
-        experiment_id = self._ensure_experiment(config.experiment_name)
+        experiment_id = self._ensure_experiment(config.experiment_name or "gaussia-evalhub")
         metadata = benchmark_input.metadata
         run = self._post(
             "/api/2.0/mlflow/runs/create",
@@ -121,10 +121,10 @@ class MLflowRunLogger:
             allow_not_found=True,
         )
         if response is not None:
-            return response["experiment"]["experiment_id"]
+            return str(response["experiment"]["experiment_id"])
 
         created = self._post("/api/2.0/mlflow/experiments/create", {"name": experiment_name})
-        return created["experiment_id"]
+        return str(created["experiment_id"])
 
     def _build_tags(self, config: JobSpec, benchmark_input: BenchmarkInput) -> list[dict[str, str]]:
         tags = [
@@ -350,7 +350,7 @@ class MLflowRunLogger:
         *,
         params: dict[str, str] | None = None,
         allow_not_found: bool = False,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         response = self.session.get(
             f"{self.base_url}{path}",
             params=params,
@@ -361,9 +361,9 @@ class MLflowRunLogger:
         if allow_not_found and response.status_code in {400, 404} and "RESOURCE_DOES_NOT_EXIST" in response.text:
             return None
         _raise_for_status(response)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
-    def _post(self, path: str, payload: dict) -> dict:
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         response = self.session.post(
             f"{self.base_url}{path}",
             json=payload,
@@ -372,9 +372,9 @@ class MLflowRunLogger:
             timeout=30,
         )
         _raise_for_status(response)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
-    def _post_optional(self, path: str, payload: dict) -> dict | None:
+    def _post_optional(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         response = self.session.post(
             f"{self.base_url}{path}",
             json=payload,
@@ -390,7 +390,7 @@ class MLflowRunLogger:
             )
             return None
         _raise_for_status(response)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
     def _set_tag_if_possible(self, run_id: str, key: str, value: str) -> None:
         if not run_id:

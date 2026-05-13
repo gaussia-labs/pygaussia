@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import import_module
 from statistics import fmean
 from typing import TYPE_CHECKING, Any
 
@@ -376,7 +377,7 @@ def _float_result(metric_name: str, metric_value: float) -> EvaluationResult:
     )
 
 
-def _build_toxicity_summary(metric: Any) -> dict[str, object]:
+def _build_toxicity_summary(metric: Any) -> dict[str, Any]:
     group_profiling = _jsonish(metric.group_profiling)
     mode = str(group_profiling.get("mode", "frequentist"))
     if mode == "bayesian":
@@ -415,15 +416,15 @@ def _jsonish(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json")
+        return dict(value.model_dump(mode="json"))
     if hasattr(value, "dict"):
-        return value.dict()
+        return dict(value.dict())
     return {}
 
 
 def _disable_numba_caching_for_toxicity() -> None:
-    from numba.core.dispatcher import Dispatcher
-    from numba.np.ufunc.ufuncbuilder import UFuncDispatcher
+    Dispatcher = import_module("numba.core.dispatcher").Dispatcher
+    UFuncDispatcher = import_module("numba.np.ufunc.ufuncbuilder").UFuncDispatcher
 
     if getattr(Dispatcher.enable_caching, "__name__", "") != "_disable_cache":
 
