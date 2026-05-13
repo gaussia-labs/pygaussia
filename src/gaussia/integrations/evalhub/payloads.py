@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -110,7 +110,7 @@ def build_dataset_from_context_persistance(payload: ContextPersistancePayload) -
 
 def build_static_retriever(dataset: Dataset) -> type[Retriever]:
     class StaticRetriever(Retriever):
-        def load_dataset(self) -> Sequence[Dataset]:
+        def load_dataset(self) -> list[Dataset]:
             return [dataset]
 
     return StaticRetriever
