@@ -1,6 +1,150 @@
 # CHANGELOG
 
 
+## v1.0.0-b.2 (2026-05-13)
+
+### Bug Fixes
+
+- **evalhub**: Satisfy release type checks
+  ([`e7582af`](https://github.com/gaussia-labs/pygaussia/commit/e7582afbbdd54052c64b59570e519fae725a4cbd))
+
+- **guardians**: Address PR review — runtime bugs and schema consistency
+  ([`c42fe90`](https://github.com/gaussia-labs/pygaussia/commit/c42fe90b668a55bbec605bfac4bacd34552bf015))
+
+- HuggingFaceGuardianProvider: instantiate tokenizer via AutoTokenizer.from_pretrained(model) in
+  __init__ instead of passing None; tokenizer was used in _parse_output and _get_probabilities,
+  causing AttributeError at runtime - HuggingFaceGuardianProvider.infer: replace self.model.device
+  with next(model.parameters()).device; self.model is a str so .device would raise AttributeError at
+  runtime - GuardianLLMConfig.overrides: change mutable dict default {} to
+  Field(default_factory=dict) for consistency with project Pydantic patterns -
+  OptimizationResult.history, MIPROv2Result.demos/trials: change mutable list defaults [] to
+  Field(default_factory=list) for same reason - test_toxicity: add missing context= argument to two
+  batch() call sites to match updated Gaussia.batch() signature - Add test_huggingface_provider.py
+  covering tokenizer initialization and device resolution in infer()
+
+- **tests**: Assign lazy-loaded property to _ to satisfy ruff B018
+  ([`1a99bcf`](https://github.com/gaussia-labs/pygaussia/commit/1a99bcf94dc24069e9ec1a80f853741e78201885))
+
+- **types**: Eliminate all type: ignore comments and fix root causes
+  ([`fc4a1b0`](https://github.com/gaussia-labs/pygaussia/commit/fc4a1b07a8c767da229ae07c303cfba35c77e33b))
+
+Replace all 25 occurrences of # type: ignore across the codebase with proper type fixes:
+
+- pyproject.toml: add follow_imports = skip for torch, transformers, langchain and langchain_core to
+  silence incomplete third-party stubs without per-line suppressions - schemas/bias.py: correct
+  tokenizer parameter from AutoTokenizer to PreTrainedTokenizerBase in LLMGuardianProvider -
+  guardians/__init__.py: annotate self.tokenizer as PreTrainedTokenizerBase in IBMGranite and
+  LLamaGuard; remove all arg-type suppressions - embedders/qwen.py, rerankers/qwen.py: lazy-init
+  fields typed as PreTrainedTokenizerBase | None and PreTrainedModel | None with assert is not None
+  guards in properties - llm/judge.py, guardians/llms/providers.py: annotate json.loads and
+  response.json() return values as dict[str, Any] to resolve no-any-return -
+  statistical/frequentist.py: use isinstance(v, (int, float)) inline to narrow float | dict[str,
+  Any] union without suppression - metrics/agentic.py, metrics/toxicity.py: assert isinstance before
+  indexing into float | dict[str, Any] in Bayesian code paths - metrics/toxicity.py: fix
+  score_cluster key type to dict[int, float], use GroupProfiling.model_validate() instead of passing
+  raw dict - prompt_optimizer/base.py: use isinstance-filtered list comprehension to narrow Dataset
+  | StreamedBatch union - mipro/mipro.py: fix _collect_examples return type from object to Batch -
+  schemas/generators.py, gepa/gepa.py, mipro/proposer.py, llm/judge.py: remove stale suppressions
+  made redundant by follow_imports = skip
+
+Add 38 targeted tests verifying runtime correctness of all changes: -
+  tests/guardians/test_ibm_granite.py: tokenizer loading, safe/unsafe token configuration,
+  is_biased() return values and prompt structure - tests/guardians/test_llama_guard.py:
+  chat_completions flag, content list format, categories construction, is_biased() return values -
+  tests/embedders/test_qwen_embedder.py: lazy init, caching, eval() call -
+  tests/rerankers/test_qwen_reranker.py: same pattern as embedder
+
+mypy: Success — no issues found in 88 source files
+
+pytest: 441 passed, 83.93% coverage
+
+- **types**: Resolve 107 mypy errors and remove ignore_errors suppression
+  ([`44b3ba0`](https://github.com/gaussia-labs/pygaussia/commit/44b3ba0b7b4f26852e98c288123a47a52b1a8851))
+
+Resolves gaussia-labs/pygaussia#1.
+
+Remove the blanket `ignore_errors = true` overrides for 16 modules from `pyproject.toml` and fix
+  each underlying type error:
+
+Group A — missing stubs for optional dependencies: - `rerankers/qwen.py`, `embedders/qwen.py`: add
+  `# type: ignore[import-not-found]` for torch imports; annotate lazy-init properties with proper `T
+  | None` types - `metrics/humanity.py`: mark scipy import as untyped
+
+Group B — `batch()` signature mismatch with base class: - `metrics/toxicity.py`: reorder params to
+  match `(session_id, context, assistant_id, batch, language)` - `metrics/bias.py`: fix `language`
+  default from `str = "en"` to `str | None = "english"`
+
+Group C — FrequentistMode and BayesianMode return types too narrow: - `statistical/frequentist.py`,
+  `statistical/bayesian.py`: widen all method return type declarations to `float | dict[str, Any]`
+  matching the base class; switch dict parameters to `Mapping` for covariance -
+  `statistical/base.py`: update abstract method signatures to use `Mapping` instead of `dict` so
+  subclasses can accept narrower callers
+
+Group D — Agentic.run() override with incompatible signature: - `metrics/agentic.py`: remove `k` as
+  a positional param, thread via `**kwargs` instead; add proper type annotations for local variables
+
+Group E — LangChain / attr-defined errors: - `llm/judge.py`: add `# type: ignore[no-any-return]` on
+  `json.loads` - `guardians/llms/providers.py`: fix `super().__init__()` positional arg order;
+  annotate return types; add targeted ignores for torch attrs - `prompt_optimizer/mipro/mipro.py`:
+  remove stale union-attr ignores
+
+Group F — BaseContextLoader.load() signature mismatch: - `schemas/generators.py`: widen
+  `load(source: str)` to accept `str | list[str]` matching the concrete implementation
+
+Remaining targeted fixes: - `metrics/best_of.py`: fix `result_reasoning` type from `str | None` to
+  `dict | None` matching `BestOfContest.reasoning` - `metrics/humanity.py`: add `defaultdict` type
+  annotation; guard `None` language with fallback - `metrics/toxicity.py`: use `np.ndarray` for
+  accumulated embeddings; add ignores for numpy integer subclass check - `metrics/regulatory.py`,
+  `metrics/vision.py`: targeted fixes - `prompt_optimizer/schemas.py`: make `MIPROv2Result` extend
+  `OptimizationResult` (LSP compliance); rename `trials_run` to `iterations_run`; update test
+  accordingly - `guardians/__init__.py`: remove stale type: ignore comments
+
+Pin Python to 3.13 via `.python-version` to avoid pydantic v1 incompatibility with Python 3.14.
+
+`uv run mypy src/gaussia` now reports: Success: no issues found in 88 source files.
+
+### Chores
+
+- Remove spec plan from tracked files
+  ([`713a8a7`](https://github.com/gaussia-labs/pygaussia/commit/713a8a76c726a597859932321ae87b2a94aca9bb))
+
+### Documentation
+
+- Add PyPI badges to README
+  ([`83426ea`](https://github.com/gaussia-labs/pygaussia/commit/83426eac5a227261eed418062d3ba54eaa4c037c))
+
+- Add usage examples for all metrics and deployment targets
+  ([`b0d08da`](https://github.com/gaussia-labs/pygaussia/commit/b0d08daad035cbda61ee671f0f1df233633e2bf4))
+
+- Update trials_run references to iterations_run
+  ([`a83e1a7`](https://github.com/gaussia-labs/pygaussia/commit/a83e1a76976c717cec4746aa55ffd109b5d00a6c))
+
+Follow-up to the MIPROv2Result schema change in the previous commit. The `trials_run` field was
+  renamed to `iterations_run` to align with the `OptimizationResult` base class. Update all
+  references:
+
+- examples/prompt_optimizer/mipro/jupyter/mipro.ipynb: result.trials_run → result.iterations_run -
+  tests/prompt_optimizer/test_mipro.py: rename test method accordingly
+
+### Features
+
+- **evalhub**: Add built-in provider adapter
+  ([`469cf9a`](https://github.com/gaussia-labs/pygaussia/commit/469cf9a053c4a590a7c905a6f14d727299a5a815))
+
+- **guardians**: Add provider overrides support and fix null content crash
+  ([`869ec57`](https://github.com/gaussia-labs/pygaussia/commit/869ec575d40504ec61a7caa23c101a55edfc6aa4))
+
+Resolves gaussia-labs/pygaussia#2.
+
+- Add `overrides: dict[str, Any] = {}` field to `GuardianLLMConfig` so callers can pass extra HTTP
+  body fields (e.g. OpenRouter provider routing, transforms) without subclassing - Thread
+  `overrides` through `IBMGranite` and `LLamaGuard` constructors into the underlying
+  `LLMGuardianProvider` instance - Spread `**self._overrides` into both `_with_chat_completions` and
+  `_with_completions` request bodies in `OpenAIGuardianProvider` - Guard against null message
+  content in `_parse_guardian_response`: when `choice["message"]["content"]` is `None` return
+  `(False, 1.0)` instead of crashing with a `TypeError`
+
+
 ## v1.0.0-b.1 (2026-04-09)
 
 ### Bug Fixes

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gaussia"
-version = "1.0.0-b.1"
+version = "1.0.0-b.2"
 description = "Gaussia - AI evaluation framework for measuring fairness, quality, and safety of AI models and assistants"
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,7 +41,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-
 dependencies = [
     "langchain>=1.2",
     "langchain-core>=1.2.11",
@@ -118,6 +117,13 @@ all = [
     "gaussia[metrics,generators,explainability,prompt-optimizer]",
 ]
 
+[project.urls]
+Homepage = "https://github.com/gaussia-labs/pygaussia"
+Repository = "https://github.com/gaussia-labs/pygaussia.git"
+"Bug Tracker" = "https://github.com/gaussia-labs/pygaussia/issues"
+Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
+
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
@@ -133,12 +139,6 @@ dev = [
     "types-tqdm>=4.66.0",
     "pandas-stubs>=2.0.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/gaussia-labs/pygaussia"
-Repository = "https://github.com/gaussia-labs/pygaussia.git"
-"Bug Tracker" = "https://github.com/gaussia-labs/pygaussia/issues"
-Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gaussia"]
