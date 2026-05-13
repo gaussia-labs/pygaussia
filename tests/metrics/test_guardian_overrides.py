@@ -94,6 +94,25 @@ class TestOpenAIProviderOverrides:
         expected_keys = {"model", "messages", "temperature", "max_tokens", "logprobs"}
         assert set(posted_json.keys()) == expected_keys
 
+    def test_v1_base_url_is_not_duplicated_for_chat_completions(self):
+        provider = self._make_provider()
+        provider.url = "https://guardian.example.com/v1"
+
+        assert provider._endpoint("chat/completions") == "https://guardian.example.com/v1/chat/completions"
+
+    def test_chat_completions_flag_uses_value_not_presence(self):
+        mock_tokenizer = MagicMock()
+        provider = OpenAIGuardianProvider(
+            model="meta-llama/llama-guard-4-12b",
+            tokenizer=mock_tokenizer,
+            api_key="sk-test",
+            url="https://openrouter.ai/api",
+            temperature=0.0,
+            chat_completions=False,
+        )
+
+        assert provider.chat_completions is False
+
 
 class TestParseGuardianResponseNullContent:
     def _make_provider(self):

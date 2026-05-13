@@ -37,6 +37,27 @@ class TestIBMGraniteInit:
         mock_auto_tokenizer.from_pretrained.assert_called_once_with("ibm/granite-guardian-test")
 
     @patch("gaussia.guardians.AutoTokenizer")
+    def test_tokenizer_can_use_separate_tokenizer_model(self, mock_auto_tokenizer):
+        mock_provider_class = MagicMock()
+        config = _make_config(mock_provider_class)
+        config.tokenizer_model = "ibm-granite/granite-guardian-tokenizer"
+
+        IBMGranite(config=config)
+
+        mock_auto_tokenizer.from_pretrained.assert_called_once_with("ibm-granite/granite-guardian-tokenizer")
+
+    @patch("gaussia.guardians.AutoTokenizer")
+    def test_provider_receives_chat_completions_flag(self, mock_auto_tokenizer):
+        mock_provider_class = MagicMock()
+        config = _make_config(mock_provider_class)
+        config.chat_completions = True
+
+        IBMGranite(config=config)
+
+        _, kwargs = mock_provider_class.call_args
+        assert kwargs["chat_completions"] is True
+
+    @patch("gaussia.guardians.AutoTokenizer")
     def test_provider_instantiated_with_safe_no_unsafe_yes(self, mock_auto_tokenizer):
         mock_provider_class = MagicMock()
         config = _make_config(mock_provider_class)

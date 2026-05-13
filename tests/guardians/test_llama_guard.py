@@ -37,6 +37,16 @@ class TestLLamaGuardInit:
         mock_auto_tokenizer.from_pretrained.assert_called_once_with("meta-llama/llama-guard-test")
 
     @patch("gaussia.guardians.AutoTokenizer")
+    def test_tokenizer_can_use_separate_tokenizer_model(self, mock_auto_tokenizer):
+        mock_provider_class = MagicMock()
+        config = _make_config(mock_provider_class)
+        config.tokenizer_model = "meta-llama/llama-guard-tokenizer"
+
+        LLamaGuard(config=config)
+
+        mock_auto_tokenizer.from_pretrained.assert_called_once_with("meta-llama/llama-guard-tokenizer")
+
+    @patch("gaussia.guardians.AutoTokenizer")
     def test_provider_instantiated_with_chat_completions_true(self, mock_auto_tokenizer):
         mock_provider_class = MagicMock()
         config = _make_config(mock_provider_class)

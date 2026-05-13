@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from pydantic import BaseModel, Field
 
 from gaussia.llm.judge import Judge
@@ -295,11 +296,37 @@ class TestJudge:
 
         assert result == {"score": 0.7, "insight": "test"}
 
+    def test_check_with_schema_in_regex_mode_escapes_schema_braces(self):
+        """Test schema JSON braces are not treated as prompt variables."""
+        model = FakeListChatModel(responses=['```json\n{"score": 0.7, "insight": "test"}\n```'])
+        judge = Judge(model=model, use_structured_output=False)
+
+        _thought, result = judge.check(
+            "Context: {context}\nAssistant answer: {assistant_answer}",
+            "Query",
+            {"context": "retrieved context", "assistant_answer": "assistant response"},
+            output_schema=ContextJudgeOutput,
+        )
+
+        assert result == {"score": 0.7, "insight": "test"}
+
     def test_extract_json_basic(self, mock_model):
         """Test _extract_json with basic JSON."""
         judge = Judge(model=mock_model)
         result = judge._extract_json('some text ```json\n{"key": "value"}\n``` more text')
         assert result == {"key": "value"}
+
+    def test_extract_json_raw_object(self, mock_model):
+        """Test _extract_json accepts raw JSON without fences."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('{"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
+
+    def test_extract_json_object_with_prefix(self, mock_model):
+        """Test _extract_json accepts a JSON object embedded in prose."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('Result: {"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
 
     def test_extract_json_not_found(self, mock_model):
         """Test _extract_json when no JSON found."""

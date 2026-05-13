@@ -18,6 +18,7 @@ With specific metric dependencies:
 ```bash
 pip install gaussia[toxicity]    # Toxicity analysis
 pip install gaussia[bias]        # Bias detection
+pip install gaussia[evalhub]     # EvalHub provider adapter
 pip install gaussia[metrics]     # All metrics
 pip install gaussia[all]         # Everything
 ```
@@ -119,6 +120,14 @@ Optimize prompts using evolutionary and multi-objective strategies:
 
 ```python
 from gaussia.prompt_optimizer import GEPAOptimizer, MIPROv2Optimizer
+```
+
+### EvalHub Provider
+
+Run Gaussia as an EvalHub BYOF provider:
+
+```bash
+python -m gaussia.integrations.evalhub.adapter
 ```
 
 ## Documentation

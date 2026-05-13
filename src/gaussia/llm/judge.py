@@ -85,6 +85,9 @@ class Judge:
     def _render_system_prompt(self, system_prompt: str, data: dict) -> str:
         return system_prompt.format_map(data)
 
+    def _escape_prompt_template(self, prompt: str) -> str:
+        return prompt.replace("{", "{{").replace("}", "}}")
+
     def _get_json_schema_for_prompt(self, schema: type[BaseModel]) -> str:
         schema_json = schema.model_json_schema()
         props = schema_json.get("properties", {})
@@ -156,16 +159,19 @@ Do not include any additional text after the JSON.
         data: dict,
         output_schema: type[BaseModel] | None = None,
     ) -> tuple[str, dict | None]:
+        rendered_system_prompt = self._render_system_prompt(system_prompt, data)
         if output_schema:
             schema_instruction = self._get_json_schema_for_prompt(output_schema)
-            enhanced_prompt = system_prompt + schema_instruction
+            enhanced_prompt = rendered_system_prompt + schema_instruction
         else:
-            enhanced_prompt = system_prompt
+            enhanced_prompt = rendered_system_prompt
+
+        escaped_prompt = self._escape_prompt_template(enhanced_prompt)
 
         self.chat_history.append(("human", query))
-        prompt = ChatPromptTemplate.from_messages([("system", enhanced_prompt), *self.chat_history])
+        prompt = ChatPromptTemplate.from_messages([("system", escaped_prompt), *self.chat_history])
         chain = prompt | self.model
-        response = chain.invoke(data)
+        response = chain.invoke({})
         content = str(response.content)
         reasoning = response.additional_kwargs.get("reasoning_content", "")
         json_data = self._extract_json(content)
@@ -182,5 +188,13 @@ Do not include any additional text after the JSON.
             except json.JSONDecodeError:
                 logging.exception("[FAIR FORGE/JUDGE] JSON decode error")
                 return None
+        decoder = json.JSONDecoder()
+        for start in (match.start() for match in re.finditer(r"\{", text)):
+            try:
+                result, _end = decoder.raw_decode(text[start:])
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                continue
         logging.error(f"[FAIR FORGE/JUDGE] No JSON found between {self.bos_json_clause} and {self.eos_json_clause}")
         return None
