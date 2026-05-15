@@ -83,8 +83,8 @@ def run(payload: dict) -> dict[str, Any]:
 
     strategy = LLMJudgeStrategy(
         model=model,
-        binary=config.get("binary", True),
-        use_structured_output=config.get("use_structured_output", True),
+        temperature=config.get("temperature", 1.0),
+        top_logprobs=config.get("top_logprobs", 10),
         verbose=config.get("verbose", False),
     )
 
@@ -95,7 +95,6 @@ def run(payload: dict) -> dict[str, Any]:
             binary=config.get("binary", True),
             strict_mode=config.get("strict_mode", False),
             threshold=config.get("threshold", 0.5),
-            include_reason=config.get("include_reason", False),
             verbose=config.get("verbose", False),
         )
     except Exception as e:
@@ -120,7 +119,6 @@ def run(payload: dict) -> dict[str, Any]:
                         "qa_id": t.qa_id,
                         "adherence_score": t.adherence_score,
                         "adherent": t.adherent,
-                        "reason": t.reason,
                     }
                     for t in m.turns
                 ],

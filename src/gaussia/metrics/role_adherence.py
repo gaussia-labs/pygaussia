@@ -5,18 +5,22 @@ from abc import ABC, abstractmethod
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from gaussia.core import Gaussia, Retriever
-from gaussia.llm import Judge, RoleAdherenceJudgeOutput
-from gaussia.llm.prompts import (
-    role_adherence_binary_system_prompt,
-    role_adherence_continuous_system_prompt,
-)
+from gaussia.llm import Judge
+from gaussia.llm.prompts import role_adherence_judge_system_prompt
 from gaussia.schemas import Batch, IterationLevel
 from gaussia.schemas.role_adherence import RoleAdherenceMetric, RoleAdherenceTurn
 from gaussia.statistical import FrequentistMode, StatisticalMode
 
 
 class ScoringStrategy(ABC):
-    """Abstract strategy for scoring per-turn role adherence."""
+    """Abstract strategy for scoring per-turn role adherence.
+
+    Concrete implementations score a single turn against the role definition.
+    The current implementation is `LLMJudgeStrategy` (LLM-as-judge with
+    logprob-based scoring). Deterministic strategies (e.g. embedding similarity,
+    rule-based) are tracked as future work — see the paper for evaluated
+    deterministic baselines.
+    """
 
     @abstractmethod
     def score(
@@ -24,7 +28,7 @@ class ScoringStrategy(ABC):
         turn: Batch,
         history: list[Batch],
         chatbot_role: str,
-    ) -> tuple[float, str | None]:
+    ) -> float:
         """Evaluate a single turn against the role definition.
 
         Args:
@@ -33,57 +37,46 @@ class ScoringStrategy(ABC):
             chatbot_role: The role definition string R.
 
         Returns:
-            Tuple of (score ∈ [0,1], optional_reason).
+            Score in [0, 1] where 1 means full adherence.
         """
 
 
 class LLMJudgeStrategy(ScoringStrategy):
-    """Scoring strategy using an LLM judge to evaluate role adherence per turn.
+    """Scoring strategy that uses an LLM judge with logprob-based scoring.
 
-    The judge reads the role definition directly and evaluates adherence without
-    requiring ground-truth references. Supports binary classification (default)
-    and continuous scoring modes.
+    Asks the judge a binary YES/NO question and derives a continuous
+    [0, 1] adherence score from the first-token logprobs, via
+    `Judge.check_logprob_binary()`.
 
     Args:
-        model: LangChain BaseChatModel instance for evaluation.
-        binary: If True, judge is prompted to return 0 or 1. If False, returns [0,1].
-        use_structured_output: If True, use LangChain's with_structured_output().
-        strict: Strict mode for structured output parsing.
-        bos_json_clause: Opening marker for JSON blocks.
-        eos_json_clause: Closing marker for JSON blocks.
-        verbose: Enable verbose logging.
+        model: LangChain BaseChatModel. Must be a provider that exposes
+            logprobs (OpenAI, Azure OpenAI, Ollama, LiteLLM, HF TGI via
+            BaseChatOpenAI). Anthropic/Gemini/Bedrock will raise
+            LogprobsNotSupportedError on first invocation.
+        temperature: Forwarded to the judge. Default 1.0 follows the
+            paper to preserve first-token distribution calibration. Pass
+            None to inherit the model's own configured temperature.
+        top_logprobs: Number of top tokens to retrieve per position. Default
+            10 matches the paper.
+        verbose: Enable verbose logging on the underlying Judge.
     """
 
     def __init__(
         self,
         model: BaseChatModel,
-        binary: bool = True,
-        use_structured_output: bool = False,
-        strict: bool = True,
-        bos_json_clause: str = "```json",
-        eos_json_clause: str = "```",
+        temperature: float | None = 1.0,
+        top_logprobs: int = 10,
         verbose: bool = False,
     ):
         self.model = model
-        self.binary = binary
-        self.use_structured_output = use_structured_output
-        self.strict = strict
-        self.bos_json_clause = bos_json_clause
-        self.eos_json_clause = eos_json_clause
+        self.temperature = temperature
+        self.top_logprobs = top_logprobs
         self.verbose = verbose
-        self._prompt = role_adherence_binary_system_prompt if binary else role_adherence_continuous_system_prompt
 
-    def score(self, turn: Batch, history: list[Batch], chatbot_role: str) -> tuple[float, str | None]:
-        judge = Judge(
-            model=self.model,
-            use_structured_output=self.use_structured_output,
-            strict=self.strict,
-            bos_json_clause=self.bos_json_clause,
-            eos_json_clause=self.eos_json_clause,
-            verbose=self.verbose,
-        )
-        _, result = judge.check(
-            self._prompt,
+    def score(self, turn: Batch, history: list[Batch], chatbot_role: str) -> float:
+        judge = Judge(model=self.model, verbose=self.verbose)
+        score, _ = judge.check_logprob_binary(
+            role_adherence_judge_system_prompt,
             turn.query,
             {
                 "chatbot_role": chatbot_role,
@@ -91,15 +84,10 @@ class LLMJudgeStrategy(ScoringStrategy):
                 "query": turn.query,
                 "assistant_response": turn.assistant,
             },
-            output_schema=RoleAdherenceJudgeOutput,
+            top_logprobs=self.top_logprobs,
+            temperature=self.temperature,
         )
-
-        if result is None:
-            raise ValueError(f"[GAUSSIA/ROLE_ADHERENCE] No valid response from judge for QA ID: {turn.qa_id}")
-
-        score = float(result["score"] if isinstance(result, dict) else result.score)
-        reason = result["reason"] if isinstance(result, dict) else result.reason
-        return score, reason
+        return score
 
     def _format_history(self, history: list[Batch]) -> str:
         if not history:
@@ -125,10 +113,9 @@ class RoleAdherence(Gaussia):
         scoring_strategy: Strategy object that scores each turn (e.g. LLMJudgeStrategy).
         statistical_mode: Statistical computation mode (defaults to FrequentistMode).
         binary: If True, per-turn scores are binarized using threshold. Session score = proportion adherent.
-                If False, per-turn continuous scores are averaged.
+                If False, the raw continuous logprob score is averaged.
         strict_mode: If True, the session is adherent only if all turns are adherent.
         threshold: Minimum score to classify a turn (or session) as adherent.
-        include_reason: If True, include the judge's justification in per-turn output.
         **kwargs: Additional arguments passed to Gaussia base class.
     """
 
@@ -140,7 +127,6 @@ class RoleAdherence(Gaussia):
         binary: bool = True,
         strict_mode: bool = False,
         threshold: float = 0.5,
-        include_reason: bool = False,
         **kwargs,
     ):
         super().__init__(retriever, **kwargs)
@@ -156,7 +142,6 @@ class RoleAdherence(Gaussia):
         self.binary = binary
         self.strict_mode = strict_mode
         self.threshold = threshold
-        self.include_reason = include_reason
         self._current_chatbot_role: str = ""
         self._session_data: dict[str, dict] = {}
 
@@ -191,7 +176,7 @@ class RoleAdherence(Gaussia):
         for turn in batch:
             self.logger.debug(f"QA ID: {turn.qa_id}")
 
-            raw_score, reason = self.scoring_strategy.score(turn, list(history), self._current_chatbot_role)
+            raw_score = self.scoring_strategy.score(turn, list(history), self._current_chatbot_role)
             history.append(turn)
 
             adherent_turn = raw_score >= self.threshold
@@ -206,7 +191,6 @@ class RoleAdherence(Gaussia):
                     qa_id=turn.qa_id,
                     adherence_score=stored_score,
                     adherent=adherent_turn,
-                    reason=reason if self.include_reason else None,
                 )
             )
 

@@ -1,6 +1,6 @@
 """Tests for RoleAdherence metric."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,10 +12,10 @@ from tests.fixtures.mock_data import create_role_adherence_dataset, create_sampl
 from tests.fixtures.mock_retriever import MockRetriever, RoleAdherenceDatasetRetriever
 
 
-def make_mock_strategy(scores: list[float], reason: str = "mock reason") -> ScoringStrategy:
+def make_mock_strategy(scores: list[float]) -> ScoringStrategy:
     """Create a mock ScoringStrategy that returns predetermined scores in order."""
     strategy = MagicMock(spec=ScoringStrategy)
-    strategy.score.side_effect = [(s, reason) for s in scores]
+    strategy.score.side_effect = list(scores)
     return strategy
 
 
@@ -29,7 +29,6 @@ class TestRoleAdherenceInit:
         assert metric.binary is True
         assert metric.strict_mode is False
         assert metric.threshold == 0.5
-        assert metric.include_reason is False
 
     def test_custom_parameters(self):
         strategy = make_mock_strategy([])
@@ -40,18 +39,15 @@ class TestRoleAdherenceInit:
             binary=False,
             strict_mode=True,
             threshold=0.7,
-            include_reason=True,
         )
 
         assert isinstance(metric.statistical_mode, BayesianMode)
         assert metric.binary is False
         assert metric.strict_mode is True
         assert metric.threshold == 0.7
-        assert metric.include_reason is True
 
     def test_raises_on_stream_batches(self):
         from gaussia.core.retriever import Retriever
-        from gaussia.schemas.common import IterationLevel
 
         class StreamBatchRetriever(Retriever):
             @property
@@ -97,18 +93,16 @@ class TestRoleAdherenceBatch:
         metric.batch(session_id="s1", context="ctx", assistant_id="bot", batch=[b0, b1, b2])
 
         calls = strategy.score.call_args_list
-        assert calls[0][0][1] == []        # first turn: empty history
-        assert calls[1][0][1] == [b0]      # second turn: one prior turn
-        assert calls[2][0][1] == [b0, b1]  # third turn: two prior turns
+        assert calls[0][0][1] == []
+        assert calls[1][0][1] == [b0]
+        assert calls[2][0][1] == [b0, b1]
 
     def test_chatbot_role_passed_to_strategy(self):
         strategy = make_mock_strategy([1.0])
         metric = RoleAdherence(retriever=MockRetriever, scoring_strategy=strategy)
 
         metric._current_chatbot_role = "Fintech support agent"
-        metric.batch(
-            session_id="s1", context="ctx", assistant_id="bot", batch=[create_sample_batch(qa_id="qa_001")]
-        )
+        metric.batch(session_id="s1", context="ctx", assistant_id="bot", batch=[create_sample_batch(qa_id="qa_001")])
 
         _, _, role_arg = strategy.score.call_args[0]
         assert role_arg == "Fintech support agent"
@@ -138,9 +132,9 @@ class TestBinaryMode:
         metric.on_process_complete()
 
         turns = metric.metrics[0].turns
-        assert turns[0].adherence_score == 1.0  # 0.9 >= 0.5 → 1
-        assert turns[1].adherence_score == 0.0  # 0.3 < 0.5 → 0
-        assert turns[2].adherence_score == 1.0  # 0.8 >= 0.5 → 1
+        assert turns[0].adherence_score == 1.0
+        assert turns[1].adherence_score == 0.0
+        assert turns[2].adherence_score == 1.0
         assert metric.metrics[0].role_adherence == pytest.approx(2 / 3)
 
     def test_binary_false_keeps_raw_scores(self):
@@ -170,7 +164,7 @@ class TestStrictMode:
         metric.on_process_complete()
 
         assert metric.metrics[0].role_adherence == pytest.approx(2 / 3)
-        assert metric.metrics[0].adherent is True  # 0.667 >= 0.5
+        assert metric.metrics[0].adherent is True
 
     def test_strict_mode_true_requires_all_turns_adherent(self):
         strategy = make_mock_strategy([1.0, 1.0, 0.0])
@@ -181,7 +175,7 @@ class TestStrictMode:
         metric.batch(session_id="s1", context="c", assistant_id="a", batch=batches)
         metric.on_process_complete()
 
-        assert metric.metrics[0].adherent is False  # one turn failed
+        assert metric.metrics[0].adherent is False
 
     def test_strict_mode_true_all_pass(self):
         strategy = make_mock_strategy([1.0, 1.0, 1.0])
@@ -205,32 +199,9 @@ class TestThreshold:
         metric.batch(session_id="s1", context="c", assistant_id="a", batch=batches)
         metric.on_process_complete()
 
-        # 0.6 < 0.7 → not adherent per turn; mean = 0.0 < 0.7 → session not adherent
         for turn in metric.metrics[0].turns:
             assert turn.adherent is False
         assert metric.metrics[0].adherent is False
-
-
-class TestIncludeReason:
-    def test_reason_excluded_by_default(self):
-        strategy = make_mock_strategy([1.0], reason="The response is within scope.")
-        metric = RoleAdherence(retriever=MockRetriever, scoring_strategy=strategy, include_reason=False)
-
-        metric._current_chatbot_role = "role"
-        metric.batch(session_id="s1", context="c", assistant_id="a", batch=[create_sample_batch(qa_id="q1")])
-        metric.on_process_complete()
-
-        assert metric.metrics[0].turns[0].reason is None
-
-    def test_reason_included_when_enabled(self):
-        strategy = make_mock_strategy([1.0], reason="The response is within scope.")
-        metric = RoleAdherence(retriever=MockRetriever, scoring_strategy=strategy, include_reason=True)
-
-        metric._current_chatbot_role = "role"
-        metric.batch(session_id="s1", context="c", assistant_id="a", batch=[create_sample_batch(qa_id="q1")])
-        metric.on_process_complete()
-
-        assert metric.metrics[0].turns[0].reason == "The response is within scope."
 
 
 class TestBayesianMode:
@@ -263,7 +234,6 @@ class TestRunMethod:
             binary=True,
             strict_mode=False,
             threshold=0.5,
-            include_reason=False,
         )
 
         assert len(metrics) > 0
@@ -288,17 +258,20 @@ class TestRunMethod:
 
 
 class TestLLMJudgeStrategy:
-    def test_selects_binary_prompt(self):
-        from gaussia.llm.prompts import role_adherence_binary_system_prompt
+    def test_initialization_defaults(self):
+        model = MagicMock()
+        strategy = LLMJudgeStrategy(model=model)
+        assert strategy.model is model
+        assert strategy.temperature == 1.0
+        assert strategy.top_logprobs == 10
+        assert strategy.verbose is False
 
-        strategy = LLMJudgeStrategy(model=MagicMock(), binary=True)
-        assert strategy._prompt == role_adherence_binary_system_prompt
-
-    def test_selects_continuous_prompt(self):
-        from gaussia.llm.prompts import role_adherence_continuous_system_prompt
-
-        strategy = LLMJudgeStrategy(model=MagicMock(), binary=False)
-        assert strategy._prompt == role_adherence_continuous_system_prompt
+    def test_initialization_custom(self):
+        model = MagicMock()
+        strategy = LLMJudgeStrategy(model=model, temperature=0.7, top_logprobs=20, verbose=True)
+        assert strategy.temperature == 0.7
+        assert strategy.top_logprobs == 20
+        assert strategy.verbose is True
 
     def test_format_history_empty(self):
         strategy = LLMJudgeStrategy(model=MagicMock())
@@ -317,37 +290,43 @@ class TestLLMJudgeStrategy:
         assert "Assistant: I'm fine" in result
 
     def test_score_calls_judge_with_correct_data(self):
-        from unittest.mock import patch
+        from gaussia.llm.prompts import role_adherence_judge_system_prompt
 
         mock_model = MagicMock()
-        strategy = LLMJudgeStrategy(model=mock_model, binary=True)
+        strategy = LLMJudgeStrategy(model=mock_model)
         turn = create_sample_batch(qa_id="q1", query="Test query", assistant="Test response")
 
         with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
             mock_judge = MagicMock()
             mock_judge_class.return_value = mock_judge
-            mock_judge.check.return_value = ("", {"score": 1.0, "reason": "Correct"})
+            mock_judge.check_logprob_binary.return_value = (0.85, {"top_logprobs": []})
 
-            score, reason = strategy.score(turn, [], "Fintech agent role")
+            score = strategy.score(turn, [], "Fintech agent role")
 
-        assert score == 1.0
-        assert reason == "Correct"
-        call_data = mock_judge.check.call_args[0][2]
+        assert score == 0.85
+        call_args = mock_judge.check_logprob_binary.call_args
+        assert call_args[0][0] == role_adherence_judge_system_prompt
+        assert call_args[0][1] == "Test query"
+        call_data = call_args[0][2]
         assert call_data["chatbot_role"] == "Fintech agent role"
         assert call_data["query"] == "Test query"
         assert call_data["assistant_response"] == "Test response"
         assert call_data["history"] == "No prior conversation."
+        assert call_args[1]["top_logprobs"] == 10
+        assert call_args[1]["temperature"] == 1.0
 
-    def test_score_raises_on_none_result(self):
-        from unittest.mock import patch
-
-        strategy = LLMJudgeStrategy(model=MagicMock(), binary=True)
+    def test_score_forwards_custom_params(self):
+        mock_model = MagicMock()
+        strategy = LLMJudgeStrategy(model=mock_model, temperature=0.5, top_logprobs=20)
         turn = create_sample_batch(qa_id="q1")
 
         with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
             mock_judge = MagicMock()
             mock_judge_class.return_value = mock_judge
-            mock_judge.check.return_value = ("", None)
+            mock_judge.check_logprob_binary.return_value = (0.5, {"top_logprobs": []})
 
-            with pytest.raises(ValueError, match="No valid response"):
-                strategy.score(turn, [], "role")
+            strategy.score(turn, [], "role")
+
+        kwargs = mock_judge.check_logprob_binary.call_args[1]
+        assert kwargs["temperature"] == 0.5
+        assert kwargs["top_logprobs"] == 20
