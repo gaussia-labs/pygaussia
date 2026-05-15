@@ -14,12 +14,17 @@ This Lambda function uses the Gaussia `RoleAdherence` metric to score how consis
 
 ## Supported LLM Providers
 
+The judge uses first-token logprobs, so only providers that expose logprobs through their API are compatible.
+
 | Provider | class_path |
 |----------|-----------|
-| Groq | `langchain_groq.chat_models.ChatGroq` |
 | OpenAI | `langchain_openai.chat_models.ChatOpenAI` |
-| Google Gemini | `langchain_google_genai.chat_models.ChatGoogleGenerativeAI` |
+| Azure OpenAI | `langchain_openai.chat_models.AzureChatOpenAI` |
 | Ollama | `langchain_ollama.chat_models.ChatOllama` |
+| LiteLLM | `langchain_community.chat_models.ChatLiteLLM` |
+| HuggingFace TGI (OpenAI-compatible) | `langchain_openai.chat_models.ChatOpenAI` with `base_url` |
+
+**Not supported:** Anthropic, Google Gemini and AWS Bedrock do not return logprobs. Passing these will raise `LogprobsNotSupportedError`.
 
 ## Test Example
 
@@ -30,11 +35,10 @@ curl -s -X POST "<INVOKE_URL>/run" \
   -H "Content-Type: application/json" \
   -d '{
     "connector": {
-      "class_path": "langchain_groq.chat_models.ChatGroq",
+      "class_path": "langchain_openai.chat_models.ChatOpenAI",
       "params": {
-        "model": "qwen/qwen3-32b",
-        "api_key": "your-groq-api-key",
-        "temperature": 0.0
+        "model": "gpt-4o-mini",
+        "api_key": "your-openai-api-key"
       }
     },
     "datasets": [
@@ -69,24 +73,21 @@ curl -s -X POST "<INVOKE_URL>/run" \
     "config": {
       "binary": true,
       "strict_mode": false,
-      "threshold": 0.5,
-      "include_reason": false,
-      "use_structured_output": true
+      "threshold": 0.5
     }
   }'
 ```
 
-### Using OpenAI
+### Using Ollama (Local)
 
 ```bash
 curl -s -X POST "<INVOKE_URL>/run" \
   -H "Content-Type: application/json" \
   -d '{
     "connector": {
-      "class_path": "langchain_openai.chat_models.ChatOpenAI",
+      "class_path": "langchain_ollama.chat_models.ChatOllama",
       "params": {
-        "model": "gpt-4o-mini",
-        "api_key": "your-openai-api-key"
+        "model": "llama3.1:70b"
       }
     },
     "datasets": [...],
@@ -102,11 +103,10 @@ curl -s -X POST "<INVOKE_URL>/run" \
 ```json
 {
   "connector": {
-    "class_path": "langchain_groq.chat_models.ChatGroq",
+    "class_path": "langchain_openai.chat_models.ChatOpenAI",
     "params": {
-      "model": "qwen/qwen3-32b",
-      "api_key": "your-api-key",
-      "temperature": 0.0
+      "model": "gpt-4o-mini",
+      "api_key": "your-api-key"
     }
   },
   "datasets": [
@@ -130,8 +130,8 @@ curl -s -X POST "<INVOKE_URL>/run" \
     "binary": true,
     "strict_mode": false,
     "threshold": 0.5,
-    "include_reason": false,
-    "use_structured_output": true,
+    "temperature": 1.0,
+    "top_logprobs": 10,
     "verbose": false
   }
 }
@@ -145,7 +145,7 @@ curl -s -X POST "<INVOKE_URL>/run" \
 | `connector.params` | object | Yes | Parameters passed to the chat model constructor |
 | `connector.params.model` | string | Yes | Model name/identifier |
 | `connector.params.api_key` | string | Yes | API key for the LLM provider |
-| `connector.params.temperature` | float | No | Sampling temperature (recommend 0.0 for consistency) |
+| `connector.params.temperature` | float | No | Sampling temperature on the underlying model. The judge overrides this per-call with `config.temperature` unless `null`. |
 
 ### Module-Specific Fields
 
@@ -162,11 +162,11 @@ curl -s -X POST "<INVOKE_URL>/run" \
 | `datasets[].conversation[].query` | string | Yes | User message |
 | `datasets[].conversation[].assistant` | string | Yes | Assistant's response |
 | `datasets[].conversation[].ground_truth_assistant` | string | No | Expected/ideal response |
-| `config.binary` | boolean | No | Binary (0/1) vs continuous [0,1] scoring (default: true) |
+| `config.binary` | boolean | No | If true, per-turn scores are binarized at `threshold`; otherwise raw logprob score is kept (default: true) |
 | `config.strict_mode` | boolean | No | Session adherent only if ALL turns pass (default: false) |
 | `config.threshold` | float | No | Score cutoff for binary classification (default: 0.5) |
-| `config.include_reason` | boolean | No | Include judge reasoning per turn (default: false) |
-| `config.use_structured_output` | boolean | No | Use LangChain structured output (default: true) |
+| `config.temperature` | float | No | Temperature forwarded to the judge. Default 1.0 (per paper). Pass null to inherit the model's own temperature. |
+| `config.top_logprobs` | int | No | Number of top tokens to inspect for the first generated token (default: 10) |
 | `config.verbose` | boolean | No | Enable verbose logging (default: false) |
 
 ## Response Format
@@ -187,20 +187,17 @@ curl -s -X POST "<INVOKE_URL>/run" \
         {
           "qa_id": "q1",
           "adherence_score": 1.0,
-          "adherent": true,
-          "reason": null
+          "adherent": true
         },
         {
           "qa_id": "q2",
           "adherence_score": 1.0,
-          "adherent": true,
-          "reason": null
+          "adherent": true
         },
         {
           "qa_id": "q3",
           "adherence_score": 0.5,
-          "adherent": false,
-          "reason": null
+          "adherent": false
         }
       ]
     }
@@ -225,7 +222,6 @@ curl -s -X POST "<INVOKE_URL>/run" \
 | `results[].turns[].qa_id` | string | Turn identifier |
 | `results[].turns[].adherence_score` | float | Per-turn score (0.0–1.0) |
 | `results[].turns[].adherent` | boolean | Turn-level pass/fail |
-| `results[].turns[].reason` | string\|null | Judge reasoning — populated when `include_reason=true` |
 
 ## Error Responses
 

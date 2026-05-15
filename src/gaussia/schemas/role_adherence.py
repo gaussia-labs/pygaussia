@@ -9,7 +9,6 @@ class RoleAdherenceTurn(BaseModel):
     qa_id: str
     adherence_score: float
     adherent: bool
-    reason: str | None = None
 
 
 class RoleAdherenceMetric(BaseMetric):

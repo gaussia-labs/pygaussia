@@ -1025,7 +1025,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'explainability'", specifier = ">=4.35.0" },
     { name = "umap-learn", marker = "extra == 'toxicity'", specifier = ">=0.5.6,<0.6.0" },
 ]
-provides-extras = ["context", "conversational", "bestof", "agentic", "humanity", "toxicity", "bias", "vision", "regulatory", "explainability", "metrics", "prompt-optimizer", "generators", "evalhub", "all"]
+provides-extras = ["context", "conversational", "bestof", "agentic", "role-adherence", "humanity", "toxicity", "bias", "vision", "regulatory", "explainability", "metrics", "prompt-optimizer", "generators", "evalhub", "all"]
 
 [package.metadata.requires-dev]
 dev = [

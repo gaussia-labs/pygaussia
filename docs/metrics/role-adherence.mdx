@@ -5,13 +5,15 @@ description: "Evaluate whether an AI assistant stays within its defined role acr
 
 # Role Adherence Metric
 
-The Role Adherence metric evaluates whether an AI assistant's responses conform to its defined role description across all turns of a conversation. It accumulates `role_adherence` scores across all turns in a session and emits one session-level result, with optional uncertainty quantification via Bayesian mode. The `turns` list preserves per-turn scores and judge reasoning for debugging.
+The Role Adherence metric evaluates whether an AI assistant's responses conform to its defined role description across all turns of a conversation. It accumulates `role_adherence` scores across all turns in a session and emits one session-level result, with optional uncertainty quantification via Bayesian mode. The `turns` list preserves per-turn scores for debugging.
+
+The judge uses **first-token logprobs** to derive a calibrated [0, 1] adherence score from a YES/NO question to the judge model, following the paper's `P(YES) / (P(YES) + P(NO))` formulation. This requires a provider that exposes logprobs (OpenAI, Azure OpenAI, Ollama, LiteLLM, HuggingFace TGI). Anthropic, Gemini and Bedrock are not supported and will raise `LogprobsNotSupportedError`.
 
 ## Overview
 
 * **Role Adherence**: How consistently the assistant stays within its assigned role (0.0–1.0)
 * **Session aggregate**: Weighted mean across all turns
-* **Per-turn detail**: Each turn's score, pass/fail verdict, and optional judge reason accessible via `turns`
+* **Per-turn detail**: Each turn's score and pass/fail verdict accessible via `turns`
 * **Bayesian mode**: Bootstrapped credible interval around the session mean
 
 ## Installation
@@ -29,8 +31,8 @@ uv add langchain-openai  # Or your preferred LLM provider
   from langchain_openai import ChatOpenAI
   from your_retriever import MyRetriever
 
-  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
-  strategy = LLMJudgeStrategy(model=judge_model, binary=True)
+  judge_model = ChatOpenAI(model="gpt-4o-mini")
+  strategy = LLMJudgeStrategy(model=judge_model)
 
   metrics = RoleAdherence.run(
       MyRetriever,
@@ -53,8 +55,8 @@ uv add langchain-openai  # Or your preferred LLM provider
   from langchain_openai import ChatOpenAI
   from your_retriever import MyRetriever
 
-  judge_model = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
-  strategy = LLMJudgeStrategy(model=judge_model, binary=True)
+  judge_model = ChatOpenAI(model="gpt-4o-mini")
+  strategy = LLMJudgeStrategy(model=judge_model)
 
   metrics = RoleAdherence.run(
       MyRetriever,
@@ -73,12 +75,9 @@ uv add langchain-openai  # Or your preferred LLM provider
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `model` | `BaseChatModel` | required | LangChain-compatible judge model |
-| `binary` | `bool` | `True` | Binary (0/1) vs continuous [0,1] scoring |
-| `use_structured_output` | `bool` | `False` | Use LangChain structured output |
-| `strict` | `bool` | `True` | Strict mode for structured output parsing |
-| `bos_json_clause` | `str` | `` ```json `` | JSON block start marker |
-| `eos_json_clause` | `str` | `` ``` `` | JSON block end marker |
+| `model` | `BaseChatModel` | required | LangChain-compatible judge model. Must support logprobs (OpenAI, Azure, Ollama, LiteLLM, HF TGI). |
+| `temperature` | `float \| None` | `1.0` | Forwarded to the judge. Default `1.0` preserves first-token distribution calibration (per paper). Pass `None` to inherit the model's configured temperature. |
+| `top_logprobs` | `int` | `10` | Number of top tokens to inspect for the first generated token. Matches the paper. |
 | `verbose` | `bool` | `False` | Enable verbose logging |
 
 ### Required Parameters
@@ -93,10 +92,9 @@ uv add langchain-openai  # Or your preferred LLM provider
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `statistical_mode` | `StatisticalMode` | `FrequentistMode()` | Statistical computation mode |
-| `binary` | `bool` | `True` | If `True`, per-turn scores binarized at threshold |
+| `binary` | `bool` | `True` | If `True`, per-turn scores binarized at threshold; otherwise the raw continuous logprob score is kept |
 | `strict_mode` | `bool` | `False` | If `True`, session adherent only if ALL turns pass |
 | `threshold` | `float` | `0.5` | Score cutoff for binary classification |
-| `include_reason` | `bool` | `False` | Include judge reasoning in per-turn output |
 
 ## Statistical Modes
 
@@ -163,8 +161,11 @@ class RoleAdherenceTurn(BaseModel):
     qa_id: str
     adherence_score: float   # Per-turn score (0.0–1.0)
     adherent: bool           # Turn-level pass/fail
-    reason: str | None       # Judge reasoning — populated when include_reason=True
 ```
+
+<Note>
+Judge reasoning is **not** populated. The logprob-based scoring path does not produce a textual justification — it derives the score directly from the model's first-token probabilities. Adding an optional `reason` would require a second model call per turn; this may be added later as an opt-in feature if it proves valuable. Track this as a future enhancement.
+</Note>
 
 Session `adherent` logic:
 
@@ -263,8 +264,8 @@ class FinTrackRetriever(Retriever):
         ]
 
 
-judge = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"), temperature=0.0)
-strategy = LLMJudgeStrategy(model=judge, binary=True, use_structured_output=True)
+judge = ChatOpenAI(model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY"))
+strategy = LLMJudgeStrategy(model=judge)
 
 metrics = RoleAdherence.run(
     FinTrackRetriever,
@@ -272,7 +273,6 @@ metrics = RoleAdherence.run(
     statistical_mode=BayesianMode(mc_samples=5000, ci_level=0.95),
     strict_mode=False,
     threshold=0.5,
-    include_reason=True,
     verbose=True,
 )
 
@@ -289,8 +289,7 @@ for metric in metrics:
     print("  Per-turn:")
     for turn in metric.turns:
         status = "✅ PASS" if turn.adherent else "❌ FAIL"
-        reason = f"  → {turn.reason}" if turn.reason else ""
-        print(f"    [{turn.qa_id}] {status}  score={turn.adherence_score:.2f}{reason}")
+        print(f"    [{turn.qa_id}] {status}  score={turn.adherence_score:.2f}")
     print()
 ```
 
@@ -299,24 +298,29 @@ for metric in metrics:
 <CodeGroup>
   ```python OpenAI
   from langchain_openai import ChatOpenAI
-  judge = ChatOpenAI(model="gpt-4o-mini", api_key="your-api-key", temperature=0.0)
+  judge = ChatOpenAI(model="gpt-4o-mini", api_key="your-api-key")
   ```
 
-  ```python Groq
-  from langchain_groq import ChatGroq
-  judge = ChatGroq(model="llama-3.3-70b-versatile", api_key="your-api-key", temperature=0.0)
-  ```
-
-  ```python Anthropic
-  from langchain_anthropic import ChatAnthropic
-  judge = ChatAnthropic(model="claude-sonnet-4-20250514", api_key="your-api-key", temperature=0.0)
+  ```python Azure OpenAI
+  from langchain_openai import AzureChatOpenAI
+  judge = AzureChatOpenAI(deployment_name="gpt-4o-mini", api_version="2024-08-01-preview")
   ```
 
   ```python Ollama (Local)
   from langchain_ollama import ChatOllama
-  judge = ChatOllama(model="llama3.1:70b", temperature=0.0)
+  judge = ChatOllama(model="llama3.1:70b")
+  ```
+
+  ```python HuggingFace TGI
+  # Self-hosted endpoints exposing the OpenAI-compatible API
+  from langchain_openai import ChatOpenAI
+  judge = ChatOpenAI(model="google/gemma-3-12b-it", base_url="https://your-tgi-endpoint/v1", api_key="sk-x")
   ```
 </CodeGroup>
+
+<Warning>
+Anthropic (Claude), Google Gemini and AWS Bedrock do **not** expose logprobs through their public APIs. Passing one of those providers as the judge model will raise `LogprobsNotSupportedError` on the first call.
+</Warning>
 
 ## Best Practices
 
@@ -345,13 +349,15 @@ for metric in metrics:
     ```
   </Accordion>
 
-  <Accordion title="Enable include_reason for Debugging">
-    Setting `include_reason=True` populates `turn.reason` with the judge's explanation. Use it to audit borderline cases and refine your role definition:
+  <Accordion title="Inspect Raw Logprobs for Debugging">
+    The judge's per-token probabilities are accessible by calling `Judge.check_logprob_binary()` directly. Use this to audit borderline cases where the score sits near the threshold:
 
     ```python
-    for turn in metric.turns:
-        if not turn.adherent:
-            print(f"Violation at {turn.qa_id}: {turn.reason}")
+    from gaussia.llm import Judge
+
+    judge = Judge(model=judge_model)
+    score, raw = judge.check_logprob_binary(prompt, query, data)
+    print(score, raw["top_logprobs"])
     ```
   </Accordion>
 
