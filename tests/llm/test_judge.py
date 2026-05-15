@@ -1,5 +1,6 @@
 """Tests for Judge module."""
 
+import math
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -339,3 +340,168 @@ class TestJudge:
         judge = Judge(model=mock_model)
         result = judge._extract_json("```json\n{invalid}\n```")
         assert result is None
+
+
+def _make_fake_model(provider_name: str) -> MagicMock:
+    """Create a MagicMock whose class name matches a real provider class name."""
+    fake_cls = type(provider_name, (MagicMock,), {})
+    return fake_cls()
+
+
+class TestJudgeLogprob:
+    """Test suite for Judge.check_logprob_binary and its helpers."""
+
+    def test_supports_logprobs_openai(self):
+        model = _make_fake_model("ChatOpenAI")
+        assert Judge._supports_logprobs(model) is True
+
+    def test_supports_logprobs_anthropic_returns_false(self):
+        model = _make_fake_model("ChatAnthropic")
+        assert Judge._supports_logprobs(model) is False
+
+    def test_supports_logprobs_unknown_returns_false(self):
+        model = _make_fake_model("ChatSomethingNew")
+        assert Judge._supports_logprobs(model) is False
+
+    def test_check_logprob_binary_raises_when_unsupported(self):
+        from gaussia.core.exceptions import LogprobsNotSupportedError
+
+        model = _make_fake_model("ChatAnthropic")
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsNotSupportedError):
+            judge.check_logprob_binary("p", "q", {})
+
+        model.bind.assert_not_called()
+        model.invoke.assert_not_called()
+
+    @staticmethod
+    def _bind_response(model: MagicMock, top_logprobs_list: list[dict]) -> MagicMock:
+        response = MagicMock()
+        response.response_metadata = {"logprobs": {"content": [{"top_logprobs": top_logprobs_list}]}}
+        bound = MagicMock()
+        bound.invoke.return_value = response
+        model.bind.return_value = bound
+        return bound
+
+    def test_check_logprob_binary_extracts_yes_score(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.3},
+                {"token": "Maybe", "logprob": -5.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, raw = judge.check_logprob_binary("p", "q", {})
+
+        expected = 1.0 / (1.0 + math.exp(-2.3 - (-0.1)))
+        assert abs(score - expected) < 1e-9
+        assert abs(score - 0.9002) < 1e-3
+        assert raw["top_logprobs"][0]["token"] == "Yes"
+
+    def test_check_logprob_binary_aggregates_variants(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "YES", "logprob": -1.0},
+                {"token": "Yes", "logprob": -1.0},
+                {"token": "No", "logprob": -1.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, _ = judge.check_logprob_binary("p", "q", {})
+
+        log_p_pos = -1.0 + math.log(2)
+        log_p_neg = -1.0
+        expected = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
+        assert abs(score - expected) < 1e-9
+        assert score > 0.5
+
+    def test_check_logprob_binary_no_tokens_present_raises_extraction_error(self):
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Okay", "logprob": -0.01},
+                {"token": "Sure", "logprob": -3.0},
+            ],
+        )
+        judge = Judge(model=model)
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {})
+
+    def test_check_logprob_binary_one_side_missing(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "No", "logprob": -0.5},
+                {"token": "Maybe", "logprob": -3.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, _ = judge.check_logprob_binary("p", "q", {})
+        assert score == 0.0
+
+    def test_check_logprob_binary_binds_correct_params(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {})
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10, temperature=1.0)
+
+    def test_check_logprob_binary_custom_temperature(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {}, temperature=0.7)
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10, temperature=0.7)
+
+    def test_check_logprob_binary_temperature_none_inherits_model_config(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {}, temperature=None)
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10)
+
+    def test_aggregate_logprobs_empty_returns_neg_inf(self):
+        assert Judge._aggregate_logprobs([], ("YES",)) == -math.inf
+
+    def test_aggregate_logprobs_logsumexp_correctness(self):
+        result = Judge._aggregate_logprobs(
+            [
+                {"token": "A", "logprob": -1.0},
+                {"token": "A", "logprob": -2.0},
+            ],
+            ("A",),
+        )
+        expected = math.log(math.exp(-1.0) + math.exp(-2.0))
+        assert abs(result - expected) < 1e-9
+        assert abs(result - (-0.6867)) < 1e-3

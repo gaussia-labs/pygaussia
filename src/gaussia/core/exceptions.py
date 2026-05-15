@@ -23,3 +23,11 @@ class LoaderError(GaussiaError):
 
 class StatisticalModeError(GaussiaError):
     """Exception raised when a statistical mode calculation fails."""
+
+
+class LogprobsNotSupportedError(GaussiaError):
+    """Raised when the configured LLM provider does not expose logprobs."""
+
+
+class LogprobsExtractionError(GaussiaError):
+    """Raised when expected tokens are absent from the model's top_logprobs."""

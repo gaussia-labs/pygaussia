@@ -2,8 +2,9 @@
 
 import json
 import logging
+import math
 import re
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from langchain.agents import create_agent
 from langchain.agents.factory import ProviderStrategy
@@ -11,9 +12,32 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
+from gaussia.core.exceptions import LogprobsExtractionError, LogprobsNotSupportedError
 from gaussia.utils.logging import VerboseLogger
 
 T = TypeVar("T", bound=BaseModel)
+
+_LOGPROB_CAPABLE_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "ChatOpenAI",
+        "AzureChatOpenAI",
+        "BaseChatOpenAI",
+        "ChatOllama",
+        "ChatLiteLLM",
+    }
+)
+
+_LOGPROB_INCAPABLE_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "ChatAnthropic",
+        "ChatGoogleGenerativeAI",
+        "ChatBedrock",
+        "ChatBedrockConverse",
+    }
+)
+
+_DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes", " yes")
+_DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
 
 
 class Judge:
@@ -198,3 +222,85 @@ Do not include any additional text after the JSON.
                 continue
         logging.error(f"[FAIR FORGE/JUDGE] No JSON found between {self.bos_json_clause} and {self.eos_json_clause}")
         return None
+
+    def check_logprob_binary(
+        self,
+        system_prompt: str,
+        query: str,
+        data: dict,
+        positive_tokens: tuple[str, ...] = _DEFAULT_POSITIVE_TOKENS,
+        negative_tokens: tuple[str, ...] = _DEFAULT_NEGATIVE_TOKENS,
+        top_logprobs: int = 10,
+        temperature: float | None = 1.0,
+    ) -> tuple[float, dict]:
+        """Score a binary YES/NO judgment via first-token logprobs.
+
+        Returns P(positive) / (P(positive) + P(negative)) aggregated across
+        surface-form variants with log-sum-exp.
+
+        Args:
+            temperature: passed to model.bind() to control the first-token
+                distribution. Default 1.0 follows the paper — at lower values
+                the distribution sharpens and the score loses calibration
+                (only the YES/NO ranking survives). Pass None to inherit
+                whatever temperature the underlying model was configured with.
+
+        Requires a sufficiently capable model — see paper for AUC by model size.
+
+        Raises:
+            LogprobsNotSupportedError: provider is known not to expose logprobs.
+            LogprobsExtractionError: neither positive nor negative tokens appear
+                in the top_logprobs of the first generated token.
+        """
+        if not self._supports_logprobs(self.model):
+            raise LogprobsNotSupportedError(
+                f"Provider {type(self.model).__name__} does not support logprobs. "
+                f"Use a provider in {sorted(_LOGPROB_CAPABLE_PROVIDERS)} or call "
+                f"Judge.check() instead."
+            )
+
+        rendered_system = self._render_system_prompt(system_prompt, data)
+        bind_kwargs: dict[str, Any] = {"logprobs": True, "top_logprobs": top_logprobs}
+        if temperature is not None:
+            bind_kwargs["temperature"] = temperature
+        bound = self.model.bind(**bind_kwargs)
+        response = bound.invoke(
+            [
+                ("system", rendered_system),
+                ("human", query),
+            ]
+        )
+
+        metadata: dict = getattr(response, "response_metadata", {}) or {}
+        content_entries: list = metadata.get("logprobs", {}).get("content", []) or []
+        top_lp: list[dict[str, Any]] = content_entries[0].get("top_logprobs", []) if content_entries else []
+
+        log_p_pos = self._aggregate_logprobs(top_lp, positive_tokens)
+        log_p_neg = self._aggregate_logprobs(top_lp, negative_tokens)
+
+        if log_p_pos == -math.inf and log_p_neg == -math.inf:
+            raise LogprobsExtractionError(
+                f"Neither positive {positive_tokens} nor negative {negative_tokens} "
+                f"tokens appeared in top_{top_logprobs}. Observed tokens: "
+                f"{[entry.get('token') for entry in top_lp]}"
+            )
+
+        score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
+        return score, {"top_logprobs": top_lp}
+
+    @staticmethod
+    def _supports_logprobs(model: BaseChatModel) -> bool:
+        name = type(model).__name__
+        if name in _LOGPROB_INCAPABLE_PROVIDERS:
+            return False
+        return name in _LOGPROB_CAPABLE_PROVIDERS
+
+    @staticmethod
+    def _aggregate_logprobs(top_logprobs: list[dict[str, Any]], target_tokens: tuple[str, ...]) -> float:
+        matches: list[float] = [
+            float(entry["logprob"]) for entry in top_logprobs if entry.get("token") in target_tokens
+        ]
+        if not matches:
+            return -math.inf
+        max_lp = max(matches)
+        return max_lp + math.log(sum(math.exp(lp - max_lp) for lp in matches))
