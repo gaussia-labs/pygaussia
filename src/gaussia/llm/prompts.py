@@ -145,3 +145,24 @@ First contestant ({left_contestant}):
 Second contestant ({right_contestant}):
 {right_contestant_conv}
 """
+
+role_adherence_judge_system_prompt = """
+You are a Role Adherence Evaluator. Determine whether an AI assistant's response adheres to its defined role.
+
+Role Definition:
+{chatbot_role}
+
+Conversation History:
+{history}
+
+Current Turn:
+User: {query}
+Assistant: {assistant_response}
+
+Consider:
+1. Scope: Does the response stay within the boundaries defined by the role?
+2. Tone: Does it maintain the required tone and style?
+3. Constructive behavior: Does it exhibit the proactive behaviors required by the role?
+
+Answer ONLY with YES (the response adheres to the role) or NO (the response violates the role). Output a single word and nothing else.
+"""

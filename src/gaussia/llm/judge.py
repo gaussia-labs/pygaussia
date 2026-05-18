@@ -17,25 +17,6 @@ from gaussia.utils.logging import VerboseLogger
 
 T = TypeVar("T", bound=BaseModel)
 
-_LOGPROB_CAPABLE_PROVIDERS: frozenset[str] = frozenset(
-    {
-        "ChatOpenAI",
-        "AzureChatOpenAI",
-        "BaseChatOpenAI",
-        "ChatOllama",
-        "ChatLiteLLM",
-    }
-)
-
-_LOGPROB_INCAPABLE_PROVIDERS: frozenset[str] = frozenset(
-    {
-        "ChatAnthropic",
-        "ChatGoogleGenerativeAI",
-        "ChatBedrock",
-        "ChatBedrockConverse",
-    }
-)
-
 _DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes", " yes")
 _DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
 
@@ -248,28 +229,28 @@ Do not include any additional text after the JSON.
         Requires a sufficiently capable model — see paper for AUC by model size.
 
         Raises:
-            LogprobsNotSupportedError: provider is known not to expose logprobs.
+            LogprobsNotSupportedError: provider returned an error when logprobs
+                were requested.
             LogprobsExtractionError: neither positive nor negative tokens appear
                 in the top_logprobs of the first generated token.
         """
-        if not self._supports_logprobs(self.model):
-            raise LogprobsNotSupportedError(
-                f"Provider {type(self.model).__name__} does not support logprobs. "
-                f"Use a provider in {sorted(_LOGPROB_CAPABLE_PROVIDERS)} or call "
-                f"Judge.check() instead."
-            )
-
         rendered_system = self._render_system_prompt(system_prompt, data)
         bind_kwargs: dict[str, Any] = {"logprobs": True, "top_logprobs": top_logprobs}
         if temperature is not None:
             bind_kwargs["temperature"] = temperature
-        bound = self.model.bind(**bind_kwargs)
-        response = bound.invoke(
-            [
-                ("system", rendered_system),
-                ("human", query),
-            ]
-        )
+        try:
+            bound = self.model.bind(**bind_kwargs)
+            response = bound.invoke(
+                [
+                    ("system", rendered_system),
+                    ("human", query),
+                ]
+            )
+        except Exception as e:
+            raise LogprobsNotSupportedError(
+                f"Provider {type(self.model).__name__} returned an error when logprobs were requested. "
+                f"Use a provider that exposes logprobs or call Judge.check() instead."
+            ) from e
 
         metadata: dict = getattr(response, "response_metadata", {}) or {}
         content_entries: list = metadata.get("logprobs", {}).get("content", []) or []
@@ -287,13 +268,6 @@ Do not include any additional text after the JSON.
 
         score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
         return score, {"top_logprobs": top_lp}
-
-    @staticmethod
-    def _supports_logprobs(model: BaseChatModel) -> bool:
-        name = type(model).__name__
-        if name in _LOGPROB_INCAPABLE_PROVIDERS:
-            return False
-        return name in _LOGPROB_CAPABLE_PROVIDERS
 
     @staticmethod
     def _aggregate_logprobs(top_logprobs: list[dict[str, Any]], target_tokens: tuple[str, ...]) -> float:
