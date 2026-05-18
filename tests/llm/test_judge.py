@@ -351,29 +351,17 @@ def _make_fake_model(provider_name: str) -> MagicMock:
 class TestJudgeLogprob:
     """Test suite for Judge.check_logprob_binary and its helpers."""
 
-    def test_supports_logprobs_openai(self):
-        model = _make_fake_model("ChatOpenAI")
-        assert Judge._supports_logprobs(model) is True
-
-    def test_supports_logprobs_anthropic_returns_false(self):
-        model = _make_fake_model("ChatAnthropic")
-        assert Judge._supports_logprobs(model) is False
-
-    def test_supports_logprobs_unknown_returns_false(self):
-        model = _make_fake_model("ChatSomethingNew")
-        assert Judge._supports_logprobs(model) is False
-
-    def test_check_logprob_binary_raises_when_unsupported(self):
+    def test_check_logprob_binary_raises_when_provider_errors(self):
         from gaussia.core.exceptions import LogprobsNotSupportedError
 
         model = _make_fake_model("ChatAnthropic")
+        bound = MagicMock()
+        bound.invoke.side_effect = ValueError("logprobs not supported by this provider")
+        model.bind.return_value = bound
         judge = Judge(model=model)
 
         with pytest.raises(LogprobsNotSupportedError):
             judge.check_logprob_binary("p", "q", {})
-
-        model.bind.assert_not_called()
-        model.invoke.assert_not_called()
 
     @staticmethod
     def _bind_response(model: MagicMock, top_logprobs_list: list[dict]) -> MagicMock:
