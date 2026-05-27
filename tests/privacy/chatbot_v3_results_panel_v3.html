@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Panel v3 — Privacy Detection Score (sin InfraScore)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#222638;--border:#2e3350;
+  --text:#e2e8f0;--muted:#8892b0;--accent:#7c6af7;--accent2:#5eead4;
+  --green:#22d3a5;--yellow:#f59e0b;--red:#ef4444;--orange:#f97316;
+  --blue:#3b82f6;--purple:#a855f7;--teal:#14b8a6;
+  --risk-critical:#ef4444;--risk-high:#f97316;
+  --risk-medium:#f59e0b;--risk-low:#22d3a5;--risk-none:#8892b0;
+  --p-hf:#f59e0b;--p-base:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;}
+
+.header{background:linear-gradient(135deg,#1a1d27,#16192a);border-bottom:1px solid var(--border);padding:28px 40px 24px;}
+.header-top{display:flex;align-items:center;gap:16px;margin-bottom:6px;}
+.shield-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--teal),#ef4444);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.header h1{font-size:22px;font-weight:700;}
+.header p{font-size:13px;color:var(--muted);margin-top:2px;}
+.meta-pills{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+.pill{font-size:11.5px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);color:var(--muted);background:var(--surface);}
+.pill span{color:var(--accent2);font-weight:600;}
+.pill.rpill span{color:var(--risk-high);}
+
+.main{padding:32px 40px;max-width:1380px;margin:0 auto;}
+.section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px;margin-top:36px;}
+.section-title:first-of-type{margin-top:0;}
+
+/* BEST CARD */
+.best-card{background:linear-gradient(135deg,#121e2a,#0f1e1a);border:1px solid #1e4a40;border-radius:16px;padding:24px 28px;display:flex;align-items:center;gap:28px;margin-bottom:8px;position:relative;overflow:hidden;}
+.best-card::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(20,184,166,.2),transparent 70%);}
+.best-badge{background:linear-gradient(135deg,var(--teal),var(--accent));border-radius:12px;padding:12px 18px;text-align:center;flex-shrink:0;}
+.best-badge .score-big{font-size:38px;font-weight:800;color:#fff;line-height:1;}
+.best-badge .score-label{font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;}
+.best-info h2{font-size:18px;font-weight:700;}
+.best-kpis{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;}
+.kpi-val{font-size:14px;font-weight:700;color:var(--accent2);}
+.kpi-lbl{font-size:10.5px;color:var(--muted);}
+
+/* PARADIGM BADGES */
+.paradigm-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.pb-hf{background:rgba(245,158,11,.12);color:var(--p-hf);border:1px solid rgba(245,158,11,.35);}
+.pb-base{background:rgba(59,130,246,.12);color:var(--p-base);border:1px solid rgba(59,130,246,.35);}
+.pb-unknown{background:rgba(136,146,176,.1);color:var(--muted);border:1px solid rgba(136,146,176,.25);}
+
+/* RISK STRIP */
+.risk-strip{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px;margin-top:12px;}
+.rstrip-card{flex:1;min-width:155px;border-radius:14px;padding:15px 16px;border:1px solid;cursor:pointer;}
+.rc-card{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.3);}
+.rh-card{background:rgba(249,115,22,.09);border-color:rgba(249,115,22,.3);}
+.rm-card{background:rgba(245,158,11,.09);border-color:rgba(245,158,11,.3);}
+.rl-card{background:rgba(34,211,165,.06);border-color:rgba(34,211,165,.25);}
+.rn-card{background:rgba(136,146,176,.05);border-color:rgba(136,146,176,.2);}
+.rs-rank{font-size:11px;color:var(--muted);margin-bottom:3px;}
+.rs-pct{font-size:26px;font-weight:900;line-height:1;}
+.rs-sub{font-size:10px;font-weight:600;margin-top:2px;}
+.rs-bar-wrap{height:4px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:7px;}
+.rs-bar{height:100%;border-radius:2px;}
+.rcc{color:var(--risk-critical);}.rbc{background:var(--risk-critical);}
+.rch{color:var(--risk-high);}    .rbh{background:var(--risk-high);}
+.rcm{color:var(--risk-medium);}  .rbm{background:var(--risk-medium);}
+.rcl{color:var(--risk-low);}     .rbl{background:var(--risk-low);}
+.rcn{color:var(--risk-none);}    .rbn{background:var(--risk-none);}
+
+/* TABLE */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:8px;}
+table{width:100%;border-collapse:collapse;}
+thead th{background:var(--surface2);padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;cursor:pointer;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(20,184,166,.05);}
+tbody tr.selected{background:rgba(20,184,166,.1);}
+tbody td{padding:10px 12px;font-size:12px;vertical-align:middle;}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;font-weight:800;font-size:13px;}
+.rk1{background:linear-gradient(135deg,#ffd700,#f59e0b);color:#000;}
+.rk2{background:linear-gradient(135deg,#c0c0c0,#94a3b8);color:#000;}
+.rk3{background:linear-gradient(135deg,#cd7f32,#b45309);color:#fff;}
+.rko{background:var(--surface2);color:var(--muted);}
+.mn{font-weight:600;}
+.mn small{display:block;font-size:10px;color:var(--muted);font-weight:400;margin-top:1px;}
+.sbar-wrap{height:4px;background:var(--surface2);border-radius:2px;margin-top:4px;width:90px;}
+.sbar{height:100%;border-radius:2px;}
+.rbar-wrap{height:4px;background:var(--surface2);border-radius:2px;margin-top:4px;width:80px;}
+.rbar{height:100%;border-radius:2px;}
+
+/* BADGES */
+.interp-badge{display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.interp-optimal{background:rgba(34,211,165,.12);color:var(--green);border:1px solid rgba(34,211,165,.3);}
+.interp-baseline{background:rgba(94,234,212,.1);color:var(--accent2);border:1px solid rgba(94,234,212,.3);}
+.interp-limited{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3);}
+.interp-nofeasible{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.risk-badge{display:inline-block;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.risk-critical{background:rgba(239,68,68,.15);color:var(--risk-critical);border:1px solid rgba(239,68,68,.35);}
+.risk-high{background:rgba(249,115,22,.15);color:var(--risk-high);border:1px solid rgba(249,115,22,.35);}
+.risk-medium{background:rgba(245,158,11,.15);color:var(--risk-medium);border:1px solid rgba(245,158,11,.35);}
+.risk-low{background:rgba(34,211,165,.12);color:var(--risk-low);border:1px solid rgba(34,211,165,.3);}
+.risk-none{background:rgba(136,146,176,.1);color:var(--muted);border:1px solid rgba(136,146,176,.25);}
+
+/* DETAIL PANEL */
+.detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:8px;}
+.dp-header{background:var(--surface2);padding:15px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.dp-header h3{font-size:15px;font-weight:700;flex:1;}
+.dp-body{padding:22px;}
+.click-hint{font-size:12px;color:var(--muted);margin-bottom:10px;padding:7px 13px;background:var(--surface2);border-radius:8px;display:inline-flex;align-items:center;gap:6px;}
+
+/* HERO ROW */
+.hero-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.hero-box{border-radius:14px;padding:16px 20px;}
+.score-hbox{background:linear-gradient(135deg,#0f1e1a,#0f1221);border:1px solid var(--teal);}
+.risk-hbox{border:1px solid;}
+.hlbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:7px;}
+.hbig{font-size:46px;font-weight:900;line-height:1;}
+.score-grad{background:linear-gradient(135deg,var(--teal),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hunit{font-size:12px;color:var(--muted);margin-top:2px;}
+.ibig{font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;display:inline-block;margin-top:8px;}
+.risk-sub-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.rsub-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.rsub-val{font-size:20px;font-weight:800;}
+.rsub-lbl{font-size:10.5px;color:var(--muted);margin-top:3px;}
+
+/* FORMULA */
+.formula-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.fc{background:rgba(20,184,166,.06);border:1px solid rgba(20,184,166,.2);border-radius:10px;padding:11px 14px;font-size:11.5px;color:var(--muted);}
+.fc.rfc{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.2);}
+.fc strong{color:var(--teal);}
+.fc.rfc strong{color:var(--risk-high);}
+
+/* SCORE COMPONENTS — 5 cards (sin InfraScore) */
+.comps5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+.comp-card{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:13px;}
+.cval{font-size:20px;font-weight:800;color:var(--accent2);}
+.clbl{font-size:10.5px;color:var(--muted);margin-top:4px;}
+.cbar-wrap{height:4px;background:var(--border);border-radius:2px;margin-top:8px;}
+.cbar{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--teal),var(--accent));}
+
+/* CRITICAL FN TABLE */
+.dtitle{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;}
+.dtable{width:100%;border-collapse:collapse;margin-bottom:20px;}
+.dtable th{background:var(--surface2);padding:8px 11px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);}
+.dtable td{padding:8px 11px;font-size:12px;border-bottom:1px solid rgba(46,51,80,.4);}
+.dtable tr:last-child td{border-bottom:none;}
+.mini-bar-wrap{height:5px;background:rgba(255,255,255,.06);border-radius:3px;}
+.mini-bar{height:100%;border-radius:3px;}
+
+/* CHART */
+.ctitle{font-size:13px;font-weight:700;color:var(--text);margin-bottom:11px;}
+.chart-wrap{position:relative;height:260px;}
+.chart-wrap.tall{height:320px;}
+.chart-wrap.xtall{height:400px;}
+
+/* MICRO */
+.micro-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.mc{flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px;text-align:center;}
+.mcv{font-size:20px;font-weight:800;}
+.mcl{font-size:10px;color:var(--muted);margin-top:3px;}
+.mc-f2{color:var(--accent2);}  .mc-pr{color:var(--purple);}  .mc-rc{color:var(--blue);}
+.mc-tp{color:var(--green);}    .mc-fp{color:var(--orange);}  .mc-fn{color:var(--red);}
+.mc-filt{color:var(--muted);}
+
+/* LAT ROW */
+.lat-row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;}
+.lcard{flex:1;min-width:100px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px;}
+.lval{font-size:19px;font-weight:800;color:var(--blue);}
+.llbl{font-size:10.5px;color:var(--muted);margin-top:3px;}
+
+.divider{border:none;border-top:1px solid var(--border);margin:6px 0 20px;}
+.footer{text-align:center;padding:22px 40px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);}
+
+@media(max-width:960px){
+  .main,.header{padding:20px 14px;}
+  .comps5{grid-template-columns:repeat(3,1fr);}
+  .hero-row,.formula-row{grid-template-columns:1fr;}
+  .best-card{flex-direction:column;align-items:flex-start;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="shield-icon">🛡️</div>
+    <div>
+      <h1>Panel v3 — Domain-Adjusted Privacy Detection Score</h1>
+      <p>Score = DetectionScore × Coverage × DomainFit × RegulatoryFit × PenaltyFN
+         &nbsp;·&nbsp; Sin InfraScore · Sin capas REGEX/NER · chatbot_v3_results.json</p>
+    </div>
+  </div>
+  <div class="meta-pills">
+    <div class="pill">Modelos: <span>6</span></div>
+    <div class="pill">Clases evaluadas: <span>9</span></div>
+    <div class="pill">Mejor score: <span>35.57/100</span></div>
+    <div class="pill rpill">R_final mín: <span>42.5%</span></div>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- MEJOR MODELO -->
+<div class="section-title">🏆 Mejor modelo</div>
+<div class="best-card">
+  <div class="best-badge">
+    <div class="score-big">35.57</div>
+    <div class="score-label">Score / 100</div>
+  </div>
+  <div class="best-info">
+    <h2>Presidio-Baseline</h2>
+    <span class="paradigm-badge pb-base">🛡️ Presidio Baseline</span>
+    <span class="interp-badge interp-nofeasible" style="margin-left:8px">No adecuado</span>
+    <div class="best-kpis">
+      <div><span class="kpi-val">0.6877</span><div class="kpi-lbl">DetectionScore</div></div>
+      <div><span class="kpi-val">1.000</span><div class="kpi-lbl">Coverage</div></div>
+      <div><span class="kpi-val">0.6761</span><div class="kpi-lbl">PenaltyFN</div></div>
+      <div><span class="kpi-val" style="color:var(--risk-medium)">42.5%</span><div class="kpi-lbl">R_final</div></div>
+      <div><span class="kpi-val" style="color:var(--accent2)">0.681</span><div class="kpi-lbl">F2 micro</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- RISK STRIP -->
+<div class="section-title">⚠️ Resumen de riesgo</div>
+<div class="risk-strip">
+        <div class="rstrip-card rm-card" onclick="showDetail(0)">
+          <div class="rs-rank">#1 · <span style="color:rgba(59,130,246,0.85)">🛡️ Pres-Baseline</span></div>
+          <div class="rs-pct rcm">42.5%</div>
+          <div class="rs-sub rcm">Medio riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 35.6 · R1: 15.0%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbm" style="width:42%"></div></div>
+        </div>
+        <div class="rstrip-card rm-card" onclick="showDetail(1)">
+          <div class="rs-rank">#2 · <span style="color:rgba(245,158,11,0.85)">🤗 SuperClinical-434M</span></div>
+          <div class="rs-pct rcm">55.8%</div>
+          <div class="rs-sub rcm">Medio riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 19.6 · R1: 13.0%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbm" style="width:55%"></div></div>
+        </div>
+        <div class="rstrip-card rh-card" onclick="showDetail(2)">
+          <div class="rs-rank">#3 · <span style="color:rgba(245,158,11,0.85)">🤗 privacy-filter-nemotron</span></div>
+          <div class="rs-pct rch">64.8%</div>
+          <div class="rs-sub rch">Alto riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 11.3 · R1: 14.1%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbh" style="width:64%"></div></div>
+        </div>
+        <div class="rstrip-card rh-card" onclick="showDetail(3)">
+          <div class="rs-rank">#4 · <span style="color:rgba(245,158,11,0.85)">🤗 ModernMed-Large-395M</span></div>
+          <div class="rs-pct rch">66.4%</div>
+          <div class="rs-sub rch">Alto riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 11.3 · R1: 14.5%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbh" style="width:66%"></div></div>
+        </div>
+        <div class="rstrip-card rh-card" onclick="showDetail(4)">
+          <div class="rs-rank">#5 · <span style="color:rgba(245,158,11,0.85)">🤗 SuperMedical-Large-355M</span></div>
+          <div class="rs-pct rch">68.5%</div>
+          <div class="rs-sub rch">Alto riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 9.1 · R1: 13.5%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbh" style="width:68%"></div></div>
+        </div>
+        <div class="rstrip-card rc-card" onclick="showDetail(5)">
+          <div class="rs-rank">#6 · <span style="color:rgba(245,158,11,0.85)">🤗 BigMed-BioClinical</span></div>
+          <div class="rs-pct rcc">99.8%</div>
+          <div class="rs-sub rcc">Crítico riesgo</div>
+          <div class="rs-sub" style="color:var(--muted);font-size:10px;margin-top:2px">
+            Score: 0.0 · R1: 15.0%
+          </div>
+          <div class="rs-bar-wrap"><div class="rs-bar rbc" style="width:99%"></div></div>
+        </div></div>
+
+<!-- RANKING TABLE -->
+<div class="section-title">📊 Ranking completo</div>
+<p class="click-hint">👆 Clic en fila para análisis detallado</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Modelo</th><th>Paradigma</th>
+        <th>Score (/100)</th><th>Interpretación</th>
+        <th>R_final</th><th>Nivel riesgo</th>
+        <th>R1 Weakest</th><th>Clase débil</th>
+        <th>DetectionScore</th><th>F2 micro</th>
+      </tr>
+    </thead>
+    <tbody id="ranking-tbody">
+        <tr data-idx="0">
+          <td><span class="rank-badge rk1">1</span></td>
+          <td><div class="mn">Pres-Baseline<small>Presidio-Baseline</small></div></td>
+          <td><span class="paradigm-badge pb-base">🛡️ Presidio Baseline</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--yellow)">35.57</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:35%;background:var(--yellow)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-medium)">42.5%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:42%;background:var(--risk-medium)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-medium">Medio</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">15.0%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:15%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">person</td>
+          <td style="color:var(--accent2);font-weight:700">0.6877</td>
+          <td style="font-weight:600">0.681</td>
+        </tr>
+        <tr data-idx="1">
+          <td><span class="rank-badge rk2">2</span></td>
+          <td><div class="mn">SuperClinical-434M<small>OpenMed-PII-SuperClinical-434M</small></div></td>
+          <td><span class="paradigm-badge pb-hf">🤗 HuggingFace NER</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--orange)">19.56</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:19%;background:var(--orange)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-medium)">55.8%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:55%;background:var(--risk-medium)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-medium">Medio</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">13.0%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:13%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">credit card</td>
+          <td style="color:var(--accent2);font-weight:700">0.5032</td>
+          <td style="font-weight:600">0.488</td>
+        </tr>
+        <tr data-idx="2">
+          <td><span class="rank-badge rk3">3</span></td>
+          <td><div class="mn">privacy-filter-nemotron<small>OpenMed-privacy-filter-nemotron</small></div></td>
+          <td><span class="paradigm-badge pb-hf">🤗 HuggingFace NER</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--orange)">11.30</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:11%;background:var(--orange)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-high)">64.8%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:64%;background:var(--risk-high)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-high">Alto</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">14.1%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:14%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">iban code</td>
+          <td style="color:var(--accent2);font-weight:700">0.3606</td>
+          <td style="font-weight:600">0.409</td>
+        </tr>
+        <tr data-idx="3">
+          <td><span class="rank-badge rko">4</span></td>
+          <td><div class="mn">ModernMed-Large-395M<small>OpenMed-PII-ModernMed-Large-395M</small></div></td>
+          <td><span class="paradigm-badge pb-hf">🤗 HuggingFace NER</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--orange)">11.26</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:11%;background:var(--orange)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-high)">66.4%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:66%;background:var(--risk-high)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-high">Alto</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">14.5%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:14%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">iban code</td>
+          <td style="color:var(--accent2);font-weight:700">0.3744</td>
+          <td style="font-weight:600">0.368</td>
+        </tr>
+        <tr data-idx="4">
+          <td><span class="rank-badge rko">5</span></td>
+          <td><div class="mn">SuperMedical-Large-355M<small>OpenMed-PII-SuperMedical-Large-355M</small></div></td>
+          <td><span class="paradigm-badge pb-hf">🤗 HuggingFace NER</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--orange)">9.08</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:9%;background:var(--orange)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-high)">68.5%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:68%;background:var(--risk-high)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-high">Alto</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">13.5%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:13%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">iban code</td>
+          <td style="color:var(--accent2);font-weight:700">0.3257</td>
+          <td style="font-weight:600">0.331</td>
+        </tr>
+        <tr data-idx="5">
+          <td><span class="rank-badge rko">6</span></td>
+          <td><div class="mn">BigMed-BioClinical<small>OpenMed-PII-BigMed-BioClinical</small></div></td>
+          <td><span class="paradigm-badge pb-hf">🤗 HuggingFace NER</span></td>
+          <td>
+            <div style="font-size:17px;font-weight:800;color:var(--orange)">0.00</div>
+            <div class="sbar-wrap"><div class="sbar" style="width:0%;background:var(--orange)"></div></div>
+          </td>
+          <td><span class="interp-badge interp-nofeasible">No adecuado</span></td>
+          <td>
+            <div style="font-size:16px;font-weight:800;color:var(--risk-critical)">99.8%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:99%;background:var(--risk-critical)"></div></div>
+          </td>
+          <td><span class="risk-badge risk-critical">Crítico</span></td>
+          <td>
+            <div style="font-size:12px;color:var(--risk-high)">15.0%</div>
+            <div class="rbar-wrap"><div class="rbar" style="width:15%;background:var(--risk-high)"></div></div>
+          </td>
+          <td style="font-size:11px;color:var(--muted)">person</td>
+          <td style="color:var(--accent2);font-weight:700">0.0022</td>
+          <td style="font-weight:600">0.003</td>
+        </tr></tbody>
+  </table>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="section-title">🔍 Análisis detallado</div>
+<div class="detail-panel" id="detail-panel">
+  <div class="dp-header">
+    <h3 id="d-name">—</h3>
+    <span id="d-pbadge" class="paradigm-badge">—</span>
+    <span id="d-ibadge" class="interp-badge" style="margin-left:6px">—</span>
+    <span id="d-rbadge" class="risk-badge"   style="margin-left:6px">—</span>
+  </div>
+  <div class="dp-body">
+
+    <div class="hero-row">
+      <div class="hero-box score-hbox">
+        <div class="hlbl">Score de desempeño</div>
+        <div class="hbig score-grad" id="d-score100">—</div>
+        <div class="hunit">puntos de 100</div>
+        <span class="ibig" id="d-ibig">—</span>
+      </div>
+      <div class="hero-box risk-hbox" id="d-risk-hbox">
+        <div class="hlbl">Riesgo final (R_final)</div>
+        <div class="hbig" id="d-rfinal-pct">—</div>
+        <div class="hunit">riesgo combinado</div>
+        <div class="risk-sub-row">
+          <div class="rsub-card">
+            <div class="rsub-val" id="d-r1-pct" style="color:var(--risk-high)">—</div>
+            <div class="rsub-lbl">R1 — Clase más débil</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">Clase: <b id="d-r1-class" style="color:var(--accent2)">—</b></div>
+          </div>
+          <div class="rsub-card">
+            <div class="rsub-val" id="d-r2-pct" style="color:var(--risk-medium)">—</div>
+            <div class="rsub-lbl">R2 — Riesgo sistémico</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fórmula v3 (5 componentes) -->
+    <div class="formula-row">
+      <div class="fc">
+        <strong>Score v3</strong> = DetectionScore × Coverage × DomainFit × RegulatoryFit × PenaltyFN<br>
+        <strong id="f-det">—</strong> × <strong id="f-cov">—</strong> × <strong id="f-dom">—</strong> ×
+        <strong id="f-reg">—</strong> × <strong id="f-pen">—</strong>
+        → <strong id="f-res">—</strong>
+      </div>
+      <div class="fc rfc">
+        <strong>R_final</strong> = 1 − (1 − R1) × (1 − R2)<br>
+        R1: <strong id="f-r1">—</strong> &nbsp;|&nbsp; R2: <strong id="f-r2">—</strong>
+        → <strong id="f-rf">—</strong>
+      </div>
+    </div>
+
+    <!-- 5 componentes (sin InfraScore) -->
+    <div class="ctitle">Componentes del score (v3 — sin InfraScore)</div>
+    <div class="comps5">
+      <div class="comp-card"><div class="cval" id="c-det">—</div><div class="clbl">DetectionScore</div><div class="cbar-wrap"><div class="cbar" id="cb-det"></div></div></div>
+      <div class="comp-card"><div class="cval" id="c-cov">—</div><div class="clbl">Coverage</div><div class="cbar-wrap"><div class="cbar" id="cb-cov"></div></div></div>
+      <div class="comp-card"><div class="cval" id="c-dom">—</div><div class="clbl">DomainFit</div><div class="cbar-wrap"><div class="cbar" id="cb-dom"></div></div></div>
+      <div class="comp-card"><div class="cval" id="c-reg">—</div><div class="clbl">RegulatoryFit</div><div class="cbar-wrap"><div class="cbar" id="cb-reg"></div></div></div>
+      <div class="comp-card"><div class="cval" id="c-pen">—</div><div class="clbl">PenaltyFN</div><div class="cbar-wrap"><div class="cbar" id="cb-pen"></div></div></div>
+    </div>
+
+    <!-- Métricas micro -->
+    <div class="ctitle">Métricas micro del corpus</div>
+    <div class="micro-row">
+      <div class="mc"><div class="mcv mc-f2" id="m-f2">—</div><div class="mcl">F2 micro</div></div>
+      <div class="mc"><div class="mcv mc-pr" id="m-pr">—</div><div class="mcl">Precision</div></div>
+      <div class="mc"><div class="mcv mc-rc" id="m-rc">—</div><div class="mcl">Recall</div></div>
+      <div class="mc"><div class="mcv mc-tp" id="m-tp">—</div><div class="mcl">TP</div></div>
+      <div class="mc"><div class="mcv mc-fp" id="m-fp">—</div><div class="mcl">FP</div></div>
+      <div class="mc"><div class="mcv mc-fn" id="m-fn">—</div><div class="mcl">FN</div></div>
+      <div class="mc"><div class="mcv mc-filt" id="m-filt">—</div><div class="mcl">Filtradas (fuera dom.)</div></div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Critical FN table -->
+    <div class="dtitle">🎯 Contribuciones de riesgo crítico por clase</div>
+    <table class="dtable" id="crit-table">
+      <thead><tr><th>Clase PII</th><th>Severity ρ</th><th>FN Rate</th><th>Contribución</th><th>Visual</th></tr></thead>
+      <tbody id="crit-tbody"></tbody>
+    </table>
+
+    <hr class="divider">
+
+    <!-- F2 + FN Rate por clase -->
+    <div class="ctitle">F2 y FN Rate por clase PII</div>
+    <div class="chart-wrap tall"><canvas id="classChart"></canvas></div>
+
+    <div class="lat-row">
+      <div class="lcard"><div class="lval" id="l-load">—</div><div class="llbl">⏱ Carga modelo</div></div>
+      <div class="lcard"><div class="lval" id="l-inf">—</div><div class="llbl">⚡ Latencia total</div></div>
+      <div class="lcard"><div class="lval" id="l-gt">—</div><div class="llbl">✅ GT entidades</div></div>
+      <div class="lcard"><div class="lval" id="l-pred">—</div><div class="llbl">🔎 Predicciones dom.</div></div>
+      <div class="lcard"><div class="lval" id="l-samples">—</div><div class="llbl">📄 Turnos corpus</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCATTER: Score vs R_final -->
+<div class="section-title">📈 Score vs. Riesgo</div>
+<div class="detail-panel">
+  <div class="dp-body"><div class="chart-wrap xtall"><canvas id="scatterChart"></canvas></div></div>
+</div>
+
+<!-- F2 por clase -->
+<div class="section-title">📊 F2 por clase — comparación</div>
+<div class="detail-panel">
+  <div class="dp-body"><div class="chart-wrap xtall"><canvas id="compF2Chart"></canvas></div></div>
+</div>
+
+<!-- FN Rate por clase -->
+<div class="section-title">🔥 FN Rate por clase — comparación</div>
+<div class="detail-panel">
+  <div class="dp-body"><div class="chart-wrap xtall"><canvas id="compFNChart"></canvas></div></div>
+</div>
+
+</div>
+<div class="footer">
+  Panel generado el 26 de May de 2026 &nbsp;·&nbsp;
+  Domain-Adjusted Privacy Detection Score v3 &nbsp;·&nbsp;
+  Sin InfraScore · Sin capas REGEX/NER
+</div>
+
+<script>
+const MODELS   = [
+  {
+    "rank": 1,
+    "name": "Presidio-Baseline",
+    "short": "Pres-Baseline",
+    "paradigm": "presidio_baseline",
+    "final_score": 0.35568282,
+    "score_100": 35.5683,
+    "interpretation": "No adecuado",
+    "detection_score": 0.687659,
+    "coverage": 1.0,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.676127,
+    "critical_fn": 0.323873,
+    "load_time": 0.177,
+    "inference_latency": 1.507,
+    "ground_truth_count": 1082,
+    "prediction_count": 690,
+    "out_of_domain_filtered": 21,
+    "corpus_samples": 4935,
+    "f2_micro": 0.6806,
+    "precision_micro": 0.9899,
+    "recall_micro": 0.6312,
+    "tp_total": 683,
+    "fp_total": 7,
+    "fn_total": 399,
+    "f2_by_class": {
+      "credit_card": 0.7854,
+      "date_time": 0.9592,
+      "email_address": 1.0,
+      "iban_code": 1.0,
+      "ip_address": 1.0,
+      "person": 0.0,
+      "phone_number": 0.5633,
+      "street_address": 0.0,
+      "us_ssn": 1.0
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 0.2545,
+      "date_time": 0.0408,
+      "email_address": 0.0,
+      "iban_code": 0.0,
+      "ip_address": 0.0,
+      "person": 1.0,
+      "phone_number": 0.4895,
+      "street_address": 1.0,
+      "us_ssn": 0.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 0.2545,
+        "contribution": 0.033091
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 0.0408,
+        "contribution": 0.002041
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 1.0,
+        "contribution": 0.15
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 0.4895,
+        "contribution": 0.058741
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 1.0,
+        "contribution": 0.08
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      }
+    },
+    "r1": 0.15,
+    "r1_100": 15.0,
+    "r1_class": "person",
+    "r2": 0.323873,
+    "r2_100": 32.39,
+    "r_final": 0.425292,
+    "r_final_100": 42.53,
+    "coverage_basis": "presidio_standard_recognizers"
+  },
+  {
+    "rank": 2,
+    "name": "OpenMed-PII-SuperClinical-434M",
+    "short": "SuperClinical-434M",
+    "paradigm": "huggingface",
+    "final_score": 0.19557224,
+    "score_100": 19.5572,
+    "interpretation": "No adecuado",
+    "detection_score": 0.503237,
+    "coverage": 0.8889,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.571512,
+    "critical_fn": 0.428488,
+    "load_time": 2.503,
+    "inference_latency": 517.485,
+    "ground_truth_count": 1082,
+    "prediction_count": 2187,
+    "out_of_domain_filtered": 1202,
+    "corpus_samples": 4935,
+    "f2_micro": 0.4881,
+    "precision_micro": 0.2908,
+    "recall_micro": 0.5878,
+    "tp_total": 636,
+    "fp_total": 1551,
+    "fn_total": 446,
+    "f2_by_class": {
+      "credit_card": 0.0,
+      "date_time": 0.7692,
+      "email_address": 0.8006,
+      "iban_code": 0.8046,
+      "ip_address": 0.0,
+      "person": 0.1509,
+      "phone_number": 0.7143,
+      "street_address": 0.5409,
+      "us_ssn": 0.9048
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 1.0,
+      "date_time": 0.1224,
+      "email_address": 0.1073,
+      "iban_code": 0.1171,
+      "ip_address": 1.0,
+      "person": 0.7331,
+      "phone_number": 0.3147,
+      "street_address": 0.2623,
+      "us_ssn": 0.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 1.0,
+        "contribution": 0.13
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 0.1224,
+        "contribution": 0.006122
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.1073,
+        "contribution": 0.016094
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.1171,
+        "contribution": 0.017568
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 1.0,
+        "contribution": 0.09
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.7331,
+        "contribution": 0.109958
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 0.3147,
+        "contribution": 0.037762
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.2623,
+        "contribution": 0.020984
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      }
+    },
+    "r1": 0.13,
+    "r1_100": 13.0,
+    "r1_class": "credit_card",
+    "r2": 0.491989,
+    "r2_100": 49.2,
+    "r_final": 0.558031,
+    "r_final_100": 55.8,
+    "coverage_basis": "model_id2label"
+  },
+  {
+    "rank": 3,
+    "name": "OpenMed-privacy-filter-nemotron",
+    "short": "privacy-filter-nemotron",
+    "paradigm": "huggingface",
+    "final_score": 0.11301353,
+    "score_100": 11.3014,
+    "interpretation": "No adecuado",
+    "detection_score": 0.360619,
+    "coverage": 0.8889,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.460864,
+    "critical_fn": 0.539136,
+    "load_time": 2.29,
+    "inference_latency": 202.556,
+    "ground_truth_count": 1082,
+    "prediction_count": 2509,
+    "out_of_domain_filtered": 1958,
+    "corpus_samples": 4935,
+    "f2_micro": 0.4088,
+    "precision_micro": 0.2228,
+    "recall_micro": 0.5166,
+    "tp_total": 559,
+    "fp_total": 1950,
+    "fn_total": 523,
+    "f2_by_class": {
+      "credit_card": 0.0,
+      "date_time": 0.5081,
+      "email_address": 0.7483,
+      "iban_code": 0.0703,
+      "ip_address": 0.0,
+      "person": 0.1525,
+      "phone_number": 0.7836,
+      "street_address": 0.3607,
+      "us_ssn": 0.8333
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 1.0,
+      "date_time": 0.2959,
+      "email_address": 0.0815,
+      "iban_code": 0.9369,
+      "ip_address": 1.0,
+      "person": 0.7415,
+      "phone_number": 0.0629,
+      "street_address": 0.4098,
+      "us_ssn": 0.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 1.0,
+        "contribution": 0.13
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 0.2959,
+        "contribution": 0.014796
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.0815,
+        "contribution": 0.012232
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.9369,
+        "contribution": 0.140541
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 1.0,
+        "contribution": 0.09
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.7415,
+        "contribution": 0.111229
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 0.0629,
+        "contribution": 0.007552
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.4098,
+        "contribution": 0.032787
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      }
+    },
+    "r1": 0.140541,
+    "r1_100": 14.05,
+    "r1_class": "iban_code",
+    "r2": 0.590343,
+    "r2_100": 59.03,
+    "r_final": 0.647917,
+    "r_final_100": 64.79,
+    "coverage_basis": "model_id2label"
+  },
+  {
+    "rank": 4,
+    "name": "OpenMed-PII-ModernMed-Large-395M",
+    "short": "ModernMed-Large-395M",
+    "paradigm": "huggingface",
+    "final_score": 0.11260305,
+    "score_100": 11.2603,
+    "interpretation": "No adecuado",
+    "detection_score": 0.374401,
+    "coverage": 0.8889,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.442288,
+    "critical_fn": 0.557712,
+    "load_time": 1.291,
+    "inference_latency": 330.007,
+    "ground_truth_count": 1082,
+    "prediction_count": 2906,
+    "out_of_domain_filtered": 1611,
+    "corpus_samples": 4935,
+    "f2_micro": 0.3677,
+    "precision_micro": 0.1831,
+    "recall_micro": 0.4917,
+    "tp_total": 532,
+    "fp_total": 2374,
+    "fn_total": 550,
+    "f2_by_class": {
+      "credit_card": 0.0,
+      "date_time": 0.9572,
+      "email_address": 0.6691,
+      "iban_code": 0.0351,
+      "ip_address": 0.0,
+      "person": 0.0825,
+      "phone_number": 0.8077,
+      "street_address": 0.4989,
+      "us_ssn": 0.8962
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 1.0,
+      "date_time": 0.0408,
+      "email_address": 0.2103,
+      "iban_code": 0.964,
+      "ip_address": 1.0,
+      "person": 0.8093,
+      "phone_number": 0.1538,
+      "street_address": 0.2459,
+      "us_ssn": 0.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 1.0,
+        "contribution": 0.13
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 0.0408,
+        "contribution": 0.002041
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.2103,
+        "contribution": 0.031545
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.964,
+        "contribution": 0.144595
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 1.0,
+        "contribution": 0.09
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.8093,
+        "contribution": 0.121398
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 0.1538,
+        "contribution": 0.018462
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.2459,
+        "contribution": 0.019672
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      }
+    },
+    "r1": 0.144595,
+    "r1_100": 14.46,
+    "r1_class": "iban_code",
+    "r2": 0.606856,
+    "r2_100": 60.69,
+    "r_final": 0.663702,
+    "r_final_100": 66.37,
+    "coverage_basis": "model_id2label"
+  },
+  {
+    "rank": 5,
+    "name": "OpenMed-PII-SuperMedical-Large-355M",
+    "short": "SuperMedical-Large-355M",
+    "paradigm": "huggingface",
+    "final_score": 0.09075858,
+    "score_100": 9.0759,
+    "interpretation": "No adecuado",
+    "detection_score": 0.325713,
+    "coverage": 0.8889,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.409774,
+    "critical_fn": 0.590226,
+    "load_time": 1.24,
+    "inference_latency": 312.058,
+    "ground_truth_count": 1082,
+    "prediction_count": 2833,
+    "out_of_domain_filtered": 1910,
+    "corpus_samples": 4935,
+    "f2_micro": 0.331,
+    "precision_micro": 0.1673,
+    "recall_micro": 0.4381,
+    "tp_total": 474,
+    "fp_total": 2359,
+    "fn_total": 608,
+    "f2_by_class": {
+      "credit_card": 0.0,
+      "date_time": 0.5887,
+      "email_address": 0.572,
+      "iban_code": 0.1155,
+      "ip_address": 0.0,
+      "person": 0.0526,
+      "phone_number": 0.6772,
+      "street_address": 0.4738,
+      "us_ssn": 0.8261
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 1.0,
+      "date_time": 0.2959,
+      "email_address": 0.206,
+      "iban_code": 0.9009,
+      "ip_address": 1.0,
+      "person": 0.8941,
+      "phone_number": 0.3077,
+      "street_address": 0.2295,
+      "us_ssn": 0.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 1.0,
+        "contribution": 0.13
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 0.2959,
+        "contribution": 0.014796
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.206,
+        "contribution": 0.030901
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.9009,
+        "contribution": 0.135135
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 1.0,
+        "contribution": 0.09
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.8941,
+        "contribution": 0.13411
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 0.3077,
+        "contribution": 0.036923
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.2295,
+        "contribution": 0.018361
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 0.0,
+        "contribution": 0.0
+      }
+    },
+    "r1": 0.135135,
+    "r1_100": 13.51,
+    "r1_class": "iban_code",
+    "r2": 0.635757,
+    "r2_100": 63.58,
+    "r_final": 0.684979,
+    "r_final_100": 68.5,
+    "coverage_basis": "model_id2label"
+  },
+  {
+    "rank": 6,
+    "name": "OpenMed-PII-BigMed-BioClinical",
+    "short": "BigMed-BioClinical",
+    "paradigm": "huggingface",
+    "final_score": 2.87e-06,
+    "score_100": 0.0003,
+    "interpretation": "No adecuado",
+    "detection_score": 0.002182,
+    "coverage": 0.8889,
+    "domain_fit": 0.9,
+    "regulatory_fit": 0.85,
+    "penalty_fn": 0.001931,
+    "critical_fn": 0.998069,
+    "load_time": 2.662,
+    "inference_latency": 99.353,
+    "ground_truth_count": 1082,
+    "prediction_count": 156,
+    "out_of_domain_filtered": 5369,
+    "corpus_samples": 4935,
+    "f2_micro": 0.0033,
+    "precision_micro": 0.0192,
+    "recall_micro": 0.0028,
+    "tp_total": 3,
+    "fp_total": 153,
+    "fn_total": 1079,
+    "f2_by_class": {
+      "credit_card": 0.0,
+      "date_time": 0.0,
+      "email_address": 0.0145,
+      "iban_code": 0.0,
+      "ip_address": 0.0,
+      "person": 0.0,
+      "phone_number": 0.0,
+      "street_address": 0.0,
+      "us_ssn": 0.0
+    },
+    "weight_by_class": {
+      "credit_card": 0.13,
+      "date_time": 0.05,
+      "email_address": 0.15,
+      "iban_code": 0.15,
+      "ip_address": 0.09,
+      "person": 0.15,
+      "phone_number": 0.12,
+      "street_address": 0.08,
+      "us_ssn": 0.08
+    },
+    "fn_rate_by_class": {
+      "credit_card": 1.0,
+      "date_time": 1.0,
+      "email_address": 0.9871,
+      "iban_code": 1.0,
+      "ip_address": 1.0,
+      "person": 1.0,
+      "phone_number": 1.0,
+      "street_address": 1.0,
+      "us_ssn": 1.0
+    },
+    "crit_fn_by_class": {
+      "credit_card": {
+        "severity_weight": 0.13,
+        "fn_rate": 1.0,
+        "contribution": 0.13
+      },
+      "date_time": {
+        "severity_weight": 0.05,
+        "fn_rate": 1.0,
+        "contribution": 0.05
+      },
+      "email_address": {
+        "severity_weight": 0.15,
+        "fn_rate": 0.9871,
+        "contribution": 0.148069
+      },
+      "iban_code": {
+        "severity_weight": 0.15,
+        "fn_rate": 1.0,
+        "contribution": 0.15
+      },
+      "ip_address": {
+        "severity_weight": 0.09,
+        "fn_rate": 1.0,
+        "contribution": 0.09
+      },
+      "person": {
+        "severity_weight": 0.15,
+        "fn_rate": 1.0,
+        "contribution": 0.15
+      },
+      "phone_number": {
+        "severity_weight": 0.12,
+        "fn_rate": 1.0,
+        "contribution": 0.12
+      },
+      "street_address": {
+        "severity_weight": 0.08,
+        "fn_rate": 1.0,
+        "contribution": 0.08
+      },
+      "us_ssn": {
+        "severity_weight": 0.08,
+        "fn_rate": 1.0,
+        "contribution": 0.08
+      }
+    },
+    "r1": 0.15,
+    "r1_100": 15.0,
+    "r1_class": "person",
+    "r2": 0.998283,
+    "r2_100": 99.83,
+    "r_final": 0.998541,
+    "r_final_100": 99.85,
+    "coverage_basis": "model_id2label"
+  }
+];
+const CLASSES  = ["credit_card", "date_time", "email_address", "iban_code", "ip_address", "person", "phone_number", "street_address", "us_ssn"];
+const CLS_LBL  = ["Credit Card", "Date Time", "Email Address", "Iban Code", "Ip Address", "Person", "Phone Number", "Street Address", "Us Ssn"];
+const P_COLORS = {"huggingface": "rgba(245,158,11,0.80)", "presidio_baseline": "rgba(59,130,246,0.80)"};
+
+function fmt(v,d=4){ return (v!=null&&!isNaN(v))?(+v).toFixed(d):'—'; }
+function scoreColor(s){ return s>=75?'var(--green)':s>=55?'var(--accent2)':s>=35?'var(--yellow)':s>0?'var(--orange)':'var(--red)'; }
+function riskColor(r){  return r>=0.9?'var(--risk-critical)':r>=0.6?'var(--risk-high)':r>=0.3?'var(--risk-medium)':r>0?'var(--risk-low)':'var(--risk-none)'; }
+function riskLevel(r){  return r>=0.9?'Crítico':r>=0.6?'Alto':r>=0.3?'Medio':r>0?'Bajo':'Sin riesgo'; }
+function riskCls(r){    return r>=0.9?'risk-critical':r>=0.6?'risk-high':r>=0.3?'risk-medium':r>0?'risk-low':'risk-none'; }
+function interpCls(i){
+  const lo=i.toLowerCase();
+  if(lo.includes('recomendado')) return 'interp-optimal';
+  if(lo.includes('operacionalmente')) return 'interp-baseline';
+  if(lo.includes('mitigaciones')||lo.includes('complemento')) return 'interp-limited';
+  return 'interp-nofeasible';
+}
+function riskHeroStyle(r){
+  if(r>=0.9) return 'background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);';
+  if(r>=0.6) return 'background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.4);';
+  if(r>=0.3) return 'background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);';
+  if(r>0)    return 'background:rgba(34,211,165,.07);border-color:rgba(34,211,165,.35);';
+  return 'background:rgba(136,146,176,.06);border-color:rgba(136,146,176,.25);';
+}
+function pbCls(p){ return {huggingface:'pb-hf',presidio_baseline:'pb-base'}[p]||'pb-unknown'; }
+function pbLabel(p){ return {huggingface:'🤗 HuggingFace NER',presidio_baseline:'🛡️ Presidio Baseline'}[p]||p; }
+
+document.querySelectorAll('#ranking-tbody tr').forEach(tr=>{
+  tr.addEventListener('click',()=>showDetail(+tr.dataset.idx));
+});
+
+let classChartInst=null;
+
+function showDetail(idx){
+  document.querySelectorAll('#ranking-tbody tr').forEach(r=>r.classList.remove('selected'));
+  const row=document.querySelector(`tr[data-idx="${idx}"]`);
+  if(row) row.classList.add('selected');
+  const m=MODELS[idx];
+
+  document.getElementById('d-name').textContent=m.name;
+  const pb=document.getElementById('d-pbadge');
+  pb.textContent=pbLabel(m.paradigm); pb.className='paradigm-badge '+pbCls(m.paradigm);
+  const ib=document.getElementById('d-ibadge');
+  ib.textContent=m.interpretation; ib.className='interp-badge '+interpCls(m.interpretation);
+  const rb=document.getElementById('d-rbadge');
+  rb.textContent=riskLevel(m.r_final)+' · '+fmt(m.r_final_100,1)+'%';
+  rb.className='risk-badge '+riskCls(m.r_final);
+
+  document.getElementById('d-score100').textContent=fmt(m.score_100,2);
+  const dib=document.getElementById('d-ibig');
+  dib.textContent=m.interpretation; dib.className='ibig '+interpCls(m.interpretation);
+
+  const rc=riskColor(m.r_final);
+  document.getElementById('d-rfinal-pct').textContent=fmt(m.r_final_100,1)+'%';
+  document.getElementById('d-rfinal-pct').style.color=rc;
+  document.getElementById('d-risk-hbox').style.cssText=riskHeroStyle(m.r_final);
+  document.getElementById('d-r1-pct').textContent=fmt(m.r1_100,1)+'%';
+  document.getElementById('d-r1-class').textContent=(m.r1_class||'—').replace(/_/g,' ');
+  document.getElementById('d-r2-pct').textContent=fmt(m.r2_100,1)+'%';
+
+  document.getElementById('f-det').textContent=fmt(m.detection_score,4);
+  document.getElementById('f-cov').textContent=fmt(m.coverage,4);
+  document.getElementById('f-dom').textContent=fmt(m.domain_fit,2);
+  document.getElementById('f-reg').textContent=fmt(m.regulatory_fit,2);
+  document.getElementById('f-pen').textContent=fmt(m.penalty_fn,4);
+  document.getElementById('f-res').textContent=fmt(m.final_score,6);
+  document.getElementById('f-r1').textContent=fmt(m.r1_100,1)+'%';
+  document.getElementById('f-r2').textContent=fmt(m.r2_100,1)+'%';
+  document.getElementById('f-rf').textContent=fmt(m.r_final_100,1)+'%';
+
+  // 5 componentes (sin InfraScore)
+  [['c-det','cb-det',m.detection_score],['c-cov','cb-cov',m.coverage],
+   ['c-dom','cb-dom',m.domain_fit],['c-reg','cb-reg',m.regulatory_fit],
+   ['c-pen','cb-pen',m.penalty_fn]].forEach(([v,b,val])=>{
+    const n=val||0;
+    document.getElementById(v).textContent=fmt(n,4);
+    document.getElementById(b).style.width=(n*100)+'%';
+  });
+
+  document.getElementById('m-f2').textContent=fmt(m.f2_micro,3);
+  document.getElementById('m-pr').textContent=fmt(m.precision_micro,3);
+  document.getElementById('m-rc').textContent=fmt(m.recall_micro,3);
+  document.getElementById('m-tp').textContent=m.tp_total||0;
+  document.getElementById('m-fp').textContent=m.fp_total||0;
+  document.getElementById('m-fn').textContent=m.fn_total||0;
+  document.getElementById('m-filt').textContent=m.out_of_domain_filtered||0;
+  document.getElementById('l-load').textContent=fmt(m.load_time,2)+'s';
+  document.getElementById('l-inf').textContent=fmt(m.inference_latency,2)+'s';
+  document.getElementById('l-gt').textContent=m.ground_truth_count||0;
+  document.getElementById('l-pred').textContent=m.prediction_count||0;
+  document.getElementById('l-samples').textContent=m.corpus_samples||0;
+
+  const ctbody=document.getElementById('crit-tbody');
+  ctbody.innerHTML='';
+  CLASSES.forEach(c=>{
+    const cf=m.crit_fn_by_class[c]||{};
+    const sw=cf.severity_weight||0; const fnr=cf.fn_rate||0; const cont=cf.contribution||0;
+    if(sw===0&&fnr===0) return;
+    const cc=cont>0.1?'var(--risk-critical)':cont>0?'var(--risk-high)':'var(--green)';
+    const fc=fnr>=1?'var(--risk-critical)':fnr>0?'var(--risk-high)':'var(--green)';
+    ctbody.innerHTML+=`
+      <tr>
+        <td style="font-weight:600">${c.replace(/_/g,' ')}</td>
+        <td style="color:var(--accent2)">${(sw*100).toFixed(1)}%</td>
+        <td style="color:${fc};font-weight:700">${(fnr*100).toFixed(0)}%</td>
+        <td style="color:${cc};font-weight:700">${cont.toFixed(4)}</td>
+        <td><div class="mini-bar-wrap"><div class="mini-bar" style="width:${Math.min(100,(cont*500).toFixed(0))}%;background:${cc}"></div></div></td>
+      </tr>`;
+  });
+  if(!ctbody.innerHTML)
+    ctbody.innerHTML='<tr><td colspan="5" style="color:var(--green);text-align:center;padding:12px">✅ Sin contribuciones críticas</td></tr>';
+
+  const f2v=CLASSES.map(c=>m.f2_by_class[c]||0);
+  const fnrv=CLASSES.map(c=>m.fn_rate_by_class[c]||0);
+  const wv=CLASSES.map(c=>m.weight_by_class[c]||0);
+  const barC=f2v.map((v,i)=>{
+    const isCrit=wv[i]>0;
+    if(v>=0.9) return isCrit?'rgba(34,211,165,0.9)':'rgba(34,211,165,0.45)';
+    if(v>=0.7) return isCrit?'rgba(94,234,212,0.85)':'rgba(94,234,212,0.4)';
+    if(v>=0.5) return isCrit?'rgba(124,106,247,0.85)':'rgba(124,106,247,0.4)';
+    if(v>0)    return isCrit?'rgba(245,158,11,0.85)':'rgba(245,158,11,0.4)';
+    return isCrit?'rgba(239,68,68,0.85)':'rgba(239,68,68,0.35)';
+  });
+  if(classChartInst) classChartInst.destroy();
+  classChartInst=new Chart(document.getElementById('classChart').getContext('2d'),{
+    type:'bar',data:{labels:CLS_LBL,datasets:[
+      {label:'F2 Score',data:f2v,backgroundColor:barC,borderRadius:5,borderSkipped:false,order:2,yAxisID:'y'},
+      {label:'FN Rate',data:fnrv,type:'line',borderColor:'rgba(239,68,68,0.85)',
+        backgroundColor:'rgba(239,68,68,0.08)',fill:true,tension:0.3,
+        pointRadius:5,pointBackgroundColor:'rgba(239,68,68,0.9)',borderWidth:2,order:1,yAxisID:'y'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8892b0',font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(3)}`}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892b0',font:{size:10}}},
+        y:{min:0,max:1,grid:{color:'rgba(255,255,255,.06)'},
+            ticks:{color:'#8892b0',callback:v=>v.toFixed(1)}}
+      }
+    }
+  });
+  document.getElementById('detail-panel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── SCATTER ───────────────────────────────────────────────────────────────────
+new Chart(document.getElementById('scatterChart').getContext('2d'),{
+  type:'scatter',
+  data:{datasets:[{
+    label:'Modelos',
+    data:MODELS.map(m=>({x:m.score_100,y:m.r_final_100,name:m.short})),
+    backgroundColor:MODELS.map(m=>P_COLORS[m.paradigm]||'rgba(200,200,200,0.7)'),
+    pointRadius:14,pointHoverRadius:17
+  }]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${c.raw.name}  Score: ${c.raw.x.toFixed(1)}  R: ${c.raw.y.toFixed(1)}%`}}
+    },
+    scales:{
+      x:{min:0,max:105,title:{display:true,text:'Score (/100)',color:'#8892b0',font:{size:12}},
+          grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8892b0'}},
+      y:{min:0,max:105,title:{display:true,text:'R_final (%)',color:'#8892b0',font:{size:12}},
+          grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8892b0'}}
+    }
+  }
+});
+
+// ── F2 COMPARISON ─────────────────────────────────────────────────────────────
+new Chart(document.getElementById('compF2Chart').getContext('2d'),{
+  type:'bar',
+  data:{labels:CLS_LBL,datasets:MODELS.map(m=>{
+    return {label:m.short,data:CLASSES.map(c=>m.f2_by_class[c]||0),
+             backgroundColor:P_COLORS[m.paradigm]||'rgba(200,200,200,0.7)',
+             borderRadius:3,borderSkipped:false};
+  })},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#8892b0',font:{size:10},boxWidth:12,padding:10}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(3)}`}}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892b0',font:{size:10}}},
+      y:{min:0,max:1,grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8892b0',callback:v=>v.toFixed(1)}}
+    }
+  }
+});
+
+// ── FN RATE COMPARISON ────────────────────────────────────────────────────────
+new Chart(document.getElementById('compFNChart').getContext('2d'),{
+  type:'bar',
+  data:{labels:CLS_LBL,datasets:MODELS.map(m=>{
+    const c=P_COLORS[m.paradigm]||'rgba(200,200,200,0.6)';
+    return {label:m.short,data:CLASSES.map(cl=>m.fn_rate_by_class[cl]||0),
+             backgroundColor:c.replace(/[\d.]+\)$/,'0.65)'),
+             borderRadius:3,borderSkipped:false};
+  })},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#8892b0',font:{size:10},boxWidth:12,padding:10}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${(c.parsed.y*100).toFixed(0)}% FN`}}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892b0',font:{size:10}}},
+      y:{min:0,max:1,grid:{color:'rgba(255,255,255,.06)'},
+          ticks:{color:'#8892b0',callback:v=>(v*100).toFixed(0)+'%'}}
+    }
+  }
+});
+
+showDetail(0);
+</script>
+</body>
+</html>
