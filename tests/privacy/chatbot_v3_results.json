@@ -1,0 +1,1785 @@
+[
+    {
+        "name": "Presidio-Baseline",
+        "paradigm": "presidio_baseline",
+        "success": true,
+        "load_time": 0.17656922340393066,
+        "inference_latency": 1.5068998336791992,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 711,
+        "prediction_count": 690,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 21,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 82,
+                    "fp": 0,
+                    "fn": 28,
+                    "precision": 1.0,
+                    "recall": 0.7454545454545455,
+                    "f2": 0.78544061302682,
+                    "fn_rate": 0.2545454545454545,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 94,
+                    "fp": 4,
+                    "fn": 4,
+                    "precision": 0.9591836734693877,
+                    "recall": 0.9591836734693877,
+                    "f2": 0.9591836734693877,
+                    "fn_rate": 0.04081632653061224,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 233,
+                    "fp": 0,
+                    "fn": 0,
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f2": 1.0,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 111,
+                    "fp": 0,
+                    "fn": 0,
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f2": 1.0,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 52,
+                    "fp": 0,
+                    "fn": 0,
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f2": 1.0,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 236,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 73,
+                    "fp": 3,
+                    "fn": 70,
+                    "precision": 0.9605263157894737,
+                    "recall": 0.5104895104895105,
+                    "f2": 0.5632716049382716,
+                    "fn_rate": 0.48951048951048953,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 61,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 38,
+                    "fp": 0,
+                    "fn": 0,
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f2": 1.0,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 683,
+                "fp": 7,
+                "fn": 399,
+                "precision": 0.9898550724637681,
+                "recall": 0.6312384473197782,
+                "f2": 0.6805500199282583
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 690,
+            "total_pred_raw": 711,
+            "out_of_domain_filtered": 21
+        },
+        "detection_score": 0.6876590559595485,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 1.0,
+                "contribution": 0.15
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.5632716049382716,
+                "contribution": 0.06759259259259258
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 1.0,
+                "contribution": 0.15
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.78544061302682,
+                "contribution": 0.1021072796934866
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.9591836734693877,
+                "contribution": 0.04795918367346939
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 1.0,
+                "contribution": 0.08
+            }
+        },
+        "coverage": 1.0,
+        "covered_domain_classes": [
+            "credit_card",
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [],
+        "supported_classes": [
+            "credit_card",
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "coverage_basis": "presidio_standard_recognizers",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.3238729841586985,
+        "penalty_fn": 0.6761270158413015,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 1.0,
+                "contribution": 0.15
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 0.48951048951048953,
+                "contribution": 0.05874125874125874
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 1.0,
+                "contribution": 0.08
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 0.2545454545454545,
+                "contribution": 0.03309090909090909
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 0.04081632653061224,
+                "contribution": 0.002040816326530612
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "r1_weakest_class_risk": 0.15,
+        "r1_weakest_class_risk_100": 15.0,
+        "r1_weakest_class": "person",
+        "r2_systemic_risk": 0.3238729841586985,
+        "r2_systemic_risk_100": 32.38729841586985,
+        "r_final": 0.42529203653489367,
+        "r_final_100": 42.52920365348937,
+        "final_score": 0.3556828220479647,
+        "score_100": 35.56828220479647,
+        "interpretation": "No adecuado"
+    },
+    {
+        "name": "OpenMed-PII-SuperClinical-434M",
+        "paradigm": "huggingface",
+        "success": true,
+        "load_time": 2.503183126449585,
+        "inference_latency": 517.4848899841309,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 3389,
+        "prediction_count": 2187,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 1202,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 110,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 86,
+                    "fp": 81,
+                    "fn": 12,
+                    "precision": 0.5149700598802395,
+                    "recall": 0.8775510204081632,
+                    "f2": 0.7692307692307693,
+                    "fn_rate": 0.12244897959183673,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 208,
+                    "fp": 159,
+                    "fn": 25,
+                    "precision": 0.5667574931880109,
+                    "recall": 0.8927038626609443,
+                    "f2": 0.8006158583525791,
+                    "fn_rate": 0.1072961373390558,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 98,
+                    "fp": 67,
+                    "fn": 13,
+                    "precision": 0.593939393939394,
+                    "recall": 0.8828828828828829,
+                    "f2": 0.8045977011494252,
+                    "fn_rate": 0.11711711711711711,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 52,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 63,
+                    "fp": 1081,
+                    "fn": 173,
+                    "precision": 0.05506993006993007,
+                    "recall": 0.2669491525423729,
+                    "f2": 0.15086206896551727,
+                    "fn_rate": 0.7330508474576272,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 98,
+                    "fp": 16,
+                    "fn": 45,
+                    "precision": 0.8596491228070176,
+                    "recall": 0.6853146853146853,
+                    "f2": 0.7142857142857143,
+                    "fn_rate": 0.3146853146853147,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 45,
+                    "fp": 127,
+                    "fn": 16,
+                    "precision": 0.2616279069767442,
+                    "recall": 0.7377049180327869,
+                    "f2": 0.5408653846153847,
+                    "fn_rate": 0.26229508196721313,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 38,
+                    "fp": 20,
+                    "fn": 0,
+                    "precision": 0.6551724137931034,
+                    "recall": 1.0,
+                    "f2": 0.9047619047619047,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 636,
+                "fp": 1551,
+                "fn": 446,
+                "precision": 0.2908093278463649,
+                "recall": 0.5878003696857671,
+                "f2": 0.4881043745203376
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 2187,
+            "total_pred_raw": 3389,
+            "out_of_domain_filtered": 1202
+        },
+        "detection_score": 0.5032373515961355,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.15086206896551727,
+                "contribution": 0.02262931034482759
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 0.8006158583525791,
+                "contribution": 0.12009237875288686
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.7142857142857143,
+                "contribution": 0.08571428571428572
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.5408653846153847,
+                "contribution": 0.043269230769230775
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 0.8045977011494252,
+                "contribution": 0.12068965517241377
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.7692307692307693,
+                "contribution": 0.038461538461538464
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 0.9047619047619047,
+                "contribution": 0.07238095238095238
+            }
+        },
+        "coverage": 0.8888888888888888,
+        "covered_domain_classes": [
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [
+            "credit_card"
+        ],
+        "supported_classes": [
+            "age",
+            "api_key",
+            "biometric_identifier",
+            "blood_type",
+            "certificate_license_number",
+            "city",
+            "company_name",
+            "coordinate",
+            "country",
+            "county",
+            "credit_debit_card",
+            "customer_id",
+            "cvv",
+            "date_time",
+            "device_identifier",
+            "education_level",
+            "email_address",
+            "employee_id",
+            "employment_status",
+            "fax_number",
+            "gender",
+            "health_plan_beneficiary_number",
+            "http_cookie",
+            "iban_code",
+            "ip_address",
+            "ipv4",
+            "ipv6",
+            "language",
+            "license_plate",
+            "medical_record_number",
+            "occupation",
+            "password",
+            "person",
+            "phone_number",
+            "pin",
+            "political_view",
+            "postcode",
+            "race_ethnicity",
+            "religious_belief",
+            "sexuality",
+            "state",
+            "street_address",
+            "swift_bic",
+            "tax_id",
+            "time",
+            "unique_id",
+            "url",
+            "us_ssn",
+            "user_name",
+            "vehicle_identifier"
+        ],
+        "coverage_basis": "model_id2label",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.4284879085862767,
+        "penalty_fn": 0.5715120914137233,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.7330508474576272,
+                "contribution": 0.10995762711864407
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.1072961373390558,
+                "contribution": 0.016094420600858368
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 0.3146853146853147,
+                "contribution": 0.03776223776223776
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.26229508196721313,
+                "contribution": 0.02098360655737705
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.11711711711711711,
+                "contribution": 0.017567567567567565
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 1.0,
+                "contribution": 0.13
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 0.12244897959183673,
+                "contribution": 0.006122448979591837
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "r1_weakest_class_risk": 0.13,
+        "r1_weakest_class_risk_100": 13.0,
+        "r1_weakest_class": "credit_card",
+        "r2_systemic_risk": 0.4919892520766904,
+        "r2_systemic_risk_100": 49.19892520766904,
+        "r_final": 0.5580306493067206,
+        "r_final_100": 55.803064930672065,
+        "final_score": 0.1955722372759832,
+        "score_100": 19.55722372759832,
+        "interpretation": "No adecuado"
+    },
+    {
+        "name": "OpenMed-privacy-filter-nemotron",
+        "paradigm": "huggingface",
+        "success": true,
+        "load_time": 2.2897605895996094,
+        "inference_latency": 202.55643105506897,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 4467,
+        "prediction_count": 2509,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 1958,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 110,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 69,
+                    "fp": 218,
+                    "fn": 29,
+                    "precision": 0.24041811846689895,
+                    "recall": 0.7040816326530612,
+                    "f2": 0.508100147275405,
+                    "fn_rate": 0.29591836734693877,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 214,
+                    "fp": 284,
+                    "fn": 19,
+                    "precision": 0.42971887550200805,
+                    "recall": 0.9184549356223176,
+                    "f2": 0.7482517482517483,
+                    "fn_rate": 0.0815450643776824,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 7,
+                    "fp": 47,
+                    "fn": 104,
+                    "precision": 0.12962962962962962,
+                    "recall": 0.06306306306306306,
+                    "f2": 0.07028112449799195,
+                    "fn_rate": 0.9369369369369369,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 52,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 61,
+                    "fp": 995,
+                    "fn": 175,
+                    "precision": 0.05776515151515151,
+                    "recall": 0.2584745762711864,
+                    "f2": 0.15249999999999997,
+                    "fn_rate": 0.7415254237288136,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 134,
+                    "fp": 149,
+                    "fn": 9,
+                    "precision": 0.4734982332155477,
+                    "recall": 0.9370629370629371,
+                    "f2": 0.7836257309941522,
+                    "fn_rate": 0.06293706293706294,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 36,
+                    "fp": 219,
+                    "fn": 25,
+                    "precision": 0.1411764705882353,
+                    "recall": 0.5901639344262295,
+                    "f2": 0.3607214428857715,
+                    "fn_rate": 0.4098360655737705,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 38,
+                    "fp": 38,
+                    "fn": 0,
+                    "precision": 0.5,
+                    "recall": 1.0,
+                    "f2": 0.8333333333333334,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 559,
+                "fp": 1950,
+                "fn": 523,
+                "precision": 0.22279792746113988,
+                "recall": 0.5166358595194085,
+                "f2": 0.40880503144654085
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 2509,
+            "total_pred_raw": 4467,
+            "out_of_domain_filtered": 1958
+        },
+        "detection_score": 0.360619408093058,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.15249999999999997,
+                "contribution": 0.022874999999999996
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 0.7482517482517483,
+                "contribution": 0.11223776223776225
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.7836257309941522,
+                "contribution": 0.09403508771929826
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.3607214428857715,
+                "contribution": 0.02885771543086172
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 0.07028112449799195,
+                "contribution": 0.010542168674698793
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.508100147275405,
+                "contribution": 0.02540500736377025
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 0.8333333333333334,
+                "contribution": 0.06666666666666667
+            }
+        },
+        "coverage": 0.8888888888888888,
+        "covered_domain_classes": [
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [
+            "credit_card"
+        ],
+        "supported_classes": [
+            "age",
+            "api_key",
+            "biometric_identifier",
+            "blood_type",
+            "certificate_license_number",
+            "city",
+            "company_name",
+            "coordinate",
+            "country",
+            "county",
+            "credit_debit_card",
+            "customer_id",
+            "cvv",
+            "date_time",
+            "device_identifier",
+            "education_level",
+            "email_address",
+            "employee_id",
+            "employment_status",
+            "fax_number",
+            "gender",
+            "health_plan_beneficiary_number",
+            "http_cookie",
+            "iban_code",
+            "ip_address",
+            "ipv4",
+            "ipv6",
+            "language",
+            "license_plate",
+            "medical_record_number",
+            "national_id",
+            "occupation",
+            "password",
+            "person",
+            "phone_number",
+            "pin",
+            "political_view",
+            "postcode",
+            "race_ethnicity",
+            "religious_belief",
+            "sexuality",
+            "state",
+            "street_address",
+            "swift_bic",
+            "tax_id",
+            "time",
+            "unique_id",
+            "url",
+            "us_ssn",
+            "user_name",
+            "vehicle_identifier"
+        ],
+        "coverage_basis": "model_id2label",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.5391363649222111,
+        "penalty_fn": 0.46086363507778894,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.7415254237288136,
+                "contribution": 0.11122881355932203
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.0815450643776824,
+                "contribution": 0.01223175965665236
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 0.06293706293706294,
+                "contribution": 0.007552447552447553
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.4098360655737705,
+                "contribution": 0.03278688524590164
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.9369369369369369,
+                "contribution": 0.14054054054054052
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 1.0,
+                "contribution": 0.13
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 0.29591836734693877,
+                "contribution": 0.01479591836734694
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "r1_weakest_class_risk": 0.14054054054054052,
+        "r1_weakest_class_risk_100": 14.054054054054053,
+        "r1_weakest_class": "iban_code",
+        "r2_systemic_risk": 0.5903434354864099,
+        "r2_systemic_risk_100": 59.03434354864099,
+        "r_final": 0.6479167904991306,
+        "r_final_100": 64.79167904991307,
+        "final_score": 0.11301353247948977,
+        "score_100": 11.301353247948978,
+        "interpretation": "No adecuado"
+    },
+    {
+        "name": "OpenMed-PII-ModernMed-Large-395M",
+        "paradigm": "huggingface",
+        "success": true,
+        "load_time": 1.2914199829101562,
+        "inference_latency": 330.00693106651306,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 4517,
+        "prediction_count": 2906,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 1611,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 110,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 94,
+                    "fp": 5,
+                    "fn": 4,
+                    "precision": 0.9494949494949495,
+                    "recall": 0.9591836734693877,
+                    "f2": 0.9572301425661913,
+                    "fn_rate": 0.04081632653061224,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 184,
+                    "fp": 259,
+                    "fn": 49,
+                    "precision": 0.4153498871331828,
+                    "recall": 0.7896995708154506,
+                    "f2": 0.669090909090909,
+                    "fn_rate": 0.21030042918454936,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 4,
+                    "fp": 122,
+                    "fn": 107,
+                    "precision": 0.031746031746031744,
+                    "recall": 0.036036036036036036,
+                    "f2": 0.03508771929824561,
+                    "fn_rate": 0.963963963963964,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 52,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 45,
+                    "fp": 1739,
+                    "fn": 191,
+                    "precision": 0.02522421524663677,
+                    "recall": 0.1906779661016949,
+                    "f2": 0.08247800586510264,
+                    "fn_rate": 0.809322033898305,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 121,
+                    "fp": 56,
+                    "fn": 22,
+                    "precision": 0.6836158192090396,
+                    "recall": 0.8461538461538461,
+                    "f2": 0.8077436582109481,
+                    "fn_rate": 0.15384615384615385,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 46,
+                    "fp": 171,
+                    "fn": 15,
+                    "precision": 0.2119815668202765,
+                    "recall": 0.7540983606557377,
+                    "f2": 0.4989154013015185,
+                    "fn_rate": 0.2459016393442623,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 38,
+                    "fp": 22,
+                    "fn": 0,
+                    "precision": 0.6333333333333333,
+                    "recall": 1.0,
+                    "f2": 0.8962264150943396,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 532,
+                "fp": 2374,
+                "fn": 550,
+                "precision": 0.18306951135581556,
+                "recall": 0.49168207024029575,
+                "f2": 0.3677080453414432
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 2906,
+            "total_pred_raw": 4517,
+            "out_of_domain_filtered": 1611
+        },
+        "detection_score": 0.3744005865634305,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.08247800586510264,
+                "contribution": 0.012371700879765395
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 0.669090909090909,
+                "contribution": 0.10036363636363634
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.8077436582109481,
+                "contribution": 0.09692923898531376
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.4989154013015185,
+                "contribution": 0.03991323210412148
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 0.03508771929824561,
+                "contribution": 0.005263157894736842
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.9572301425661913,
+                "contribution": 0.04786150712830957
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 0.8962264150943396,
+                "contribution": 0.07169811320754717
+            }
+        },
+        "coverage": 0.8888888888888888,
+        "covered_domain_classes": [
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [
+            "credit_card"
+        ],
+        "supported_classes": [
+            "age",
+            "api_key",
+            "biometric_identifier",
+            "blood_type",
+            "certificate_license_number",
+            "city",
+            "company_name",
+            "coordinate",
+            "country",
+            "county",
+            "credit_debit_card",
+            "customer_id",
+            "cvv",
+            "date_time",
+            "device_identifier",
+            "education_level",
+            "email_address",
+            "employee_id",
+            "employment_status",
+            "fax_number",
+            "gender",
+            "health_plan_beneficiary_number",
+            "http_cookie",
+            "iban_code",
+            "ip_address",
+            "ipv4",
+            "ipv6",
+            "language",
+            "license_plate",
+            "medical_record_number",
+            "occupation",
+            "password",
+            "person",
+            "phone_number",
+            "pin",
+            "political_view",
+            "postcode",
+            "race_ethnicity",
+            "religious_belief",
+            "sexuality",
+            "state",
+            "street_address",
+            "swift_bic",
+            "tax_id",
+            "time",
+            "unique_id",
+            "url",
+            "us_ssn",
+            "user_name",
+            "vehicle_identifier"
+        ],
+        "coverage_basis": "model_id2label",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.5577124499926328,
+        "penalty_fn": 0.4422875500073672,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.809322033898305,
+                "contribution": 0.12139830508474575
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.21030042918454936,
+                "contribution": 0.031545064377682404
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 0.15384615384615385,
+                "contribution": 0.018461538461538463
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.2459016393442623,
+                "contribution": 0.019672131147540985
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.963963963963964,
+                "contribution": 0.1445945945945946
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 1.0,
+                "contribution": 0.13
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 0.04081632653061224,
+                "contribution": 0.002040816326530612
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "r1_weakest_class_risk": 0.1445945945945946,
+        "r1_weakest_class_risk_100": 14.45945945945946,
+        "r1_weakest_class": "iban_code",
+        "r2_systemic_risk": 0.6068555111045626,
+        "r2_systemic_risk_100": 60.68555111045626,
+        "r_final": 0.6637020790934974,
+        "r_final_100": 66.37020790934974,
+        "final_score": 0.11260304834367339,
+        "score_100": 11.26030483436734,
+        "interpretation": "No adecuado"
+    },
+    {
+        "name": "OpenMed-PII-SuperMedical-Large-355M",
+        "paradigm": "huggingface",
+        "success": true,
+        "load_time": 1.2403008937835693,
+        "inference_latency": 312.05804800987244,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 4743,
+        "prediction_count": 2833,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 1910,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 110,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 69,
+                    "fp": 125,
+                    "fn": 29,
+                    "precision": 0.3556701030927835,
+                    "recall": 0.7040816326530612,
+                    "f2": 0.5887372013651878,
+                    "fn_rate": 0.29591836734693877,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 185,
+                    "fp": 500,
+                    "fn": 48,
+                    "precision": 0.27007299270072993,
+                    "recall": 0.7939914163090128,
+                    "f2": 0.5720470006184292,
+                    "fn_rate": 0.20600858369098712,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 11,
+                    "fp": 21,
+                    "fn": 100,
+                    "precision": 0.34375,
+                    "recall": 0.0990990990990991,
+                    "f2": 0.11554621848739495,
+                    "fn_rate": 0.9009009009009009,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 52,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 25,
+                    "fp": 1408,
+                    "fn": 211,
+                    "precision": 0.017445917655268667,
+                    "recall": 0.1059322033898305,
+                    "f2": 0.05258729490954985,
+                    "fn_rate": 0.8940677966101694,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 99,
+                    "fp": 60,
+                    "fn": 44,
+                    "precision": 0.6226415094339622,
+                    "recall": 0.6923076923076923,
+                    "f2": 0.677154582763338,
+                    "fn_rate": 0.3076923076923077,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 47,
+                    "fp": 205,
+                    "fn": 14,
+                    "precision": 0.1865079365079365,
+                    "recall": 0.7704918032786885,
+                    "f2": 0.47379032258064513,
+                    "fn_rate": 0.22950819672131148,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 38,
+                    "fp": 40,
+                    "fn": 0,
+                    "precision": 0.48717948717948717,
+                    "recall": 1.0,
+                    "f2": 0.826086956521739,
+                    "fn_rate": 0.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 474,
+                "fp": 2359,
+                "fn": 608,
+                "precision": 0.16731380162372045,
+                "recall": 0.43807763401109057,
+                "f2": 0.33095936321742775
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 2833,
+            "total_pred_raw": 4743,
+            "out_of_domain_filtered": 1910
+        },
+        "detection_score": 0.32571266943035676,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.05258729490954985,
+                "contribution": 0.007888094236432478
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 0.5720470006184292,
+                "contribution": 0.08580705009276438
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.677154582763338,
+                "contribution": 0.08125854993160055
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.47379032258064513,
+                "contribution": 0.03790322580645161
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 0.11554621848739495,
+                "contribution": 0.01733193277310924
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.5887372013651878,
+                "contribution": 0.029436860068259393
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 0.826086956521739,
+                "contribution": 0.06608695652173913
+            }
+        },
+        "coverage": 0.8888888888888888,
+        "covered_domain_classes": [
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [
+            "credit_card"
+        ],
+        "supported_classes": [
+            "age",
+            "api_key",
+            "biometric_identifier",
+            "blood_type",
+            "certificate_license_number",
+            "city",
+            "company_name",
+            "coordinate",
+            "country",
+            "county",
+            "credit_debit_card",
+            "customer_id",
+            "cvv",
+            "date_time",
+            "device_identifier",
+            "education_level",
+            "email_address",
+            "employee_id",
+            "employment_status",
+            "fax_number",
+            "gender",
+            "health_plan_beneficiary_number",
+            "http_cookie",
+            "iban_code",
+            "ip_address",
+            "ipv4",
+            "ipv6",
+            "language",
+            "license_plate",
+            "medical_record_number",
+            "occupation",
+            "password",
+            "person",
+            "phone_number",
+            "pin",
+            "political_view",
+            "postcode",
+            "race_ethnicity",
+            "religious_belief",
+            "sexuality",
+            "state",
+            "street_address",
+            "swift_bic",
+            "tax_id",
+            "time",
+            "unique_id",
+            "url",
+            "us_ssn",
+            "user_name",
+            "vehicle_identifier"
+        ],
+        "coverage_basis": "model_id2label",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.5902262432084374,
+        "penalty_fn": 0.4097737567915626,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.8940677966101694,
+                "contribution": 0.1341101694915254
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.20600858369098712,
+                "contribution": 0.030901287553648068
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 0.3076923076923077,
+                "contribution": 0.036923076923076927
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.22950819672131148,
+                "contribution": 0.018360655737704918
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.9009009009009009,
+                "contribution": 0.13513513513513514
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 1.0,
+                "contribution": 0.13
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 0.29591836734693877,
+                "contribution": 0.01479591836734694
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "r1_weakest_class_risk": 0.13513513513513514,
+        "r1_weakest_class_risk_100": 13.513513513513514,
+        "r1_weakest_class": "iban_code",
+        "r2_systemic_risk": 0.6357566606297222,
+        "r2_systemic_risk_100": 63.575666062972225,
+        "r_final": 0.6849787335175976,
+        "r_final_100": 68.49787335175976,
+        "final_score": 0.09075858284721824,
+        "score_100": 9.075858284721825,
+        "interpretation": "No adecuado"
+    },
+    {
+        "name": "OpenMed-PII-BigMed-BioClinical",
+        "paradigm": "huggingface",
+        "success": true,
+        "load_time": 2.662061929702759,
+        "inference_latency": 99.35334730148315,
+        "ground_truth_count": 1082,
+        "raw_prediction_count": 5525,
+        "prediction_count": 156,
+        "corpus_samples": 4935,
+        "out_of_domain_filtered": 5369,
+        "evaluation": {
+            "metrics_by_label": {
+                "credit_card": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 110,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.13,
+                    "fn_severity_weight": 0.13
+                },
+                "date_time": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 98,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.05,
+                    "fn_severity_weight": 0.05
+                },
+                "email_address": {
+                    "tp": 3,
+                    "fp": 96,
+                    "fn": 230,
+                    "precision": 0.030303030303030304,
+                    "recall": 0.012875536480686695,
+                    "f2": 0.014548981571290009,
+                    "fn_rate": 0.9871244635193133,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "iban_code": {
+                    "tp": 0,
+                    "fp": 7,
+                    "fn": 111,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "ip_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 52,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.09,
+                    "fn_severity_weight": 0.09
+                },
+                "person": {
+                    "tp": 0,
+                    "fp": 50,
+                    "fn": 236,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.15,
+                    "fn_severity_weight": 0.15
+                },
+                "phone_number": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 143,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.12,
+                    "fn_severity_weight": 0.12
+                },
+                "street_address": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 61,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                },
+                "us_ssn": {
+                    "tp": 0,
+                    "fp": 0,
+                    "fn": 38,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f2": 0.0,
+                    "fn_rate": 1.0,
+                    "criticality_weight": 0.08,
+                    "fn_severity_weight": 0.08
+                }
+            },
+            "micro_metrics": {
+                "tp": 3,
+                "fp": 153,
+                "fn": 1079,
+                "precision": 0.019230769230769232,
+                "recall": 0.0027726432532347504,
+                "f2": 0.0033452274754683323
+            },
+            "corpus_samples": 4935,
+            "total_gt_entities": 1082,
+            "total_pred_entities": 156,
+            "total_pred_raw": 5525,
+            "out_of_domain_filtered": 5369
+        },
+        "detection_score": 0.0021823472356935015,
+        "detection_score_contributions": {
+            "person": {
+                "weight": 0.15,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "email_address": {
+                "weight": 0.15,
+                "f2": 0.014548981571290009,
+                "contribution": 0.0021823472356935015
+            },
+            "phone_number": {
+                "weight": 0.12,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "street_address": {
+                "weight": 0.08,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "iban_code": {
+                "weight": 0.15,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "credit_card": {
+                "weight": 0.13,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "date_time": {
+                "weight": 0.05,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "ip_address": {
+                "weight": 0.09,
+                "f2": 0.0,
+                "contribution": 0.0
+            },
+            "us_ssn": {
+                "weight": 0.08,
+                "f2": 0.0,
+                "contribution": 0.0
+            }
+        },
+        "coverage": 0.8888888888888888,
+        "covered_domain_classes": [
+            "date_time",
+            "email_address",
+            "iban_code",
+            "ip_address",
+            "person",
+            "phone_number",
+            "street_address",
+            "us_ssn"
+        ],
+        "missing_domain_classes": [
+            "credit_card"
+        ],
+        "supported_classes": [
+            "age",
+            "api_key",
+            "biometric_identifier",
+            "blood_type",
+            "certificate_license_number",
+            "city",
+            "company_name",
+            "coordinate",
+            "country",
+            "county",
+            "credit_debit_card",
+            "customer_id",
+            "cvv",
+            "date_time",
+            "device_identifier",
+            "education_level",
+            "email_address",
+            "employee_id",
+            "employment_status",
+            "fax_number",
+            "gender",
+            "health_plan_beneficiary_number",
+            "http_cookie",
+            "iban_code",
+            "ip_address",
+            "ipv4",
+            "ipv6",
+            "language",
+            "license_plate",
+            "medical_record_number",
+            "occupation",
+            "password",
+            "person",
+            "phone_number",
+            "pin",
+            "political_view",
+            "postcode",
+            "race_ethnicity",
+            "religious_belief",
+            "sexuality",
+            "state",
+            "street_address",
+            "swift_bic",
+            "tax_id",
+            "time",
+            "unique_id",
+            "url",
+            "us_ssn",
+            "user_name",
+            "vehicle_identifier"
+        ],
+        "coverage_basis": "model_id2label",
+        "domain_fit": 0.9,
+        "regulatory_fit": 0.85,
+        "critical_fn": 0.998068669527897,
+        "penalty_fn": 0.0019313304721030322,
+        "critical_fn_contributions": {
+            "person": {
+                "severity_weight": 0.15,
+                "fn_rate": 1.0,
+                "contribution": 0.15
+            },
+            "email_address": {
+                "severity_weight": 0.15,
+                "fn_rate": 0.9871244635193133,
+                "contribution": 0.148068669527897
+            },
+            "phone_number": {
+                "severity_weight": 0.12,
+                "fn_rate": 1.0,
+                "contribution": 0.12
+            },
+            "street_address": {
+                "severity_weight": 0.08,
+                "fn_rate": 1.0,
+                "contribution": 0.08
+            },
+            "iban_code": {
+                "severity_weight": 0.15,
+                "fn_rate": 1.0,
+                "contribution": 0.15
+            },
+            "credit_card": {
+                "severity_weight": 0.13,
+                "fn_rate": 1.0,
+                "contribution": 0.13
+            },
+            "date_time": {
+                "severity_weight": 0.05,
+                "fn_rate": 1.0,
+                "contribution": 0.05
+            },
+            "ip_address": {
+                "severity_weight": 0.09,
+                "fn_rate": 1.0,
+                "contribution": 0.09
+            },
+            "us_ssn": {
+                "severity_weight": 0.08,
+                "fn_rate": 1.0,
+                "contribution": 0.08
+            }
+        },
+        "r1_weakest_class_risk": 0.15,
+        "r1_weakest_class_risk_100": 15.0,
+        "r1_weakest_class": "person",
+        "r2_systemic_risk": 0.9982832618025751,
+        "r2_systemic_risk_100": 99.8283261802575,
+        "r_final": 0.9985407725321889,
+        "r_final_100": 99.85407725321889,
+        "final_score": 2.86608692756318e-06,
+        "score_100": 0.000286608692756318,
+        "interpretation": "No adecuado"
+    }
+]
