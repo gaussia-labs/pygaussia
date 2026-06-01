@@ -7,7 +7,7 @@ description: "Evaluate whether an AI assistant stays within its defined role acr
 
 The Role Adherence metric evaluates whether an AI assistant's responses conform to its defined role description across all turns of a conversation. It accumulates `role_adherence` scores across all turns in a session and emits one session-level result, with optional uncertainty quantification via Bayesian mode. The `turns` list preserves per-turn scores for debugging.
 
-The judge uses **first-token logprobs** to derive a calibrated [0, 1] adherence score from a YES/NO question to the judge model, following the paper's `P(YES) / (P(YES) + P(NO))` formulation. This requires a provider that exposes logprobs (OpenAI, Azure OpenAI, Ollama, LiteLLM, HuggingFace TGI). Anthropic, Gemini and Bedrock are not supported and will raise `LogprobsNotSupportedError`.
+The judge uses **first-token logprobs** to derive a calibrated [0, 1] adherence score from a YES/NO question to the judge model, following the paper's `P(YES) / (P(YES) + P(NO))` formulation. This requires a provider that exposes logprobs (OpenAI, Azure OpenAI, Ollama, LiteLLM, HuggingFace TGI). Providers that do not expose logprobs (Anthropic, Gemini, Bedrock) raise `LogprobsNotSupportedError` unless a structured-output fallback is configured (see [Falling back to structured output](#falling-back-to-structured-output)).
 
 ## Overview
 
@@ -79,6 +79,7 @@ uv add langchain-openai  # Or your preferred LLM provider
 | `temperature` | `float \| None` | `1.0` | Forwarded to the judge. Default `1.0` preserves first-token distribution calibration (per paper). Pass `None` to inherit the model's configured temperature. |
 | `top_logprobs` | `int` | `10` | Number of top tokens to inspect for the first generated token. Matches the paper. |
 | `verbose` | `bool` | `False` | Enable verbose logging |
+| `fallback` | `ScoringStrategy \| None` | `None` | Strategy used when the provider does not expose logprobs. Pass `StructuredOutputJudgeStrategy(model)` to emit a warning and degrade gracefully instead of raising. |
 
 ### Required Parameters
 
@@ -319,8 +320,21 @@ for metric in metrics:
 </CodeGroup>
 
 <Warning>
-Anthropic (Claude), Google Gemini and AWS Bedrock do **not** expose logprobs through their public APIs. Passing one of those providers as the judge model will raise `LogprobsNotSupportedError` on the first call.
+Anthropic (Claude), Google Gemini and AWS Bedrock do **not** expose logprobs through their public APIs. Passing one of those providers as the judge model raises `LogprobsNotSupportedError` on the first call — unless you provide a fallback (see below).
 </Warning>
+
+### Falling back to structured output
+
+To use a provider that does not expose logprobs, pass a `StructuredOutputJudgeStrategy` as the `fallback`. When the logprob call fails, the strategy emits a `RuntimeWarning` and scores the remaining turns via structured output (a binary YES/NO verdict mapped to `{0.0, 1.0}`) instead of raising. You can also use `StructuredOutputJudgeStrategy` directly as the `scoring_strategy` if you never want the logprob path.
+
+```python
+from gaussia.metrics.role_adherence import LLMJudgeStrategy, StructuredOutputJudgeStrategy
+
+strategy = LLMJudgeStrategy(
+    model=judge_model,
+    fallback=StructuredOutputJudgeStrategy(model=judge_model),
+)
+```
 
 ## Best Practices
 

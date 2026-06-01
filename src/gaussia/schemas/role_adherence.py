@@ -1,8 +1,17 @@
 """Role adherence metric schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .metrics import BaseMetric
+
+
+class RoleAdherenceJudgeOutput(BaseModel):
+    """Structured-output schema for the role adherence judge."""
+
+    adherent: bool = Field(
+        description="True if the assistant's response adheres to its role (YES), "
+        "False if it violates the role (NO)."
+    )
 
 
 class RoleAdherenceTurn(BaseModel):

@@ -4,9 +4,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gaussia.metrics.role_adherence import LLMJudgeStrategy, RoleAdherence, ScoringStrategy
+from gaussia.core.exceptions import LogprobsNotSupportedError
+from gaussia.metrics.role_adherence import (
+    LLMJudgeStrategy,
+    RoleAdherence,
+    ScoringStrategy,
+    StructuredOutputJudgeStrategy,
+)
 from gaussia.schemas.common import IterationLevel
-from gaussia.schemas.role_adherence import RoleAdherenceMetric
+from gaussia.schemas.role_adherence import RoleAdherenceJudgeOutput, RoleAdherenceMetric
 from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_role_adherence_dataset, create_sample_batch
 from tests.fixtures.mock_retriever import MockRetriever, RoleAdherenceDatasetRetriever
@@ -330,3 +336,95 @@ class TestLLMJudgeStrategy:
         kwargs = mock_judge.check_logprob_binary.call_args[1]
         assert kwargs["temperature"] == 0.5
         assert kwargs["top_logprobs"] == 20
+
+
+class TestStructuredOutputJudgeStrategy:
+    def test_score_adherent_returns_one(self):
+        strategy = StructuredOutputJudgeStrategy(model=MagicMock())
+        turn = create_sample_batch(qa_id="q1", query="Q", assistant="A")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check.return_value = ("", RoleAdherenceJudgeOutput(adherent=True))
+
+            score = strategy.score(turn, [], "role")
+
+        assert score == 1.0
+        mock_judge_class.assert_called_once()
+        assert mock_judge_class.call_args[1]["use_structured_output"] is True
+        call_args = mock_judge.check.call_args
+        assert call_args[1]["output_schema"] is RoleAdherenceJudgeOutput
+
+    def test_score_not_adherent_returns_zero(self):
+        strategy = StructuredOutputJudgeStrategy(model=MagicMock())
+        turn = create_sample_batch(qa_id="q1")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check.return_value = ("", RoleAdherenceJudgeOutput(adherent=False))
+
+            score = strategy.score(turn, [], "role")
+
+        assert score == 0.0
+
+    def test_score_none_result_returns_zero(self):
+        strategy = StructuredOutputJudgeStrategy(model=MagicMock())
+        turn = create_sample_batch(qa_id="q1")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check.return_value = ("", None)
+
+            score = strategy.score(turn, [], "role")
+
+        assert score == 0.0
+
+
+class TestLLMJudgeStrategyFallback:
+    def test_raises_when_unsupported_and_no_fallback(self):
+        strategy = LLMJudgeStrategy(model=MagicMock())
+        turn = create_sample_batch(qa_id="q1")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check_logprob_binary.side_effect = LogprobsNotSupportedError("no logprobs")
+
+            with pytest.raises(LogprobsNotSupportedError):
+                strategy.score(turn, [], "role")
+
+    def test_falls_back_with_warning(self):
+        fallback = make_mock_strategy([0.0])
+        strategy = LLMJudgeStrategy(model=MagicMock(), fallback=fallback)
+        turn = create_sample_batch(qa_id="q1")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check_logprob_binary.side_effect = LogprobsNotSupportedError("no logprobs")
+
+            with pytest.warns(RuntimeWarning):
+                score = strategy.score(turn, [], "role")
+
+        assert score == 0.0
+        fallback.score.assert_called_once_with(turn, [], "role")
+
+    def test_fallback_is_sticky(self):
+        fallback = make_mock_strategy([0.0, 1.0])
+        strategy = LLMJudgeStrategy(model=MagicMock(), fallback=fallback)
+        turn = create_sample_batch(qa_id="q1")
+
+        with patch("gaussia.metrics.role_adherence.Judge") as mock_judge_class:
+            mock_judge = MagicMock()
+            mock_judge_class.return_value = mock_judge
+            mock_judge.check_logprob_binary.side_effect = LogprobsNotSupportedError("no logprobs")
+
+            with pytest.warns(RuntimeWarning):
+                strategy.score(turn, [], "role")
+            strategy.score(turn, [], "role")
+
+        assert mock_judge.check_logprob_binary.call_count == 1
+        assert fallback.score.call_count == 2
