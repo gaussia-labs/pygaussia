@@ -1,14 +1,16 @@
 """Role adherence metric for evaluating whether an AI assistant adheres to its defined role."""
 
+import warnings
 from abc import ABC, abstractmethod
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from gaussia.core import Gaussia, Retriever
+from gaussia.core.exceptions import LogprobsNotSupportedError
 from gaussia.llm import Judge
 from gaussia.llm.prompts import role_adherence_judge_system_prompt
 from gaussia.schemas import Batch, IterationLevel
-from gaussia.schemas.role_adherence import RoleAdherenceMetric, RoleAdherenceTurn
+from gaussia.schemas.role_adherence import RoleAdherenceJudgeOutput, RoleAdherenceMetric, RoleAdherenceTurn
 from gaussia.statistical import FrequentistMode, StatisticalMode
 
 
@@ -16,10 +18,10 @@ class ScoringStrategy(ABC):
     """Abstract strategy for scoring per-turn role adherence.
 
     Concrete implementations score a single turn against the role definition.
-    The current implementation is `LLMJudgeStrategy` (LLM-as-judge with
-    logprob-based scoring). Deterministic strategies (e.g. embedding similarity,
-    rule-based) are tracked as future work — see the paper for evaluated
-    deterministic baselines.
+    Current implementations are `LLMJudgeStrategy` (logprob-based) and
+    `StructuredOutputJudgeStrategy` (structured-output). Deterministic
+    strategies (e.g. embedding similarity, rule-based) are tracked as future
+    work — see the paper for evaluated deterministic baselines.
     """
 
     @abstractmethod
@@ -41,7 +43,61 @@ class ScoringStrategy(ABC):
         """
 
 
-class LLMJudgeStrategy(ScoringStrategy):
+class LLMScoringStrategy(ScoringStrategy):
+    """Shared base for LLM-judge scoring strategies.
+
+    Holds the model and the prompt-data assembly (history formatting and
+    template variables) common to every LLM-judge strategy.
+    """
+
+    def __init__(self, model: BaseChatModel, verbose: bool = False):
+        self.model = model
+        self.verbose = verbose
+
+    def _judge_data(self, turn: Batch, history: list[Batch], chatbot_role: str) -> dict:
+        return {
+            "chatbot_role": chatbot_role,
+            "history": self._format_history(history),
+            "query": turn.query,
+            "assistant_response": turn.assistant,
+        }
+
+    @staticmethod
+    def _format_history(history: list[Batch]) -> str:
+        if not history:
+            return "No prior conversation."
+        lines = []
+        for turn in history:
+            lines.append(f"User: {turn.query}")
+            lines.append(f"Assistant: {turn.assistant}")
+        return "\n".join(lines)
+
+
+class StructuredOutputJudgeStrategy(LLMScoringStrategy):
+    """Scoring strategy that uses an LLM judge with structured output.
+
+    Asks the judge for a structured YES/NO verdict via `Judge.check()` and
+    maps it to a binary {0.0, 1.0} adherence score. Works with any provider
+    (no logprobs required), so it doubles as the fallback for
+    `LLMJudgeStrategy` when logprobs are unavailable.
+
+    Args:
+        model: LangChain BaseChatModel.
+        verbose: Enable verbose logging on the underlying Judge.
+    """
+
+    def score(self, turn: Batch, history: list[Batch], chatbot_role: str) -> float:
+        judge = Judge(model=self.model, use_structured_output=True, verbose=self.verbose)
+        _, result = judge.check(
+            role_adherence_judge_system_prompt,
+            turn.query,
+            self._judge_data(turn, history, chatbot_role),
+            output_schema=RoleAdherenceJudgeOutput,
+        )
+        return 1.0 if isinstance(result, RoleAdherenceJudgeOutput) and result.adherent else 0.0
+
+
+class LLMJudgeStrategy(LLMScoringStrategy):
     """Scoring strategy that uses an LLM judge with logprob-based scoring.
 
     Asks the judge a binary YES/NO question and derives a continuous
@@ -49,16 +105,22 @@ class LLMJudgeStrategy(ScoringStrategy):
     `Judge.check_logprob_binary()`.
 
     Args:
-        model: LangChain BaseChatModel. Must be a provider that exposes
-            logprobs (OpenAI, Azure OpenAI, Ollama, LiteLLM, HF TGI via
-            BaseChatOpenAI). Anthropic/Gemini/Bedrock will raise
-            LogprobsNotSupportedError on first invocation.
+        model: LangChain BaseChatModel. Providers that expose logprobs
+            (OpenAI, Azure OpenAI, Ollama, LiteLLM, HF TGI via BaseChatOpenAI)
+            use the logprob path directly. Providers that do not
+            (Anthropic/Gemini/Bedrock) fall back to `fallback` if one is
+            given; otherwise the first invocation raises
+            LogprobsNotSupportedError.
         temperature: Forwarded to the judge. Default 1.0 follows the
             paper to preserve first-token distribution calibration. Pass
             None to inherit the model's own configured temperature.
         top_logprobs: Number of top tokens to retrieve per position. Default
             10 matches the paper.
         verbose: Enable verbose logging on the underlying Judge.
+        fallback: Strategy to use when the provider does not expose logprobs.
+            Pass `StructuredOutputJudgeStrategy(model)` to degrade gracefully
+            instead of raising. Once the fallback triggers, it is reused for
+            the rest of the run to avoid repeating the failed logprob call.
     """
 
     def __init__(
@@ -67,36 +129,39 @@ class LLMJudgeStrategy(ScoringStrategy):
         temperature: float | None = 1.0,
         top_logprobs: int = 10,
         verbose: bool = False,
+        fallback: ScoringStrategy | None = None,
     ):
-        self.model = model
+        super().__init__(model, verbose)
         self.temperature = temperature
         self.top_logprobs = top_logprobs
-        self.verbose = verbose
+        self.fallback = fallback
+        self._fell_back = False
 
     def score(self, turn: Batch, history: list[Batch], chatbot_role: str) -> float:
-        judge = Judge(model=self.model, verbose=self.verbose)
-        score, _ = judge.check_logprob_binary(
-            role_adherence_judge_system_prompt,
-            turn.query,
-            {
-                "chatbot_role": chatbot_role,
-                "history": self._format_history(history),
-                "query": turn.query,
-                "assistant_response": turn.assistant,
-            },
-            top_logprobs=self.top_logprobs,
-            temperature=self.temperature,
-        )
-        return score
+        if self._fell_back and self.fallback is not None:
+            return self.fallback.score(turn, history, chatbot_role)
 
-    def _format_history(self, history: list[Batch]) -> str:
-        if not history:
-            return "No prior conversation."
-        lines = []
-        for turn in history:
-            lines.append(f"User: {turn.query}")
-            lines.append(f"Assistant: {turn.assistant}")
-        return "\n".join(lines)
+        judge = Judge(model=self.model, verbose=self.verbose)
+        try:
+            score, _ = judge.check_logprob_binary(
+                role_adherence_judge_system_prompt,
+                turn.query,
+                self._judge_data(turn, history, chatbot_role),
+                top_logprobs=self.top_logprobs,
+                temperature=self.temperature,
+            )
+        except LogprobsNotSupportedError:
+            if self.fallback is None:
+                raise
+            warnings.warn(
+                f"Provider {type(self.model).__name__} does not expose logprobs; "
+                f"falling back to structured-output scoring for the rest of this run.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self._fell_back = True
+            return self.fallback.score(turn, history, chatbot_role)
+        return score
 
 
 class RoleAdherence(Gaussia):
