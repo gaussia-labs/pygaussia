@@ -1,6 +1,81 @@
 # CHANGELOG
 
 
+## v1.0.0-b.3 (2026-06-02)
+
+### Documentation
+
+- **role-adherence**: Add mdx docs and aws-lambda example
+  ([`0bed671`](https://github.com/gaussia-labs/pygaussia/commit/0bed671ffdac884072fbbc8ec606aacdb3d8f32a))
+
+- Add docs/metrics/role-adherence.mdx following the full docs template - Add
+  examples/role_adherence/aws-lambda/ with handler, run, Dockerfile, README and deploy scripts -
+  Register role-adherence optional dependency in pyproject.toml
+
+### Features
+
+- **metrics**: Add role adherence metric
+  ([`590f383`](https://github.com/gaussia-labs/pygaussia/commit/590f383914751449d6ff0ab24c8be311679ffff5))
+
+Implements RoleAdherence(R, T) = (1/n) Σᵢ adhere(tᵢ, T<i, R) from the Gaussia role adherence paper.
+  Evaluates per-turn role compliance using an LLM judge with full conversation history as context,
+  without ground truth.
+
+- Add RoleAdherence metric with LLMJudgeStrategy (binary + continuous modes) - Add RoleAdherenceTurn
+  / RoleAdherenceMetric output schemas - Add RoleAdherenceJudgeOutput to llm/schemas.py - Add binary
+  and continuous system prompts for the role adherence judge - Fix judge._check_regex: escape JSON
+  schema braces for ChatPromptTemplate - Fix judge._extract_json: fallback bare-JSON extraction +
+  comma repair - Add chatbot_role optional field to Dataset schema - Add 25 unit tests covering
+  batch, binary/continuous, strict/threshold modes - Add Jupyter notebook example with FinTrack
+  dataset (2 sessions)
+
+- **role-adherence**: Structured-output fallback when provider lacks logprobs
+  ([`b79c586`](https://github.com/gaussia-labs/pygaussia/commit/b79c586397337d77e06ff6c679ddbdc1995f1f65))
+
+Adds StructuredOutputJudgeStrategy and an optional fallback on LLMJudgeStrategy: when the provider
+  does not expose logprobs, emit a warning and degrade to structured-output scoring instead of
+  raising. Addresses the #8 review request for a logprobs/structured-output choice.
+
+### Refactoring
+
+- **judge**: Add logprob-based scoring path
+  ([`2bcf2fa`](https://github.com/gaussia-labs/pygaussia/commit/2bcf2fa66599d0a5a279f2b1901cb4e7314aaa37))
+
+Add Judge.check_logprob_binary() implementing P(YES)/(P(YES)+P(NO)) scoring via first-token logprobs
+  with log-sum-exp aggregation across surface-form variants.
+
+- Provider capability registry: raise LogprobsNotSupportedError for providers known not to expose
+  logprobs (Anthropic, Gemini, Bedrock). No silent fallback to text-based scoring. - Raise
+  LogprobsExtractionError when neither positive nor negative tokens appear in top_logprobs. -
+  temperature exposed as parameter (default 1.0 per paper, None to inherit the model's own config).
+  - No changes to existing Judge.check() path; no metric migration.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- **llm**: Replace logprob provider allowlist with try/except on invocation
+  ([`92b0774`](https://github.com/gaussia-labs/pygaussia/commit/92b0774e6276b076ebbadfd1df846cdda125ea74))
+
+- **role-adherence**: Use logprob-based judge scoring
+  ([`565be17`](https://github.com/gaussia-labs/pygaussia/commit/565be17768c0a826bfdabae1c93f5cdaaa28520d))
+
+Migrates RoleAdherence to consume Judge.check_logprob_binary() from PR A. Replaces the previous
+  text-based judge call (model returns a JSON score plus textual reason) with a calibrated [0, 1]
+  score derived from the first-token YES/NO logprobs.
+
+Changes: - LLMJudgeStrategy: drop `binary` / `use_structured_output` / `strict` / JSON-clause
+  parameters. Expose `temperature` (default 1.0 per paper) and `top_logprobs` (default 10) —
+  forwarded to Judge.check_logprob_binary(). - ScoringStrategy.score() returns float (no reason).
+  The ABC is preserved to allow future deterministic strategies (paper evaluated several; out of
+  scope for this PR). - Drop `include_reason` from RoleAdherence and `reason` from RoleAdherenceTurn
+  / RoleAdherenceJudgeOutput. The logprob path does not produce reasoning; a second model call would
+  be required. - Replace `role_adherence_binary_system_prompt` and
+  `role_adherence_continuous_system_prompt` with a single `role_adherence_judge_system_prompt`
+  (YES/NO). - Update tests, mdx docs, aws-lambda example and Jupyter notebook to reflect the new API
+  and the provider-compatibility constraint (Anthropic/Gemini/Bedrock unsupported).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+
 ## v1.0.0-b.2 (2026-05-13)
 
 ### Bug Fixes
