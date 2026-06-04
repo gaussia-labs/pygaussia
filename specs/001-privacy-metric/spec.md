@@ -2,13 +2,20 @@
 
 **Feature Branch**: `001-privacy-metric`
 **Created**: 2026-05-28
-**Status**: Draft
+**Status**: Planned
+
+## Revision Note (post-approval corrections)
+
+The spec was approved and merged via PR #11. The changes in the plan-gate PR are **writing-error corrections, not scope changes** — as a rule we do not re-open approved specs, but factual mistakes are fixed and recorded here for traceability:
+
+1. **Corpus fact (substantive):** SC-001, SC-002 and US2 acceptance scenario #2 originally claimed the 100-turn files (`eval_*_100.txt`) reproduce `chatbot_v3_results.json`. That artifact was actually generated over the **500-turn** corpus (`corpus_samples = 4935`). Correctness verification is now defined via hand-computed `StubDetector` tests; the sandbox reproduction is an optional, opt-in integration check (SC-002a).
+2. **Housekeeping:** `Status` Draft → Planned; the `[NEEDS CLARIFICATION]` on the Implementation Issue resolved to N/A; FR-003 `set[str]` → `frozenset[str]` to match the data model.
 
 ## Paper Reference
 
 - **Paper**: `gaussia-labs/papers/papers/2026-05-privacy/`
 - **Paper PR**: gaussia-labs/papers#16
-- **Implementation Issue**: [NEEDS CLARIFICATION: issue not yet opened in gaussia-labs/pygaussia]
+- **Implementation Issue**: N/A — this metric is tracked through the SDD gate PRs on branch `001-privacy-metric` (spec → plan → tasks → code); no separate tracking issue is opened.
 
 ### Extracted from Paper
 
@@ -77,7 +84,7 @@ The same privacy engineer has several candidate detectors (Presidio, OpenMed, cu
 **Acceptance Scenarios**:
 
 1. **Given** three detectors with computable Scores `S1 > S2 > S3`, **When** `PrivacyRanker.run` is invoked over a shared corpus, **Then** the resulting `PrivacyRanking.results` list is ordered `[S1, S2, S3]` by `score_100` descending.
-2. **Given** the sandbox PR #10 corpus (`eval_tagged_100.txt` / `eval_untagged_100.txt`) and the same six detectors, **When** the ranker is run, **Then** the resulting per-detector numerical components match `chatbot_v3_results.json` within a 1e-6 relative tolerance for `score_100`, `r_final_100`, and per-class `f2`.
+2. **Given** the sandbox PR #10 500-turn corpus (`chatbot_conversations_500.txt` / `chatbot_conversations_tagged_500.txt`) and the same six real detectors, **When** the ranker is run under the optional integration test (`RUN_SANDBOX=1` + extras), **Then** the resulting per-detector numerical components match `chatbot_v3_results.json` within a 1e-6 relative tolerance for `score_100`, `r_final_100`, and per-class `f2`. (This is an opt-in check, not part of the default suite — see SC-002a.)
 3. **Given** a ranking output, **When** the user serialises it to JSON, **Then** the field names and structure match the contract consumed by the existing `panel_chatbot_v3.py` so that no changes to the diagnostic panel are required.
 
 ---
@@ -98,7 +105,7 @@ The same privacy engineer has several candidate detectors (Presidio, OpenMed, cu
 
 - **FR-002**: A `PrivacyRanker` metric MUST be implemented as a subclass of `Gaussia`, accepting a list of `PIIDetector` instances and emitting one `PrivacyRanking` in `self.metrics` containing the ordered per-detector `PrivacyMetric` results.
 
-- **FR-003**: A `PIIDetector` abstract base class MUST define `predict(text: str) -> list[Span]` and `supported_classes -> set[str]`. Concrete adapters for Microsoft Presidio and HuggingFace token-classification pipelines MUST be provided.
+- **FR-003**: A `PIIDetector` abstract base class MUST define `predict(text: str) -> list[Span]` and `supported_classes -> frozenset[str]`. Concrete adapters for Microsoft Presidio and HuggingFace token-classification pipelines MUST be provided.
 
 - **FR-004**: A `PrivacyDomainConfig` Pydantic model MUST capture the domain taxonomy `C_d`, the criticality weights `w_{c,d}`, and the severity weights `ρ_{c,d}`, with validators enforcing that both weight maps sum to `1.0 ± 1e-9` and that every class appearing in the weights also appears in the taxonomy.
 
@@ -164,9 +171,11 @@ The same privacy engineer has several candidate detectors (Presidio, OpenMed, cu
 
 ## Success Criteria
 
-- **SC-001**: Running `Privacy.run` on the sandbox 100-turn corpus (`eval_tagged_100.txt` + `eval_untagged_100.txt`) with each of the six sandbox detectors reproduces the corresponding entry in `chatbot_v3_results.json` for `score_100`, `r_final_100`, `coverage`, `penalty_fn`, and every per-class `f2` within `1e-6` relative tolerance.
+- **SC-001**: Every formula component is verified with a deterministic `StubDetector` whose predictions are fixed by the test. For a hand-constructed corpus and detector, the emitted `PrivacyMetric` reproduces values computed by hand from the paper's formulas — per-class `f2`, `detection_score`, `coverage`, `penalty_fn`, `r1_weakest_class_risk`, `r2_systemic_risk`, `r_final`, and `score_100` — within `1e-9`. A multi-class fixture reproduces the paper's worked example (`Score_100 = 28.36`) at reduced scale.
 
-- **SC-002**: Running `PrivacyRanker.run` over the same corpus and the same six detectors produces a `PrivacyRanking` whose detector order matches the order obtained by sorting the sandbox JSON entries by `score_100` descending.
+- **SC-002**: `PrivacyRanker.run` with multiple `StubDetector`s whose component scores are predetermined emits a `PrivacyRanking` ordered by `score_100` descending, with failed detectors at the tail and `winning_detector == results[0].name`.
+
+- **SC-002a** (optional, opt-in): Reproducing the PR #10 sandbox artifact `chatbot_v3_results.json` — which was generated over the **500-turn** corpus (`chatbot_conversations_500.txt` / `chatbot_conversations_tagged_500.txt`, `corpus_samples = 4935`) with the six real detectors — is covered by an integration test gated behind `RUN_SANDBOX=1` and the optional extras. It is NOT part of the default `uv run pytest` run. The 100-turn `eval_*_100.txt` files do not correspond to this JSON and are not used as a baseline.
 
 - **SC-003**: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy src/gaussia` all pass without errors on the resulting branch.
 
