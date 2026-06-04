@@ -3,7 +3,6 @@ from functools import partial
 from typing import Any
 
 import requests
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from gaussia.schemas.bias import LLMGuardianProvider, LLMGuardianProviderInfer
@@ -21,9 +20,21 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
         max_tokens: int = 5,
         **kwargs,
     ):
-        super().__init__(model, api_key, url, temperature, safe_token, unsafe_token, max_tokens, **kwargs)
+        super().__init__(
+            model=model,
+            tokenizer=AutoTokenizer.from_pretrained(model),
+            api_key=api_key,
+            url=url,
+            temperature=temperature,
+            safe_token=safe_token,
+            unsafe_token=unsafe_token,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
 
-    def _parse_output(self, output: Any, input_len):
+    def _parse_output(self, output: Any, input_len: int) -> tuple[bool, float]:
+        import torch
+
         nlogprobs = 20
         is_bias, prob_of_bias = False, None
 
@@ -44,7 +55,9 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
 
         return is_bias, prob_of_bias.item()
 
-    def _get_probabilities(self, logprobs):
+    def _get_probabilities(self, logprobs: list) -> Any:
+        import torch
+
         safe_token_prob = 1e-50
         unsafe_token_prob = 1e-50
         for gen_token_i in logprobs:
@@ -61,9 +74,12 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
         )
 
     def infer(self, prompt: partial) -> LLMGuardianProviderInfer:
+        import torch
+
         model = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
         prompt = partial(prompt, return_tensors="pt")
-        input_ids = prompt().to(self.model.device)
+        model_device = next(model.parameters()).device
+        input_ids = prompt().to(model_device)
         input_len = input_ids.shape[1]
         model.eval()
 
@@ -92,13 +108,21 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
         unsafe_token: str = "No",
         max_tokens: int = 5,
         logprobs: bool = False,
+        overrides: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(
             model, tokenizer, api_key, url, temperature, safe_token, unsafe_token, max_tokens, logprobs, **kwargs
         )
-        ## We can use chat completions if we want to use the model in a chat format
-        self.chat_completions = "chat_completions" in kwargs
+        self._overrides: dict[str, Any] = overrides if overrides is not None else {}
+        self.chat_completions = bool(kwargs.get("chat_completions", False))
+
+    def _endpoint(self, path: str) -> str:
+        base_url = (self.url or "").rstrip("/")
+        versioned_path = path.lstrip("/")
+        if base_url.endswith("/v1"):
+            return f"{base_url}/{versioned_path}"
+        return f"{base_url}/v1/{versioned_path}"
 
     def _parse_guardian_response(self, response_json):
         if "error" in response_json or "choices" not in response_json:
@@ -107,6 +131,8 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
         prob_token = 1.0
         if "message" in choice:
             message_content = choice["message"]["content"]
+            if message_content is None:
+                return False, 1.0
             is_biased = self.unsafe_token in message_content
         else:
             is_biased = self.unsafe_token in choice["text"]
@@ -118,10 +144,10 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
 
         return is_biased, prob_token
 
-    def _with_chat_completions(self, prompt: partial) -> partial:
+    def _with_chat_completions(self, prompt: partial) -> dict[str, Any]:
         messages = [{"role": "user", "content": partial(prompt, tokenize=False)()}]
         response = requests.post(
-            f"{self.url}/v1/chat/completions",
+            self._endpoint("chat/completions"),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",
@@ -132,16 +158,15 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
                 "logprobs": self.logprobs,
+                **self._overrides,
             },
         )
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
-    def _with_completions(self, prompt: partial) -> partial:
-        """
-        This might be sooner or later be deprecated by openai's chat completions
-        """
+    def _with_completions(self, prompt: partial) -> dict[str, Any]:
         response = requests.post(
-            f"{self.url}/v1/completions",
+            self._endpoint("completions"),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",
@@ -152,9 +177,11 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
                 "logprobs": self.logprobs,
+                **self._overrides,
             },
         )
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def infer(self, prompt: partial) -> LLMGuardianProviderInfer:
         if self.chat_completions:

@@ -2,8 +2,9 @@
 
 import json
 import logging
+import math
 import re
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from langchain.agents import create_agent
 from langchain.agents.factory import ProviderStrategy
@@ -11,9 +12,13 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
+from gaussia.core.exceptions import LogprobsExtractionError, LogprobsNotSupportedError
 from gaussia.utils.logging import VerboseLogger
 
 T = TypeVar("T", bound=BaseModel)
+
+_DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes", " yes")
+_DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
 
 
 class Judge:
@@ -84,6 +89,9 @@ class Judge:
 
     def _render_system_prompt(self, system_prompt: str, data: dict) -> str:
         return system_prompt.format_map(data)
+
+    def _escape_prompt_template(self, prompt: str) -> str:
+        return prompt.replace("{", "{{").replace("}", "}}")
 
     def _get_json_schema_for_prompt(self, schema: type[BaseModel]) -> str:
         schema_json = schema.model_json_schema()
@@ -156,16 +164,19 @@ Do not include any additional text after the JSON.
         data: dict,
         output_schema: type[BaseModel] | None = None,
     ) -> tuple[str, dict | None]:
+        rendered_system_prompt = self._render_system_prompt(system_prompt, data)
         if output_schema:
             schema_instruction = self._get_json_schema_for_prompt(output_schema)
-            enhanced_prompt = system_prompt + schema_instruction
+            enhanced_prompt = rendered_system_prompt + schema_instruction
         else:
-            enhanced_prompt = system_prompt
+            enhanced_prompt = rendered_system_prompt
+
+        escaped_prompt = self._escape_prompt_template(enhanced_prompt)
 
         self.chat_history.append(("human", query))
-        prompt = ChatPromptTemplate.from_messages([("system", enhanced_prompt), *self.chat_history])
+        prompt = ChatPromptTemplate.from_messages([("system", escaped_prompt), *self.chat_history])
         chain = prompt | self.model
-        response = chain.invoke(data)
+        response = chain.invoke({})
         content = str(response.content)
         reasoning = response.additional_kwargs.get("reasoning_content", "")
         json_data = self._extract_json(content)
@@ -176,9 +187,94 @@ Do not include any additional text after the JSON.
         match = re.search(pattern, text, re.DOTALL)
         if match:
             try:
-                return json.loads(match.group(1).strip())
+                result = json.loads(match.group(1).strip())
+                assert isinstance(result, dict)
+                return result
             except json.JSONDecodeError:
                 logging.exception("[FAIR FORGE/JUDGE] JSON decode error")
                 return None
+        decoder = json.JSONDecoder()
+        for start in (match.start() for match in re.finditer(r"\{", text)):
+            try:
+                result, _end = decoder.raw_decode(text[start:])
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                continue
         logging.error(f"[FAIR FORGE/JUDGE] No JSON found between {self.bos_json_clause} and {self.eos_json_clause}")
         return None
+
+    def check_logprob_binary(
+        self,
+        system_prompt: str,
+        query: str,
+        data: dict,
+        positive_tokens: tuple[str, ...] = _DEFAULT_POSITIVE_TOKENS,
+        negative_tokens: tuple[str, ...] = _DEFAULT_NEGATIVE_TOKENS,
+        top_logprobs: int = 10,
+        temperature: float | None = 1.0,
+    ) -> tuple[float, dict]:
+        """Score a binary YES/NO judgment via first-token logprobs.
+
+        Returns P(positive) / (P(positive) + P(negative)) aggregated across
+        surface-form variants with log-sum-exp.
+
+        Args:
+            temperature: passed to model.bind() to control the first-token
+                distribution. Default 1.0 follows the paper — at lower values
+                the distribution sharpens and the score loses calibration
+                (only the YES/NO ranking survives). Pass None to inherit
+                whatever temperature the underlying model was configured with.
+
+        Requires a sufficiently capable model — see paper for AUC by model size.
+
+        Raises:
+            LogprobsNotSupportedError: provider returned an error when logprobs
+                were requested.
+            LogprobsExtractionError: neither positive nor negative tokens appear
+                in the top_logprobs of the first generated token.
+        """
+        rendered_system = self._render_system_prompt(system_prompt, data)
+        bind_kwargs: dict[str, Any] = {"logprobs": True, "top_logprobs": top_logprobs}
+        if temperature is not None:
+            bind_kwargs["temperature"] = temperature
+        try:
+            bound = self.model.bind(**bind_kwargs)
+            response = bound.invoke(
+                [
+                    ("system", rendered_system),
+                    ("human", query),
+                ]
+            )
+        except Exception as e:
+            raise LogprobsNotSupportedError(
+                f"Provider {type(self.model).__name__} returned an error when logprobs were requested. "
+                f"Use a provider that exposes logprobs or call Judge.check() instead."
+            ) from e
+
+        metadata: dict = getattr(response, "response_metadata", {}) or {}
+        content_entries: list = metadata.get("logprobs", {}).get("content", []) or []
+        top_lp: list[dict[str, Any]] = content_entries[0].get("top_logprobs", []) if content_entries else []
+
+        log_p_pos = self._aggregate_logprobs(top_lp, positive_tokens)
+        log_p_neg = self._aggregate_logprobs(top_lp, negative_tokens)
+
+        if log_p_pos == -math.inf and log_p_neg == -math.inf:
+            raise LogprobsExtractionError(
+                f"Neither positive {positive_tokens} nor negative {negative_tokens} "
+                f"tokens appeared in top_{top_logprobs}. Observed tokens: "
+                f"{[entry.get('token') for entry in top_lp]}"
+            )
+
+        score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
+        return score, {"top_logprobs": top_lp}
+
+    @staticmethod
+    def _aggregate_logprobs(top_logprobs: list[dict[str, Any]], target_tokens: tuple[str, ...]) -> float:
+        matches: list[float] = [
+            float(entry["logprob"]) for entry in top_logprobs if entry.get("token") in target_tokens
+        ]
+        if not matches:
+            return -math.inf
+        max_lp = max(matches)
+        return max_lp + math.log(sum(math.exp(lp - max_lp) for lp in matches))

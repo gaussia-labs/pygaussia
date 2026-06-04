@@ -1,0 +1,20 @@
+# LLM providers for dynamic connector support
+# All providers are included to support runtime selection via connector.class_path
+#
+# Pin langchain versions to avoid compatibility issues
+langchain-core>=0.3.0,<0.4.0
+
+# Pin tiktoken to version with pre-built wheels (avoids Rust compiler requirement)
+tiktoken>=0.7.0,<0.8.0
+
+# Groq - langchain_groq.chat_models.ChatGroq
+langchain-groq>=0.2.0,<0.3.0
+
+# OpenAI - langchain_openai.chat_models.ChatOpenAI
+langchain-openai>=0.2.0,<0.3.0
+
+# Google Gemini - langchain_google_genai.chat_models.ChatGoogleGenerativeAI
+langchain-google-genai>=2.0.0,<3.0.0
+
+# Ollama - langchain_ollama.chat_models.ChatOllama
+langchain-ollama>=0.2.0,<0.3.0

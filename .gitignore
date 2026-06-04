@@ -1,4 +1,5 @@
 .DS_Store
+NOTAS_PR_PRIVADO.md
 
 # Virtual environments
 venv/
@@ -48,3 +49,7 @@ coverage.xml
 *.cover
 .pytest_cache/
 .ruff_cache/
+
+# Local Claude Code context (not tracked in git)
+.claude_context.md
+/specs

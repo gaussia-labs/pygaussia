@@ -56,7 +56,7 @@ class BestOf(Gaussia):
         self.bos_json_clause = bos_json_clause
         self.eos_json_clause = eos_json_clause
         self.criteria = criteria
-        self._session_kings = {}
+        self._session_kings: dict[tuple[str, ...], tuple[str, str, list[BestOfContest]]] = {}
         self._judge = Judge(
             model=self.model,
             use_structured_output=self.use_structured_output,
@@ -108,7 +108,12 @@ class BestOf(Gaussia):
         if result is None:
             raise ValueError(f"[FAIR FORGE/BESTOF] No valid response from judge for {king_id} vs {assistant_id}")
 
-        if self.use_structured_output:
+        winner: str = ""
+        confidence: float | None = None
+        verdict: str | None = None
+        result_reasoning: dict | None = None
+
+        if isinstance(result, BestOfJudgeOutput):
             winner = result.winner
             confidence = result.confidence
             verdict = result.verdict

@@ -1,7 +1,7 @@
 from functools import partial
 from typing import Optional
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core import Guardian
 from gaussia.schemas.bias import GuardianBias, GuardianLLMConfig, ProtectedAttribute
@@ -28,7 +28,7 @@ class IBMGranite(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,
@@ -38,6 +38,8 @@ class IBMGranite(Guardian):
             safe_token="No",
             logprobs=config.logprobs,
             unsafe_token="Yes",
+            chat_completions=config.chat_completions,
+            overrides=config.overrides,
         )
 
     def is_biased(
@@ -82,7 +84,7 @@ class LLamaGuard(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,
@@ -93,6 +95,7 @@ class LLamaGuard(Guardian):
             unsafe_token="unsafe",
             logprobs=config.logprobs,
             chat_completions=True,
+            overrides=config.overrides,
         )
 
     def is_biased(

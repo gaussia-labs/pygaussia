@@ -14,7 +14,7 @@ from gaussia.core.base import Gaussia
 from gaussia.core.embedder import Embedder  # noqa: TC001
 from gaussia.extractors import EmbeddingGroupExtractor
 from gaussia.loaders import HurtlexLoader
-from gaussia.schemas.toxicity import ToxicityMetric
+from gaussia.schemas.toxicity import GroupProfiling, ToxicityMetric
 from gaussia.statistical import FrequentistMode, StatisticalMode
 
 if TYPE_CHECKING:
@@ -142,7 +142,7 @@ class Toxicity(Gaussia):
         self.logger.debug(f"Group extractor: {self.group_extractor}")
 
         self._accumulated_metadata: list[dict] = []
-        self._accumulated_embeddings: list[list] = []
+        self._accumulated_embeddings: list[np.ndarray] = []
         self._accumulated_sentiments: list[float] = []
         self._accumulated_group_dets: list[dict] = []
         self._accumulated_toxic_words: list[int] = []
@@ -242,15 +242,16 @@ class Toxicity(Gaussia):
                     bootstrap_sample = np.random.choice(group_sents, size=len(group_sents), replace=True)
                     bootstrap_means.append(float(np.mean(bootstrap_sample)))
 
-                bootstrap_means = np.array(bootstrap_means)
+                bootstrap_means_arr = np.array(bootstrap_means)
                 S_i_distributions[group] = {
-                    "samples": bootstrap_means,
-                    "mean": float(np.mean(bootstrap_means)),
+                    "samples": bootstrap_means_arr,
+                    "mean": float(np.mean(bootstrap_means_arr)),
                 }
 
         asb = self.statistical_mode.dispersion_metric(S_i_distributions, center="mean")
 
-        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, " f"CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")
+        assert isinstance(asb, dict)
+        self.logger.info(f"ASB (Bayesian): mean={asb['mean']:.4f}, CI=[{asb['ci_low']:.4f}, {asb['ci_high']:.4f}]")
         return asb
 
     # -------------------------
@@ -332,10 +333,10 @@ class Toxicity(Gaussia):
     def batch(
         self,
         session_id: str,
+        context: str,
         assistant_id: str,
         batch: list[Batch],
         language: str | None = "english",
-        context: str = "",
     ):
         assistant_answers = [i.assistant for i in batch if i.assistant]
         if not assistant_answers:
@@ -495,17 +496,18 @@ class Toxicity(Gaussia):
         labels = clusterer.fit_predict(clusterable_embeddings if self.toxicity_cluster_use_latent_space else embeddings)
 
         # Cluster toxicity score
-        score_cluster: dict[float, float] = {}
+        score_cluster: dict[int, float] = {}
         for lbl in set(labels):
+            lbl_int = int(lbl)
             lbl_toxic_words = sum(
                 tw for label, tw in zip(labels, self._accumulated_toxic_words, strict=False) if label == lbl
             )
             lbl_total_words = sum(
                 tw for label, tw in zip(labels, self._accumulated_total_words, strict=False) if label == lbl
             )
-            score_cluster[lbl] = (lbl_toxic_words / lbl_total_words) if lbl_total_words else 0.0
+            score_cluster[lbl_int] = (lbl_toxic_words / lbl_total_words) if lbl_total_words else 0.0
 
-        cluster_scores_str = {int(k) if isinstance(k, np.integer) else k: float(v) for k, v in score_cluster.items()}
+        cluster_scores_str: dict[float, float] = {float(k): v for k, v in score_cluster.items()}
 
         umap_serializable = (
             clusterable_embeddings.tolist()
@@ -529,6 +531,6 @@ class Toxicity(Gaussia):
             assistant_id=global_assistant,
             cluster_profiling=cluster_scores_str,
             assistant_space=assistant_space,
-            group_profiling=group_profiling,
+            group_profiling=GroupProfiling.model_validate(group_profiling),
         )
         self.metrics.append(toxicity_metric)

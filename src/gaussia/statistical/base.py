@@ -1,6 +1,7 @@
 """Statistical mode abstract base class."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -16,7 +17,10 @@ class StatisticalMode(ABC):
 
     @abstractmethod
     def distribution_divergence(
-        self, observed: dict[str, int | float], reference: dict[str, float], divergence_type: str = "total_variation"
+        self,
+        observed: Mapping[str, int | float],
+        reference: Mapping[str, float],
+        divergence_type: str = "total_variation",
     ) -> float | dict[str, Any]:
         """
         Compute divergence between two probability distributions.
@@ -66,7 +70,7 @@ class StatisticalMode(ABC):
 
     @abstractmethod
     def dispersion_metric(
-        self, values: dict[str, float | dict[str, Any]], center: str = "mean"
+        self, values: Mapping[str, float | dict[str, Any]], center: str = "mean"
     ) -> float | dict[str, Any]:
         """
         Compute dispersion/spread of values around a center.

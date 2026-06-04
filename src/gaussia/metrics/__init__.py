@@ -9,6 +9,12 @@ Import metrics directly from their modules:
     from gaussia.metrics.best_of import BestOf
     from gaussia.metrics.agentic import Agentic
     from gaussia.metrics.regulatory import Regulatory
+    from gaussia.metrics.role_adherence import (
+        RoleAdherence,
+        LLMJudgeStrategy,
+        StructuredOutputJudgeStrategy,
+        ScoringStrategy,
+    )
     from gaussia.metrics.vision import VisionHallucination, VisionSimilarity
 """
 
@@ -19,7 +25,11 @@ __all__ = [
     "Context",
     "Conversational",
     "Humanity",
+    "LLMJudgeStrategy",
     "Regulatory",
+    "RoleAdherence",
+    "ScoringStrategy",
+    "StructuredOutputJudgeStrategy",
     "Toxicity",
     "VisionHallucination",
     "VisionSimilarity",

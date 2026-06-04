@@ -3,9 +3,10 @@
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from functools import partial
+from typing import Any
 
-from pydantic import BaseModel
-from transformers import AutoTokenizer
+from pydantic import BaseModel, Field
+from transformers import PreTrainedTokenizerBase
 
 from .metrics import BaseMetric
 
@@ -75,7 +76,7 @@ class LLMGuardianProvider(ABC):
     def __init__(
         self,
         model: str,
-        tokenizer: AutoTokenizer,
+        tokenizer: PreTrainedTokenizerBase,
         api_key: str | None = None,
         url: str | None = None,
         temperature: float = 0.0,
@@ -104,8 +105,11 @@ class GuardianLLMConfig(BaseModel):
     """Configuration for LLM-based guardians."""
 
     model: str
+    tokenizer_model: str | None = None
     api_key: str | None = None
     url: str | None = None
     temperature: float
     logprobs: bool = False
+    chat_completions: bool = False
     provider: type[LLMGuardianProvider]
+    overrides: dict[str, Any] = Field(default_factory=dict)

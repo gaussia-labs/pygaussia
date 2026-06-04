@@ -1,8 +1,10 @@
 """Tests for Judge module."""
 
+import math
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from pydantic import BaseModel, Field
 
 from gaussia.llm.judge import Judge
@@ -295,11 +297,37 @@ class TestJudge:
 
         assert result == {"score": 0.7, "insight": "test"}
 
+    def test_check_with_schema_in_regex_mode_escapes_schema_braces(self):
+        """Test schema JSON braces are not treated as prompt variables."""
+        model = FakeListChatModel(responses=['```json\n{"score": 0.7, "insight": "test"}\n```'])
+        judge = Judge(model=model, use_structured_output=False)
+
+        _thought, result = judge.check(
+            "Context: {context}\nAssistant answer: {assistant_answer}",
+            "Query",
+            {"context": "retrieved context", "assistant_answer": "assistant response"},
+            output_schema=ContextJudgeOutput,
+        )
+
+        assert result == {"score": 0.7, "insight": "test"}
+
     def test_extract_json_basic(self, mock_model):
         """Test _extract_json with basic JSON."""
         judge = Judge(model=mock_model)
         result = judge._extract_json('some text ```json\n{"key": "value"}\n``` more text')
         assert result == {"key": "value"}
+
+    def test_extract_json_raw_object(self, mock_model):
+        """Test _extract_json accepts raw JSON without fences."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('{"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
+
+    def test_extract_json_object_with_prefix(self, mock_model):
+        """Test _extract_json accepts a JSON object embedded in prose."""
+        judge = Judge(model=mock_model)
+        result = judge._extract_json('Result: {"score": 0.97, "insight": "ok"}')
+        assert result == {"score": 0.97, "insight": "ok"}
 
     def test_extract_json_not_found(self, mock_model):
         """Test _extract_json when no JSON found."""
@@ -312,3 +340,156 @@ class TestJudge:
         judge = Judge(model=mock_model)
         result = judge._extract_json("```json\n{invalid}\n```")
         assert result is None
+
+
+def _make_fake_model(provider_name: str) -> MagicMock:
+    """Create a MagicMock whose class name matches a real provider class name."""
+    fake_cls = type(provider_name, (MagicMock,), {})
+    return fake_cls()
+
+
+class TestJudgeLogprob:
+    """Test suite for Judge.check_logprob_binary and its helpers."""
+
+    def test_check_logprob_binary_raises_when_provider_errors(self):
+        from gaussia.core.exceptions import LogprobsNotSupportedError
+
+        model = _make_fake_model("ChatAnthropic")
+        bound = MagicMock()
+        bound.invoke.side_effect = ValueError("logprobs not supported by this provider")
+        model.bind.return_value = bound
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsNotSupportedError):
+            judge.check_logprob_binary("p", "q", {})
+
+    @staticmethod
+    def _bind_response(model: MagicMock, top_logprobs_list: list[dict]) -> MagicMock:
+        response = MagicMock()
+        response.response_metadata = {"logprobs": {"content": [{"top_logprobs": top_logprobs_list}]}}
+        bound = MagicMock()
+        bound.invoke.return_value = response
+        model.bind.return_value = bound
+        return bound
+
+    def test_check_logprob_binary_extracts_yes_score(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.3},
+                {"token": "Maybe", "logprob": -5.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, raw = judge.check_logprob_binary("p", "q", {})
+
+        expected = 1.0 / (1.0 + math.exp(-2.3 - (-0.1)))
+        assert abs(score - expected) < 1e-9
+        assert abs(score - 0.9002) < 1e-3
+        assert raw["top_logprobs"][0]["token"] == "Yes"
+
+    def test_check_logprob_binary_aggregates_variants(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "YES", "logprob": -1.0},
+                {"token": "Yes", "logprob": -1.0},
+                {"token": "No", "logprob": -1.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, _ = judge.check_logprob_binary("p", "q", {})
+
+        log_p_pos = -1.0 + math.log(2)
+        log_p_neg = -1.0
+        expected = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
+        assert abs(score - expected) < 1e-9
+        assert score > 0.5
+
+    def test_check_logprob_binary_no_tokens_present_raises_extraction_error(self):
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Okay", "logprob": -0.01},
+                {"token": "Sure", "logprob": -3.0},
+            ],
+        )
+        judge = Judge(model=model)
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {})
+
+    def test_check_logprob_binary_one_side_missing(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "No", "logprob": -0.5},
+                {"token": "Maybe", "logprob": -3.0},
+            ],
+        )
+        judge = Judge(model=model)
+        score, _ = judge.check_logprob_binary("p", "q", {})
+        assert score == 0.0
+
+    def test_check_logprob_binary_binds_correct_params(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {})
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10, temperature=1.0)
+
+    def test_check_logprob_binary_custom_temperature(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {}, temperature=0.7)
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10, temperature=0.7)
+
+    def test_check_logprob_binary_temperature_none_inherits_model_config(self):
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_response(
+            model,
+            [
+                {"token": "Yes", "logprob": -0.1},
+                {"token": "No", "logprob": -2.0},
+            ],
+        )
+        judge = Judge(model=model)
+        judge.check_logprob_binary("p", "q", {}, temperature=None)
+
+        model.bind.assert_called_once_with(logprobs=True, top_logprobs=10)
+
+    def test_aggregate_logprobs_empty_returns_neg_inf(self):
+        assert Judge._aggregate_logprobs([], ("YES",)) == -math.inf
+
+    def test_aggregate_logprobs_logsumexp_correctness(self):
+        result = Judge._aggregate_logprobs(
+            [
+                {"token": "A", "logprob": -1.0},
+                {"token": "A", "logprob": -2.0},
+            ],
+            ("A",),
+        )
+        expected = math.log(math.exp(-1.0) + math.exp(-2.0))
+        assert abs(result - expected) < 1e-9
+        assert abs(result - (-0.6867)) < 1e-3
