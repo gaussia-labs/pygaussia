@@ -31,9 +31,7 @@ class _FakePipeline:
 
 
 def _make(entities=None) -> HuggingFacePIIDetector:
-    detector = HuggingFacePIIDetector(
-        name="hf", model_path="fake/model", domain_fit=0.7, regulatory_fit=0.6
-    )
+    detector = HuggingFacePIIDetector(name="hf", model_path="fake/model", domain_fit=0.7, regulatory_fit=0.6)
     detector._pipeline = _FakePipeline(entities or [])
     return detector
 
@@ -45,9 +43,11 @@ def test_supported_classes_canonicalised_and_filtered():
 
 
 def test_predict_canonicalises_entity_labels():
-    detector = _make([
-        {"entity_group": "EMAIL", "start": 0, "end": 9, "word": "john@x.io", "score": 0.95},
-    ])
+    detector = _make(
+        [
+            {"entity_group": "EMAIL", "start": 0, "end": 9, "word": "john@x.io", "score": 0.95},
+        ]
+    )
     spans = detector.predict("john@x.io")
     assert len(spans) == 1
     assert spans[0].label == "email_address"
