@@ -283,6 +283,10 @@ module = [
     "transformers.*",
     "langchain.*",
     "langchain_core.*",
+    "presidio_analyzer",
+    "presidio_analyzer.*",
+    "spacy",
+    "spacy.*",
 ]
 follow_imports = "skip"
 
@@ -294,10 +298,6 @@ module = [
     "umap.*",
     "interpreto.*",
     "scipy.*",
-    "presidio_analyzer",
-    "presidio_analyzer.*",
-    "spacy",
-    "spacy.*",
 ]
 ignore_missing_imports = true
 
