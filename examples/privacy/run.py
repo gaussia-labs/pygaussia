@@ -40,9 +40,13 @@ class RegexDetector(PIIDetector):
     def predict(self, text: str) -> list[Span]:
         spans: list[Span] = []
         for match in _EMAIL.finditer(text):
-            spans.append(Span(label="email_address", start=match.start(), end=match.end(), text=match.group(), score=0.99))
+            spans.append(
+                Span(label="email_address", start=match.start(), end=match.end(), text=match.group(), score=0.99)
+            )
         for match in _PHONE.finditer(text):
-            spans.append(Span(label="phone_number", start=match.start(), end=match.end(), text=match.group(), score=0.90))
+            spans.append(
+                Span(label="phone_number", start=match.start(), end=match.end(), text=match.group(), score=0.90)
+            )
         return spans
 
 

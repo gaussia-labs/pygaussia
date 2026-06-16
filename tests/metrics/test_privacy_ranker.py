@@ -22,18 +22,24 @@ def _domain() -> PrivacyDomainConfig:
 
 def _high() -> StubDetector:
     return StubDetector(
-        name="high", domain_fit=1.0, regulatory_fit=1.0,
+        name="high",
+        domain_fit=1.0,
+        regulatory_fit=1.0,
         classes_supported=frozenset({EMAIL, PERSON}),
-        predictions={QUERY: [
-            Span(label=EMAIL, start=0, end=6, text="a@b.co", score=1.0),
-            Span(label=PERSON, start=10, end=20, text="John Smith", score=1.0),
-        ]},
+        predictions={
+            QUERY: [
+                Span(label=EMAIL, start=0, end=6, text="a@b.co", score=1.0),
+                Span(label=PERSON, start=10, end=20, text="John Smith", score=1.0),
+            ]
+        },
     )
 
 
 def _mid() -> StubDetector:
     return StubDetector(
-        name="mid", domain_fit=1.0, regulatory_fit=1.0,
+        name="mid",
+        domain_fit=1.0,
+        regulatory_fit=1.0,
         classes_supported=frozenset({EMAIL, PERSON}),
         predictions={QUERY: [Span(label=EMAIL, start=0, end=6, text="a@b.co", score=1.0)]},
     )
@@ -41,8 +47,11 @@ def _mid() -> StubDetector:
 
 def _broken() -> StubDetector:
     return StubDetector(
-        name="broken", domain_fit=1.0, regulatory_fit=1.0,
-        classes_supported=frozenset({EMAIL, PERSON}), raises="down",
+        name="broken",
+        domain_fit=1.0,
+        regulatory_fit=1.0,
+        classes_supported=frozenset({EMAIL, PERSON}),
+        raises="down",
     )
 
 

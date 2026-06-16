@@ -114,23 +114,40 @@ class TestPrivacyMetricValidators:
 
     def test_class_metrics_keys_must_match_taxonomy(self):
         cm = ClassMetrics(
-            tp=1, fp=0, fn=0, precision=1.0, recall=1.0, f2=1.0, fn_rate=0.0,
-            criticality_weight=1.0, fn_severity_weight=1.0,
+            tp=1,
+            fp=0,
+            fn=0,
+            precision=1.0,
+            recall=1.0,
+            f2=1.0,
+            fn_rate=0.0,
+            criticality_weight=1.0,
+            fn_severity_weight=1.0,
         )
         with pytest.raises(ValidationError):
             _metric(class_metrics={"a": cm}, covered_domain_classes=["b"], missing_domain_classes=[])
 
     def test_failed_metric_skips_consistency_checks(self):
         metric = _metric(
-            name="broken", success=False, error="boom",
-            score=0.0, score_100=0.0, detection_score=0.0, coverage=0.0,
+            name="broken",
+            success=False,
+            error="boom",
+            score=0.0,
+            score_100=0.0,
+            detection_score=0.0,
+            coverage=0.0,
         )
         assert metric.success is False
         assert metric.interpretation == "Not suitable"
 
     def test_interpretation_recomputed_from_score(self):
         metric = _metric(
-            score=0.9, score_100=90.0, detection_score=0.9, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0,
+            score=0.9,
+            score_100=90.0,
+            detection_score=0.9,
+            coverage=1.0,
+            domain_fit=1.0,
+            regulatory_fit=1.0,
         )
         assert metric.interpretation == "Recommended"
         assert metric.r_final_100 == metric.r_final * 100.0
@@ -138,26 +155,38 @@ class TestPrivacyMetricValidators:
 
 class TestPrivacyRanking:
     def test_descending_order_enforced(self):
-        a = _metric(name="a", score=0.9, score_100=90.0, detection_score=0.9, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0)
-        b = _metric(name="b", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0)
+        a = _metric(
+            name="a", score=0.9, score_100=90.0, detection_score=0.9, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
+        )
+        b = _metric(
+            name="b", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
+        )
         PrivacyRanking(session_id="s", assistant_id="a", results=[a, b], winning_detector="a", iou_threshold=0.5)
         with pytest.raises(ValidationError):
             PrivacyRanking(session_id="s", assistant_id="a", results=[b, a], winning_detector="b", iou_threshold=0.5)
 
     def test_failed_entries_must_be_at_tail(self):
-        ok = _metric(name="ok", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0)
+        ok = _metric(
+            name="ok", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
+        )
         failed = _metric(name="bad", success=False, error="x")
         with pytest.raises(ValidationError):
-            PrivacyRanking(session_id="s", assistant_id="a", results=[failed, ok], winning_detector=None, iou_threshold=0.5)
+            PrivacyRanking(
+                session_id="s", assistant_id="a", results=[failed, ok], winning_detector=None, iou_threshold=0.5
+            )
 
     def test_winner_must_match_top(self):
-        ok = _metric(name="ok", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0)
+        ok = _metric(
+            name="ok", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
+        )
         with pytest.raises(ValidationError):
             PrivacyRanking(session_id="s", assistant_id="a", results=[ok], winning_detector="wrong", iou_threshold=0.5)
 
     def test_all_failed_has_no_winner(self):
         failed = _metric(name="bad", success=False, error="x")
-        ranking = PrivacyRanking(session_id="s", assistant_id="a", results=[failed], winning_detector=None, iou_threshold=0.5)
+        ranking = PrivacyRanking(
+            session_id="s", assistant_id="a", results=[failed], winning_detector=None, iou_threshold=0.5
+        )
         assert ranking.winning_detector is None
 
 

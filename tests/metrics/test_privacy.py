@@ -42,10 +42,10 @@ GT_SPANS = [
 ]
 
 PRED_SPANS = [
-    _span(PERSON, 8, 18, score=0.9),      # IoU 1.0 -> TP person
-    _span(PERSON, 8, 16, score=0.5),      # overlaps higher-score person -> dropped by NMS
-    _span(EMAIL, 22, 28, score=0.8),      # IoU 6/9 = 0.667 >= 0.5 -> TP email
-    _span(PHONE, 40, 43, score=0.7),      # IoU 3/8 = 0.375 < 0.5 -> FP phone, GT phone -> FN
+    _span(PERSON, 8, 18, score=0.9),  # IoU 1.0 -> TP person
+    _span(PERSON, 8, 16, score=0.5),  # overlaps higher-score person -> dropped by NMS
+    _span(EMAIL, 22, 28, score=0.8),  # IoU 6/9 = 0.667 >= 0.5 -> TP email
+    _span(PHONE, 40, 43, score=0.7),  # IoU 3/8 = 0.375 < 0.5 -> FP phone, GT phone -> FN
     _span("credit_card", 0, 5, score=0.95),  # out of domain -> filtered, not FP
 ]
 
@@ -187,7 +187,9 @@ class TestLatencyAndExclusions:
 
     def test_no_statistical_mode_parameter(self):
         detector = StubDetector(
-            name="s", domain_fit=1.0, regulatory_fit=1.0,
+            name="s",
+            domain_fit=1.0,
+            regulatory_fit=1.0,
             classes_supported=frozenset({EMAIL, PERSON, PHONE, SSN}),
             predictions={QUERY: PRED_SPANS},
         )
@@ -197,7 +199,9 @@ class TestLatencyAndExclusions:
 
     def test_detector_exception_propagates(self):
         detector = StubDetector(
-            name="boom", domain_fit=1.0, regulatory_fit=1.0,
+            name="boom",
+            domain_fit=1.0,
+            regulatory_fit=1.0,
             classes_supported=frozenset({EMAIL, PERSON, PHONE, SSN}),
             raises="backend exploded",
         )
@@ -214,9 +218,16 @@ def test_paper_worked_example_uses_five_factor_formula():
     det, cov, dfit, rfit, pen = 0.8231, 0.7273, 0.85, 0.80, 0.81
     score = det * cov * dfit * rfit * pen
     metric = PrivacyMetric(
-        session_id="s", assistant_id="a", name="presidio-healthcare",
-        detection_score=det, coverage=cov, domain_fit=dfit, regulatory_fit=rfit,
-        penalty_fn=pen, score=score, score_100=score * 100.0,
+        session_id="s",
+        assistant_id="a",
+        name="presidio-healthcare",
+        detection_score=det,
+        coverage=cov,
+        domain_fit=dfit,
+        regulatory_fit=rfit,
+        penalty_fn=pen,
+        score=score,
+        score_100=score * 100.0,
     )
     assert metric.score_100 == pytest.approx(32.97, abs=0.01)
     assert metric.score_100 != pytest.approx(28.36, abs=0.01)
@@ -227,7 +238,14 @@ def test_score_validator_catches_infra_factor():
     # Sanity: constructing a metric whose score smuggles in a sixth factor fails.
     with pytest.raises(ValidationError):
         PrivacyMetric(
-            session_id="s", assistant_id="a", name="x",
-            detection_score=1.0, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0,
-            penalty_fn=1.0, score=0.86, score_100=86.0,
+            session_id="s",
+            assistant_id="a",
+            name="x",
+            detection_score=1.0,
+            coverage=1.0,
+            domain_fit=1.0,
+            regulatory_fit=1.0,
+            penalty_fn=1.0,
+            score=0.86,
+            score_100=86.0,
         )
