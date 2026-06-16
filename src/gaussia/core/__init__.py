@@ -7,6 +7,7 @@ be imported directly:
 """
 
 from .base import Gaussia
+from .detector import PIIDetector
 from .embedder import Embedder
 from .exceptions import (
     GaussiaError,
@@ -33,6 +34,7 @@ __all__ = [
     "GuardianError",
     "LoaderError",
     "MetricError",
+    "PIIDetector",
     "Reranker",
     "Retriever",
     "RetrieverError",

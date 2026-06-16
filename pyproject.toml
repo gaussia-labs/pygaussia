@@ -92,6 +92,16 @@ regulatory = [
     "accelerate>=0.25.0",
 ]
 
+privacy-presidio = [
+    "presidio-analyzer>=2.2",
+    "spacy>=3.7",
+]
+
+privacy-huggingface = [
+    "transformers>=4.40",
+    "torch>=2.1",
+]
+
 explainability = [
     "interpreto>=0.1.0",
     "torch>=2.0.0",
@@ -247,6 +257,7 @@ line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.13"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -283,6 +294,10 @@ module = [
     "umap.*",
     "interpreto.*",
     "scipy.*",
+    "presidio_analyzer",
+    "presidio_analyzer.*",
+    "spacy",
+    "spacy.*",
 ]
 ignore_missing_imports = true
 
