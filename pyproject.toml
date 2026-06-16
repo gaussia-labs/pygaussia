@@ -286,7 +286,6 @@ module = [
     "presidio_analyzer",
     "presidio_analyzer.*",
     "spacy",
-    "spacy.*",
 ]
 follow_imports = "skip"
 

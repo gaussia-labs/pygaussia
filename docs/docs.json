@@ -53,7 +53,8 @@
               "metrics/best-of",
               "metrics/agentic",
               "metrics/vision",
-              "metrics/regulatory"
+              "metrics/regulatory",
+              "metrics/privacy"
             ]
           }
         ]
