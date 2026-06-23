@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from gaussia.metrics.privacy import Privacy
+from gaussia.schemas.common import Batch
 from gaussia.schemas.privacy import PrivacyDomainConfig, PrivacyMetric, Span, interpretation_for
 from tests.fixtures.privacy.corpus import batch, dataset, make_retriever
 from tests.fixtures.privacy.stub_detector import StubDetector
@@ -208,6 +209,31 @@ class TestLatencyAndExclusions:
         retriever = make_retriever([dataset("s1", [batch("q1", QUERY, GT_SPANS)])])
         with pytest.raises(RuntimeError, match="backend exploded"):
             Privacy.run(retriever, detector=detector, domain_config=_domain())
+
+
+class TestCorpusValidation:
+    """Invalid corpus data must fail fast rather than yield misleading metrics."""
+
+    def _detector(self) -> StubDetector:
+        return StubDetector(
+            name="stub",
+            domain_fit=1.0,
+            regulatory_fit=1.0,
+            classes_supported=frozenset({EMAIL, PERSON, PHONE, SSN}),
+            predictions={QUERY: PRED_SPANS},
+        )
+
+    def test_non_privacy_batch_turn_rejected(self):
+        plain = Batch(qa_id="q1", query=QUERY, assistant="", ground_truth_assistant="")
+        retriever = make_retriever([dataset("s1", [plain])])
+        with pytest.raises(TypeError, match="PrivacyBatch"):
+            Privacy.run(retriever, detector=self._detector(), domain_config=_domain())
+
+    def test_out_of_domain_ground_truth_label_rejected(self):
+        bad = batch("q1", QUERY, [_span("credit_card", 0, 5)])
+        retriever = make_retriever([dataset("s1", [bad])])
+        with pytest.raises(ValueError, match="outside the domain classes"):
+            Privacy.run(retriever, detector=self._detector(), domain_config=_domain())
 
 
 def test_paper_worked_example_uses_five_factor_formula():

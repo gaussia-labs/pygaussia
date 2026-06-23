@@ -86,6 +86,27 @@ class TestPrivacyDomainConfig:
         with pytest.raises(ValidationError):
             cfg.iou_threshold = 0.7
 
+    def test_weight_maps_immutable(self):
+        cfg = PrivacyDomainConfig(
+            classes=frozenset({"a", "b"}),
+            criticality_weights={"a": 0.5, "b": 0.5},
+            fn_severity_weights={"a": 0.3, "b": 0.7},
+        )
+        with pytest.raises(TypeError):
+            cfg.criticality_weights["a"] = 0.9
+        with pytest.raises(TypeError):
+            cfg.fn_severity_weights["a"] = 0.9
+
+    def test_weight_maps_serialise_to_plain_dicts(self):
+        cfg = PrivacyDomainConfig(
+            classes=frozenset({"a", "b"}),
+            criticality_weights={"a": 0.5, "b": 0.5},
+            fn_severity_weights={"a": 0.3, "b": 0.7},
+        )
+        dumped = cfg.model_dump(mode="json")
+        assert dumped["criticality_weights"] == {"a": 0.5, "b": 0.5}
+        assert isinstance(dumped["fn_severity_weights"], dict)
+
 
 class TestContributions:
     def test_detection_contribution_product_enforced(self):

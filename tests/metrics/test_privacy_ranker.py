@@ -1,5 +1,7 @@
 """Ranking tests for PrivacyRanker (T012)."""
 
+import pytest
+
 from gaussia.metrics.privacy import PrivacyRanker
 from gaussia.schemas.privacy import PrivacyDomainConfig, PrivacyRanking, Span
 from tests.fixtures.privacy.corpus import batch, dataset, make_retriever
@@ -88,3 +90,12 @@ def test_ranking_echoes_domain_metadata():
     ranking = _run([_high()])
     assert ranking.iou_threshold == 0.5
     assert sorted(ranking.domain_classes) == [EMAIL, PERSON]
+
+
+def test_invalid_corpus_fails_hard_not_per_detector():
+    """A corpus data error is not a detector failure: it must raise, not produce
+    a ranking with every detector marked failed."""
+    bad = batch("q", QUERY, [Span(label="credit_card", start=0, end=5, text="xxxxx")])
+    retriever = make_retriever([dataset("s", [bad])])
+    with pytest.raises(ValueError, match="outside the domain classes"):
+        PrivacyRanker.run(retriever, detectors=[_high(), _mid()], domain_config=_domain())

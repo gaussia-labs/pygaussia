@@ -7,13 +7,21 @@ are recomputed from the stored raw values inside the model validator on every
 construction, so they cannot drift out of sync.
 """
 
+from collections.abc import Mapping
 from itertools import pairwise
-from typing import Literal
+from types import MappingProxyType
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 from .common import Batch
 from .metrics import BaseMetric
+
+FrozenWeights = Annotated[
+    Mapping[str, float],
+    AfterValidator(lambda weights: MappingProxyType(dict(weights))),
+    PlainSerializer(dict, return_type=dict),
+]
 
 Interpretation = Literal[
     "Not suitable",
@@ -70,8 +78,8 @@ class PrivacyDomainConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     classes: frozenset[str] = Field(min_length=1)
-    criticality_weights: dict[str, float]
-    fn_severity_weights: dict[str, float]
+    criticality_weights: FrozenWeights
+    fn_severity_weights: FrozenWeights
     iou_threshold: float = Field(default=0.50, gt=0.0, le=1.0)
     regulatory_framework: str | None = None
 
