@@ -132,6 +132,15 @@ class _CorpusEvaluation:
         return metrics
 
 
+def _validate_corpus(conversation: Iterable[Batch], config: PrivacyDomainConfig) -> None:
+    for turn in conversation:
+        if not isinstance(turn, PrivacyBatch):
+            raise TypeError("Privacy corpus turns must be PrivacyBatch carrying ground-truth spans")
+        for span in turn.spans:
+            if span.label not in config.classes:
+                raise ValueError(f"ground-truth span label {span.label!r} is outside the domain classes")
+
+
 def _evaluate(
     detector: PIIDetector,
     config: PrivacyDomainConfig,
@@ -252,6 +261,7 @@ class Privacy(Gaussia):
         batch: list[Batch],
         language: str | None = "english",
     ) -> None:
+        _validate_corpus(batch, self.domain_config)
         self.metrics.append(
             _evaluate(self.detector, self.domain_config, batch, session_id, assistant_id, self._load_time)
         )
@@ -280,6 +290,7 @@ class PrivacyRanker(Gaussia):
         batch: list[Batch],
         language: str | None = "english",
     ) -> None:
+        _validate_corpus(batch, self.domain_config)
         results: list[PrivacyMetric] = []
         for detector in self.detectors:
             results.append(self._evaluate_one(detector, batch, session_id, assistant_id))
