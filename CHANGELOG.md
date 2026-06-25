@@ -1,6 +1,145 @@
 # CHANGELOG
 
 
+## v1.1.0-b.1 (2026-06-25)
+
+### Bug Fixes
+
+- **privacy**: Address review — immutable domain weights and fail-fast corpus validation
+  ([`9b03e3a`](https://github.com/gaussia-labs/pygaussia/commit/9b03e3a24724a1559417169c4fc6a30f1f208bdc))
+
+- PrivacyDomainConfig: wrap criticality_weights/fn_severity_weights in MappingProxyType
+  (FrozenWeights) so weights cannot drift after construction; the frozen model only blocked field
+  reassignment, not in-place dict mutation. - metrics: add _validate_corpus, called once at the
+  start of each batch() before the detector loop, rejecting non-PrivacyBatch turns and ground-truth
+  span labels outside the domain classes. Both previously produced misleading metrics silently
+  (empty GT -> all-FP; out-of-domain GT FN dropped by class_metrics). Validating outside
+  PrivacyRanker's per-detector try/except makes a corpus data error fail hard rather than masquerade
+  as N failed detectors. - tests: weight-map immutability + dict serialisation; corpus validation
+  for Privacy and PrivacyRanker.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- **privacy**: Set up each ranked detector once across sessions
+  ([`88e86fe`](https://github.com/gaussia-labs/pygaussia/commit/88e86fe58e013887b437028d7654803947383687))
+
+PrivacyRanker.batch runs once per dataset/session, and _evaluate_one called detector.setup() on
+  every call — re-loading a heavy backend (Presidio, a HF pipeline) once per session. Memoise the
+  load per detector (keyed by identity, cached load_time) inside the per-detector try/except so the
+  fail-soft contract is preserved: a setup failure still yields a failed PrivacyMetric rather than
+  aborting the whole ranking. Privacy already loads once in __init__; this aligns the ranker with
+  that behaviour.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### Code Style
+
+- **privacy**: Format new test files and example with ruff
+  ([`5986689`](https://github.com/gaussia-labs/pygaussia/commit/5986689a66ba1dae5ef9476d68f5446f98b998fa))
+
+### Documentation
+
+- **privacy**: Add a realistic multi-detector walkthrough to the notebook
+  ([`3411ea9`](https://github.com/gaussia-labs/pygaussia/commit/3411ea987747a0a03c5fa1ec0a5bb1566835df31))
+
+Part 2: a 4-class domain, a 3-turn labelled corpus (incl. a PII-free turn), and three detectors with
+  distinct failure modes (clean, critical blind spot, noisy with FP + out-of-domain + overlap) so
+  the per-class breakdown, the risk index and the ranking are all observable. Heavily commented.
+
+- **privacy**: Add implementation plan and data model; fix spec writing errors
+  ([`ec4f574`](https://github.com/gaussia-labs/pygaussia/commit/ec4f574a0da762826a2ca0070a68712c6f458fcf))
+
+Plan gate for the 001-privacy-metric feature (spec gate merged in #11).
+
+- Add specs/001-privacy-metric/plan.md (implementation plan) - Add
+  specs/001-privacy-metric/data-model.md (Pydantic schema contracts) - Correct writing errors in the
+  already-approved spec.md (recorded in a Revision Note): the regression baseline
+  chatbot_v3_results.json was generated over the 500-turn corpus, not the eval_*_100.txt files;
+  verification is now StubDetector-based with the sandbox reproduction as an optional opt-in
+  integration test. Housekeeping: Status Draft->Planned, resolved NEEDS CLARIFICATION, FR-003
+  set[str]->frozenset[str].
+
+tasks.md is intentionally excluded; it is the next gate.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- **privacy**: Align privacy.mdx with the minimal-docs tier
+  ([`092b870`](https://github.com/gaussia-labs/pygaussia/commit/092b870c07c753fea0caeba945ab16339c7019f6))
+
+Privacy has no LLM-judge and no statistical mode, so it belongs in the minimal tier
+  (regulatory/vision) rather than the full template. Drop the H1 (frontmatter title renders it),
+  fold the formula into Overview, move install extras into the trailing Note, and remove the Next
+  Steps card group to match the house style. Document the new fail-fast corpus validation and
+  once-per-run detector setup.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- **privacy**: Document the custom-detector contract and fit guidance
+  ([`80dad8f`](https://github.com/gaussia-labs/pygaussia/commit/80dad8fe8b799ce93dcf86d84f9c4ecd99aed3b2))
+
+Add a "Bring your own detector" example subclassing PIIDetector (supported_classes / predict /
+  optional setup), a contract table for the members a subclass must implement, guidance on choosing
+  domain_fit / regulatory_fit, and clarify that span offsets are character-level half-open.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- **privacy**: Metric docs page and runnable example (phase 7)
+  ([`f3da504`](https://github.com/gaussia-labs/pygaussia/commit/f3da50407fcc66f3d729bce619c45f854cb12bde))
+
+- docs/metrics/privacy.mdx following the full docs template (overview, install, usage,
+  parameter/output tables, edge cases); registered in docs.json and the metrics overview. -
+  examples/privacy/run.py: a dependency-free, self-explanatory script showing how to build a domain
+  config, call Privacy.run / PrivacyRanker.run, and read the score, interpretation and risk fields.
+  - Drop the now-unused spacy.* mypy override.
+
+- **privacy**: Replace example script with a Jupyter notebook
+  ([`de4cf98`](https://github.com/gaussia-labs/pygaussia/commit/de4cf98c9eb0905292e42f644dfa2e4f4093f6a6))
+
+Match the examples/<metric>/jupyter/ convention used across the repo: convert
+  examples/privacy/run.py into a runnable, dependency-free notebook (evaluate one detector, rank
+  several, visualize the ranking) and point the docs page at it.
+
+- **privacy**: Tasks gate — TDD task breakdown for 001-privacy-metric
+  ([`c5083fc`](https://github.com/gaussia-labs/pygaussia/commit/c5083fcd4937b05323d4bf0cac7e6ae09d8052c8))
+
+Generated per the speckit tasks-template: Schema & Contracts -> Tests (Red) -> Implementation per
+  user story (Green) -> Polish. Tasks carry [P]/[US] tags, exact file paths from plan.md, and FR/SC
+  traceability to spec.md.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### Features
+
+- **privacy**: Privacy/privacyranker metrics and detector adapters (phases 2-4)
+  ([`969451d`](https://github.com/gaussia-labs/pygaussia/commit/969451d6a40dda97a3e8ead3b41ef65dd189cb25))
+
+Implement the Domain-Adjusted Privacy Detection metric end to end (001-privacy-metric, T006-T020),
+  test-first.
+
+- Privacy(Gaussia): IoU span matching, greedy NMS, out-of-domain filtering and the full score/risk
+  computation, one PrivacyMetric per dataset. - PrivacyRanker(Gaussia): per-detector fail-soft,
+  score-descending ranking. - PresidioDetector and HuggingFacePIIDetector adapters behind their
+  extras, plus a pure label canonicaliser; both import-fail cleanly without the extra. -
+  statistical_mode is explicitly rejected (FR-020). Deterministic StubDetector tests assert every
+  formula component against hand-computed values (SC-001).
+
+Note: the paper's worked example cites Score_100 = 28.36, which still included the InfraScore
+  removed in v3; the five-factor formula yields 32.97 (documented in test_privacy.py).
+
+- **privacy**: Schemas, PIIDetector contract and extras (phase 1)
+  ([`17629d6`](https://github.com/gaussia-labs/pygaussia/commit/17629d67496d03122c1fb9ef585299c391705094))
+
+Add the Pydantic schemas (Span, PrivacyBatch, PrivacyDomainConfig, ClassMetrics, contributions,
+  PrivacyMetric, PrivacyRanking) and the abstract PIIDetector strategy for the Domain-Adjusted
+  Privacy Detection metric (001-privacy-metric, T001-T005).
+
+- PIIDetector is a BaseModel+ABC so domain_fit/regulatory_fit are validated at construction (FR-005)
+  while predict/supported_classes stay abstract. - *_100 fields and interpretation are recomputed in
+  the model validator so they cannot drift; field names mirror the sandbox JSON for panel
+  compatibility. - Declare privacy-presidio / privacy-huggingface extras (FR-017) and enable the
+  pydantic mypy plugin to type-check the models without suppressions.
+
+
 ## v1.0.0-b.3 (2026-06-02)
 
 ### Documentation
@@ -221,6 +360,9 @@ Resolves gaussia-labs/pygaussia#2.
 
 
 ## v1.0.0-b.1 (2026-04-09)
+
+
+## v1.0.0 (2026-04-09)
 
 ### Bug Fixes
 

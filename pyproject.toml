@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gaussia"
-version = "1.0.0-b.3"
+version = "1.1.0-b.1"
 description = "Gaussia - AI evaluation framework for measuring fairness, quality, and safety of AI models and assistants"
 readme = "README.md"
 license = {text = "MIT"}
@@ -133,6 +133,7 @@ Homepage = "https://github.com/gaussia-labs/pygaussia"
 Repository = "https://github.com/gaussia-labs/pygaussia.git"
 "Bug Tracker" = "https://github.com/gaussia-labs/pygaussia/issues"
 Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
+
 
 
 
