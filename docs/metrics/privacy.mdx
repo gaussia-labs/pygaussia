@@ -30,7 +30,8 @@ diagnostics only and never enter the score.
 ## Usage
 
 Each turn is a `PrivacyBatch`: `query` is the text shown to the detector and `spans` are the
-ground-truth annotations. `assistant` / `ground_truth_assistant` stay empty.
+ground-truth annotations. Span offsets are character-level and half-open (`[start, end)`).
+`assistant` / `ground_truth_assistant` stay empty.
 
 ```python
 from gaussia.core.retriever import Retriever
@@ -86,6 +87,42 @@ If a detector raises, `PrivacyRanker` records a failed `PrivacyMetric` (`success
 `score_100=0`) and keeps going, so one broken backend never aborts the ranking. Each detector
 is set up once per run, not once per session.
 
+### Bring your own detector
+
+Any backend works once wrapped in a `PIIDetector`. Implement two members — `supported_classes`
+(the classes the backend advertises; drives `coverage`) and `predict` (the spans it finds) —
+and optionally `setup` for one-time loading (called once per run, before any `predict`):
+
+```python
+import re
+
+from gaussia.core.detector import PIIDetector
+from gaussia.schemas.privacy import Span
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+
+class RegexEmailDetector(PIIDetector):
+    @property
+    def supported_classes(self) -> frozenset[str]:
+        return frozenset({"email_address"})
+
+    def predict(self, text: str) -> list[Span]:
+        return [
+            Span(label="email_address", start=m.start(), end=m.end(), text=m.group(), score=1.0)
+            for m in _EMAIL.finditer(text)
+        ]
+
+    def setup(self) -> None:  # optional — load heavy models here
+        ...
+
+
+detector = RegexEmailDetector(name="regex-email", domain_fit=0.7, regulatory_fit=1.0)
+```
+
+Predicted labels outside `domain_config.classes` are filtered out (counted in
+`out_of_domain_filtered`), so a detector may safely return classes the domain does not track.
+
 ## Parameters
 
 ### `Privacy.run` / `PrivacyRanker.run`
@@ -109,11 +146,27 @@ is set up once per run, not once per session.
 
 ### `PIIDetector` (per detector)
 
+Constructor fields:
+
 | Field | Type | Description |
 |---|---|---|
 | `name` | `str` | Identifier used in the result and ranking. |
 | `domain_fit` | `float` | Expert `[0, 1]` scalar; required. |
 | `regulatory_fit` | `float` | Expert `[0, 1]` scalar; required (use `1.0` when no regulation applies). |
+
+Contract to implement in a subclass:
+
+| Member | Type | Description |
+|---|---|---|
+| `supported_classes` | `property -> frozenset[str]` | Classes the backend can detect; intersected with the domain to compute `coverage`. |
+| `predict` | `(text: str) -> list[Span]` | Spans the backend finds in one turn's `query`. |
+| `setup` | `() -> None` | Optional one-time init (model loading); called once per run before any `predict`. |
+
+`domain_fit` and `regulatory_fit` are judgement calls you assign, not measured: `domain_fit`
+is how well the backend's training data matches your domain's language (clinical notes,
+legal text, chat), `regulatory_fit` how well its class taxonomy covers the entities a given
+framework (HIPAA, GDPR) cares about. Both scale the final score linearly, so when in doubt
+prefer a conservative estimate and keep them consistent across the detectors you compare.
 
 ## Output schema
 
