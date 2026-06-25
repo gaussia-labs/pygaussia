@@ -281,6 +281,7 @@ class PrivacyRanker(Gaussia):
         super().__init__(retriever, **kwargs)
         self.detectors = detectors
         self.domain_config = domain_config
+        self._load_times: dict[int, float] = {}
 
     def batch(
         self,
@@ -313,11 +314,17 @@ class PrivacyRanker(Gaussia):
             )
         )
 
+    def _setup_once(self, detector: PIIDetector) -> float:
+        key = id(detector)
+        if key not in self._load_times:
+            self._load_times[key] = _timed_setup(detector)
+        return self._load_times[key]
+
     def _evaluate_one(
         self, detector: PIIDetector, batch: list[Batch], session_id: str, assistant_id: str
     ) -> PrivacyMetric:
         try:
-            load_time = _timed_setup(detector)
+            load_time = self._setup_once(detector)
             return _evaluate(detector, self.domain_config, batch, session_id, assistant_id, load_time)
         except Exception as error:
             return PrivacyMetric(

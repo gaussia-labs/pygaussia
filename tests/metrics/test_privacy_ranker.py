@@ -92,6 +92,18 @@ def test_ranking_echoes_domain_metadata():
     assert sorted(ranking.domain_classes) == [EMAIL, PERSON]
 
 
+def test_setup_runs_once_per_detector_across_sessions():
+    """Each detector is set up once for the whole run, not once per session:
+    re-loading a heavy backend per session would be a latent perf bug."""
+    high, mid = _high(), _mid()
+    turn = batch("q", QUERY, GT)
+    retriever = make_retriever([dataset("s1", [turn]), dataset("s2", [turn])])
+    rankings = PrivacyRanker.run(retriever, detectors=[high, mid], domain_config=_domain())
+    assert len(rankings) == 2
+    assert high.setup_calls == 1
+    assert mid.setup_calls == 1
+
+
 def test_invalid_corpus_fails_hard_not_per_detector():
     """A corpus data error is not a detector failure: it must raise, not produce
     a ranking with every detector marked failed."""
