@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v1.1.0-b.2 (2026-07-15)
+
+### Bug Fixes
+
+- **evalhub**: Finalize MLflow models and retry dataset races
+  ([`4810e0a`](https://github.com/gaussia-labs/pygaussia/commit/4810e0a474a4aec58999e7d64119be83cf8326ad))
+
+
 ## v1.1.0-b.1 (2026-06-25)
 
 ### Bug Fixes
