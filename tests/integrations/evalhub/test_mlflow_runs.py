@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from gaussia.integrations.evalhub.mlflow_runs import MLflowRunLogger
-from gaussia.integrations.evalhub.payloads import load_benchmark_input
+from gaussia.integrations.evalhub.payloads import BenchmarkInput, load_benchmark_input
 
 
 class FakeResponse:
@@ -42,37 +44,64 @@ class FakeSession:
             return FakeResponse(payload={"model": {"info": {"model_id": "model-123"}}})
         return FakeResponse(payload={})
 
+    def patch(self, url: str, *, json=None, headers=None, verify=None, timeout=None):
+        self.calls.append(("PATCH", url, None, json, headers or {}))
+        return FakeResponse(payload={})
+
     def put(self, url: str, *, data=None, headers=None, verify=None, timeout=None):
         self.calls.append(("PUT", url, None, None, headers or {}))
         return FakeResponse(payload={})
 
 
-def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
-    session = FakeSession()
-    logger = MLflowRunLogger(
-        base_url="https://mlflow.example.com",
-        workspace="redhat-ods-applications",
-        auth_token="token-123",
-        verify_tls=False,
-        session=session,
-    )
+class DatasetInsertRaceSession(FakeSession):
+    def __init__(self) -> None:
+        super().__init__()
+        self.log_inputs_attempts = 0
 
-    class Spec:
-        experiment_name = "gaussia-evalhub"
-        benchmark_id = "humanity"
-        provider_id = "gaussia"
-        id = "job-123"
-        tags = [{"key": "assistant_id", "value": "assistant-1"}]
-        model = type(
-            "Model",
-            (),
-            {
-                "name": "assistant-release-ops",
-                "url": "https://example.invalid/model",
-            },
-        )()
+    def post(self, url: str, *, json=None, headers=None, verify=None, timeout=None):
+        if url.endswith("/runs/log-inputs"):
+            self.log_inputs_attempts += 1
+            if self.log_inputs_attempts == 1:
+                self.calls.append(("POST", url, None, json, headers or {}))
+                return FakeResponse(
+                    status_code=400,
+                    payload={
+                        "error_code": "BAD_REQUEST",
+                        "message": (
+                            "(sqlite3.IntegrityError) UNIQUE constraint failed: "
+                            "datasets.experiment_id, datasets.name, datasets.digest"
+                        ),
+                    },
+                )
+        return super().post(url, json=json, headers=headers, verify=verify, timeout=timeout)
 
-    benchmark_input = load_benchmark_input(
+
+class LogInputsFailureSession(FakeSession):
+    def post(self, url: str, *, json=None, headers=None, verify=None, timeout=None):
+        if url.endswith("/runs/log-inputs"):
+            self.calls.append(("POST", url, None, json, headers or {}))
+            return FakeResponse(status_code=500, payload={"message": "input logging failed"})
+        return super().post(url, json=json, headers=headers, verify=verify, timeout=timeout)
+
+
+class Spec:
+    experiment_name = "gaussia-evalhub"
+    benchmark_id = "humanity"
+    provider_id = "gaussia"
+    id = "job-123"
+    tags = [{"key": "assistant_id", "value": "assistant-1"}]
+    model = type(
+        "Model",
+        (),
+        {
+            "name": "assistant-release-ops",
+            "url": "https://example.invalid/model",
+        },
+    )()
+
+
+def benchmark_input() -> BenchmarkInput:
+    return load_benchmark_input(
         {
             "dataset": {
                 "session_id": "session-1",
@@ -96,7 +125,22 @@ def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
         }
     )
 
-    run = logger.create_run(Spec(), benchmark_input)
+
+def logger_with(session: FakeSession) -> MLflowRunLogger:
+    return MLflowRunLogger(
+        base_url="https://mlflow.example.com",
+        workspace="redhat-ods-applications",
+        auth_token="token-123",
+        verify_tls=False,
+        session=session,
+    )
+
+
+def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
+    session = FakeSession()
+    logger = logger_with(session)
+
+    run = logger.create_run(Spec(), benchmark_input())
     run.log_success(
         metrics=[
             ("humanity_assistant_emotional_entropy", 0.75),
@@ -126,3 +170,44 @@ def test_mlflow_run_logger_uses_workspace_and_creates_run() -> None:
     assert metric_calls[0][3]["dataset_name"] == "gaussia-gaussia-dataset-v1-session-1"
     assert metric_calls[0][3]["model_id"] == "model-123"
     assert any("/api/2.0/mlflow-artifacts/artifacts/" in call[1] for call in session.calls)
+    model_update = next(call for call in session.calls if call[0] == "PATCH")
+    assert model_update[1].endswith("/api/2.0/mlflow/logged-models/model-123")
+    assert model_update[3] == {"model_id": "model-123", "status": "LOGGED_MODEL_READY"}
+
+
+def test_mlflow_run_logger_recovers_from_concurrent_dataset_insert() -> None:
+    session = DatasetInsertRaceSession()
+
+    run = logger_with(session).create_run(Spec(), benchmark_input())
+
+    assert run.run_id == "run-123"
+    assert session.log_inputs_attempts == 2
+
+
+def test_mlflow_run_logger_marks_model_failed_when_evaluation_fails() -> None:
+    session = FakeSession()
+    run = logger_with(session).create_run(Spec(), benchmark_input())
+
+    run.log_failure(RuntimeError("evaluation failed"))
+
+    model_update = next(call for call in session.calls if call[0] == "PATCH")
+    assert model_update[1].endswith("/api/2.0/mlflow/logged-models/model-123")
+    assert model_update[3] == {
+        "model_id": "model-123",
+        "status": "LOGGED_MODEL_UPLOAD_FAILED",
+    }
+
+
+def test_mlflow_run_logger_marks_model_failed_when_run_setup_fails() -> None:
+    session = LogInputsFailureSession()
+
+    with pytest.raises(RuntimeError, match="input logging failed"):
+        logger_with(session).create_run(Spec(), benchmark_input())
+
+    model_update = next(call for call in session.calls if call[0] == "PATCH")
+    assert model_update[3] == {
+        "model_id": "model-123",
+        "status": "LOGGED_MODEL_UPLOAD_FAILED",
+    }
+    run_update = next(call for call in session.calls if call[1].endswith("/api/2.0/mlflow/runs/update"))
+    assert run_update[3]["status"] == "FAILED"

@@ -24,6 +24,9 @@ LOCAL_MLFLOW_PREFIXES = ("http://localhost", "http://127.0.0.1")
 MLFLOW_SOURCE_NAME = "gaussia.integrations.evalhub.adapter"
 MLFLOW_SOURCE_TYPE = "JOB"
 MODEL_INPUT_UNSUPPORTED_STATUSES = {400, 404, 405, 501}
+DATASET_INSERT_RACE_ERROR = "UNIQUE constraint failed: datasets.experiment_id, datasets.name, datasets.digest"
+LOGGED_MODEL_READY = "LOGGED_MODEL_READY"
+LOGGED_MODEL_UPLOAD_FAILED = "LOGGED_MODEL_UPLOAD_FAILED"
 
 
 def build_mlflow_run_logger_from_env() -> MLflowRunLogger | None:
@@ -98,11 +101,19 @@ class MLflowRunLogger:
                 config=config,
                 benchmark_input=benchmark_input,
             )
-        self._log_inputs(
-            run_id=run_id,
-            dataset_input=dataset_input,
-            model_id=model_id,
-        )
+        try:
+            self._log_inputs(
+                run_id=run_id,
+                dataset_input=dataset_input,
+                model_id=model_id,
+            )
+        except Exception:
+            self._post(
+                "/api/2.0/mlflow/runs/update",
+                {"run_id": run_id, "status": "FAILED", "end_time": _now_ms()},
+            )
+            self._finalize_logged_model(model_id, LOGGED_MODEL_UPLOAD_FAILED)
+            raise
 
         return MLflowRunContext(
             client=self,
@@ -304,7 +315,12 @@ class MLflowRunLogger:
         }
         if model_id:
             payload["models"] = [{"model_id": model_id}]
-        self._post("/api/2.0/mlflow/runs/log-inputs", payload)
+        try:
+            self._post("/api/2.0/mlflow/runs/log-inputs", payload)
+        except RuntimeError as error:
+            if DATASET_INSERT_RACE_ERROR not in str(error):
+                raise
+            self._post("/api/2.0/mlflow/runs/log-inputs", payload)
 
     def _upload_json_artifact(
         self,
@@ -373,6 +389,25 @@ class MLflowRunLogger:
         )
         _raise_for_status(response)
         return cast("dict[str, Any]", response.json())
+
+    def _patch(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self.session.patch(
+            f"{self.base_url}{path}",
+            json=payload,
+            headers=self._request_headers({"Content-Type": "application/json"}),
+            verify=self.verify_tls,
+            timeout=30,
+        )
+        _raise_for_status(response)
+        return cast("dict[str, Any]", response.json())
+
+    def _finalize_logged_model(self, model_id: str | None, status: str) -> None:
+        if model_id is None:
+            return
+        self._patch(
+            f"/api/2.0/mlflow/logged-models/{quote(model_id, safe='')}",
+            {"model_id": model_id, "status": status},
+        )
 
     def _post_optional(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         response = self.session.post(
@@ -466,6 +501,7 @@ class MLflowRunContext:
                 "end_time": _now_ms(),
             },
         )
+        self.client._finalize_logged_model(self.model_id, LOGGED_MODEL_READY)
 
     def log_failure(self, exc: Exception) -> None:
         self.client._post(
@@ -484,6 +520,7 @@ class MLflowRunContext:
                 "end_time": _now_ms(),
             },
         )
+        self.client._finalize_logged_model(self.model_id, LOGGED_MODEL_UPLOAD_FAILED)
 
 
 def _artifact_endpoint_from_uri(artifact_uri: str, artifact_path: str) -> str:
