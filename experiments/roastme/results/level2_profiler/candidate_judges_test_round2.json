@@ -1,0 +1,146 @@
+{
+  "purpose": "Round 2: test Kimi/Qwen model:provider combos found via research into which HF Inference Providers (DeepInfra, Together, Fireworks-ai) document logprobs support in their own API docs, as opposed to Novita/Featherless-ai (already ruled out empirically in round 1, see candidate_judges_test.json).",
+  "trials_per_model": 8,
+  "temperature": 1.0,
+  "max_tokens": 1024,
+  "results": {
+    "moonshotai/Kimi-K2.6:deepinfra": {
+      "n_tokens_with_logprobs_per_trial": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_samples": [
+        "SI",
+        "SI",
+        "SI",
+        "SI",
+        "",
+        "SI",
+        "SI",
+        "SI"
+      ],
+      "any_usable": false
+    },
+    "moonshotai/Kimi-K2.6:together": {
+      "n_tokens_with_logprobs_per_trial": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_samples": [
+        "ERROR: Error code: 400 - {'id': 'osu8nAB-gBAtS-a1e39a46fe908227', 'error': {'message': {'type': 'Bad Request', 'code': '",
+        "ERROR: Error code: 400 - {'id': 'osu8nE1-gBAtS-a1e39a487f07aa23', 'error': {'message': {'type': 'Bad Request', 'code': '",
+        "ERROR: Error code: 400 - {'id': 'osu8nK1-2byqsH-a1e39a49e8a6396e', 'error': {'message': {'type': 'Bad Request', 'code': ",
+        "ERROR: Error code: 400 - {'id': 'osu8nR9-2byqsH-a1e39a4c2af65866', 'error': {'message': {'type': 'Bad Request', 'code': ",
+        "ERROR: Error code: 400 - {'id': 'osu8nX8-2byqsH-a1e39a4e6f480ac8', 'error': {'message': {'type': 'Bad Request', 'code': ",
+        "ERROR: Error code: 400 - {'id': 'osu8ndS-gBAtS-a1e39a50ecb96398', 'error': {'message': {'type': 'Bad Request', 'code': '",
+        "ERROR: Error code: 400 - {'id': 'osu8nni-2byqsH-a1e39a5408c35866', 'error': {'message': {'type': 'Bad Request', 'code': ",
+        "ERROR: Error code: 400 - {'id': 'osu8nxN-2byqsH-a1e39a579f76e609', 'error': {'message': {'type': 'Bad Request', 'code': "
+      ],
+      "any_usable": false
+    },
+    "moonshotai/Kimi-K2.6:fireworks-ai": {
+      "n_tokens_with_logprobs_per_trial": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_samples": [
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',",
+        "ERROR: Error code: 400 - {'error': {'object': 'error', 'type': 'invalid_request_error', 'code': 'invalid_request_error',"
+      ],
+      "any_usable": false
+    },
+    "moonshotai/Kimi-K2.7-Code:deepinfra": {
+      "n_tokens_with_logprobs_per_trial": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_samples": [
+        "SI",
+        "SI",
+        "SI",
+        "SI",
+        "SI",
+        "SI",
+        "SI",
+        "SI"
+      ],
+      "any_usable": false
+    },
+    "Qwen/Qwen3.5-9B:together": {
+      "n_tokens_with_logprobs_per_trial": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "content_samples": [
+        "",
+        "SI",
+        "",
+        "",
+        "SI",
+        "",
+        "SI",
+        ""
+      ],
+      "any_usable": true
+    },
+    "Qwen/Qwen3.6-35B-A3B:deepinfra": {
+      "n_tokens_with_logprobs_per_trial": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_samples": [
+        "SI",
+        "",
+        "",
+        "SI",
+        "",
+        "SI",
+        "",
+        "SI"
+      ],
+      "any_usable": false
+    }
+  }
+}

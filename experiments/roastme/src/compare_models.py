@@ -1,0 +1,164 @@
+"""Multi-model comparison: runs probe generation with several LLMs and builds a table
++ a readable HTML report of how each model behaves. This is what Alex asked for the paper.
+
+Uses the `hf_router` provider (HF Inference Providers, serverless) by default: no need
+to create endpoints, usage is billed to the org via HF_BILL_TO. WATCH OUT for cost/time: GLM
+and Kimi are reasoning models (they burn a lot of tokens and are 60-110x slower than Gemma).
+That's why you can request DIFFERENT quantities per model: many from Gemma, few from the
+reasoners.
+
+Usage:
+  PY=../../.venv/bin/python
+  $PY compare_models.py --engine grag \
+     --models "google/gemma-4-31B-it=12,zai-org/GLM-5.2=4,moonshotai/Kimi-K2.6=3"
+
+Outputs in results/: compare_<engine>.json (data)
+report, opens in the browser and shows the complete probes of each model, untruncated).
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import io
+import json
+import logging
+import os
+import time
+from pathlib import Path
+
+import probe_library as pl
+import oracle
+
+HERE = Path(__file__).resolve().parent.parent  # project root (this file lives in src/)
+RESULTS = HERE / "results" / "level1_model_comparison"
+
+# Default plan: many from Gemma (viable), few from the reasoners (slow/expensive).
+DEFAULT_PLAN = "google/gemma-4-31B-it=12,zai-org/GLM-5.2=4,moonshotai/Kimi-K2.6=3"
+
+
+def _quiet() -> None:
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    for n in ("sentence_transformers", "httpx", "transformers", "openai"):
+        logging.getLogger(n).setLevel(logging.ERROR)
+
+
+def _max_tokens_for(model: str) -> int:
+    """Reasoners need a lot of headroom (they think before the JSON); Gemma doesn't."""
+    m = model.lower()
+    return 4000 if ("gemma" in m or "llama" in m) else 8000
+
+
+def _build_engine(which: str, client, model, embedder, seed, n, max_tokens):
+    if which == "grag":
+        from engines_grag import GRAGEngine
+        return GRAGEngine(client, provider="hf_router", model=model, embedder=embedder,
+                          seed=seed, n_probes=n, max_tokens=max_tokens)
+    if which == "rag":
+        from engines_rag import RAGEngine
+        return RAGEngine(client, provider="hf_router", model=model, embedder=embedder,
+                         seed=seed, n_false_premise=n)
+    if which == "graphrag":
+        from engines_graphrag import GraphRAGEngine
+        return GraphRAGEngine(client, provider="hf_router", model=model, seed=seed,
+                              n_false_premise=n)
+    raise SystemExit(f"engine {which!r} not supported in the comparison")
+
+
+def _row(model: str, probes: list, seconds: float, asked: int) -> dict:
+    absence = [p for p in probes if p.hook.doc == 0]
+    scoreable = [p for p in absence if oracle.true_doc_label(p.hook) is not None]
+    abs_ok = sum(1 for p in scoreable if oracle.true_doc_label(p.hook) == 0)
+    return {
+        "model": model,
+        "asked": asked,
+        "probes": len(probes),
+        "false_premise": sum(1 for p in probes if p.hook.doc == 1),
+        "absence": len(absence),
+        "absence_accuracy": round(abs_ok / len(scoreable), 3) if scoreable else None,
+        "seconds": round(seconds, 1),
+        "sec_per_probe": round(seconds / len(probes), 1) if probes else None,
+    }
+
+
+def _parse_plan(plan: str, default_n: int) -> list[tuple[str, int]]:
+    out = []
+    for part in plan.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" in part:
+            m, n = part.rsplit("=", 1)
+            out.append((m.strip(), int(n)))
+        else:
+            out.append((part, default_n))
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Multi-model comparison (Roast Me)")
+    ap.add_argument("--models", default=DEFAULT_PLAN,
+                    help="comma-separated ids; quantity per model with 'id=N' (e.g. gemma=12,glm=4)")
+    ap.add_argument("--engine", default="grag", choices=["grag", "rag", "graphrag"])
+    ap.add_argument("--kb", default="ley")
+    ap.add_argument("--provider", default="hf_router")
+    ap.add_argument("--n-probes", type=int, default=4, help="quantity per model if not specified with =N")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--samples", type=int, default=100, help="probes to save per model in the report")
+    args = ap.parse_args()
+    _quiet()
+
+    from config import build_client
+    plan = _parse_plan(args.models, args.n_probes)
+
+    if args.kb == "ley":
+        docs = pl.load_kb_documents()
+    else:
+        docs = pl.load_documents(args.kb)
+    plugins, strategies = pl.load_config()
+
+    with contextlib.redirect_stderr(io.StringIO()):
+        from gaussia.embedders import SentenceTransformerEmbedder
+        embedder = SentenceTransformerEmbedder()
+
+    client = build_client(args.provider)
+
+    rows, samples = [], {}
+    for model, n in plan:
+        mt = _max_tokens_for(model)
+        print(f"\n>>> {model}  (requesting {n} probes, max_tokens={mt})", flush=True)
+        eng = _build_engine(args.engine, client, model, embedder, args.seed, n, mt)
+        t0 = time.perf_counter()
+        try:
+            probes = eng.generate(docs, plugins, strategies)
+        except Exception as e:
+            print(f"    FAIL: {type(e).__name__}: {str(e)[:160]}", flush=True)
+            rows.append({"model": model, "error": str(e)[:200]})
+            continue
+        dt = time.perf_counter() - t0
+        row = _row(model, probes, dt, n)
+        rows.append(row)
+        samples[model] = [{"query": p.query, "doc": p.hook.doc, "strategy": p.strategy,
+                           "meta": p.meta} for p in probes[: args.samples]]
+        print(f"    -> {row['probes']}/{n} probes, {row['seconds']}s "
+              f"({row['sec_per_probe']}s/probe)", flush=True)
+
+    print(f"\n=== comparison (engine={args.engine}) ===", flush=True)
+    print(f"  {'model':<32}{'req':>5}{'gen':>5}{'f_prem':>8}{'sec':>9}{'s/pr':>8}", flush=True)
+    for r in rows:
+        if "error" in r:
+            print(f"  {r['model']:<32}  ERROR", flush=True); continue
+        print(f"  {r['model']:<32}{r['asked']:>5}{r['probes']:>5}{r['false_premise']:>8}"
+              f"{r['seconds']:>9.1f}{(r['sec_per_probe'] or 0):>8.1f}", flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    js = RESULTS / f"compare_{args.engine}.json"
+    js.write_text(json.dumps({"engine": args.engine, "kb": args.kb, "provider": args.provider,
+                              "seed": args.seed, "rows": rows, "samples": samples},
+                             ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nwritten: {js.name}, {hp.name}", flush=True)
+
+
+if __name__ == "__main__":
+    main()

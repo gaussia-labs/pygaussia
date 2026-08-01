@@ -1,0 +1,29 @@
+# Versions used by the reported runs (Python 3.13).
+#
+#   python3.13 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#   cp .env.example .env
+#
+# gaussia is only needed by the rag/graphrag/grag engines, for
+# gaussia.embedders.SentenceTransformerEmbedder. The deterministic engine and Level 2 in
+# fixed_transcripts mode run without it. Use `pip install -e /path/to/pygaussia` if you have
+# the repo checked out locally.
+#
+# The pin is the v1.0.0-b.3 tag; the venv that produced the results had it installed editable
+# 13 commits past that tag (bf3d618), on unrelated work. Pin bf3d618 if a regenerated Level 1
+# dataset ever disagrees with the committed one.
+gaussia @ git+https://github.com/gaussia-labs/pygaussia@v1.0.0-b.3
+
+openai==2.44.0
+sentence-transformers==5.4.0
+networkx==3.6.1
+numpy==2.4.4
+python-dotenv==1.2.2
+PyYAML==6.0.3
+pandas==3.0.2
+
+# torch==2.11.0 and transformers==5.5.3 arrive transitively via sentence-transformers and are
+# left unpinned so the install picks the right platform wheel.
+
+jupyterlab
+ipykernel

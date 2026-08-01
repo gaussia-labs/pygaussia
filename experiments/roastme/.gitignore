@@ -1,0 +1,104 @@
+# Secrets and environments
+.env
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# The GRAG paper PDF is reference material (copyright), not versioned.
+# Cited by URL in the README and in engines_grag.py.
+Aclanthology
+*.pdf
+
+# HTML reports are regenerated from the JSON artifacts; not versioned.
+*.html
+
+# results/ is scratch for your own runs: ignored by default. BUT the CANONICAL
+# artifacts are versioned, so the notebooks load real data right after cloning,
+# with no API key needed.
+results/*
+!results/README.md
+
+!results/level1_probes/
+results/level1_probes/*
+!results/level1_probes/dataset_ley_compose.json
+!results/level1_probes/summary_ley_compose.json
+!results/level1_probes/dataset_ley_deterministic.json
+!results/level1_probes/summary_ley_deterministic.json
+!results/level1_probes/dataset_ley_grag.json
+!results/level1_probes/summary_ley_grag.json
+!results/level1_probes/dataset_faq_compose.json
+!results/level1_probes/summary_faq_compose.json
+
+!results/level1_model_comparison/
+results/level1_model_comparison/*
+!results/level1_model_comparison/compare_grag.json
+!results/level1_model_comparison/archive/
+results/level1_model_comparison/archive/*
+!results/level1_model_comparison/archive/compare_grag.json
+
+!results/level1_probes_generic/
+results/level1_probes_generic/*
+!results/level1_probes_generic/dataset_generic.json
+!results/level1_probes_generic/summary_generic.json
+!results/level1_probes_generic/dataset_generic_example_delivery.json
+!results/level1_probes_generic/Roastme_promptfo.md
+
+!results/level2_profiler/
+results/level2_profiler/*
+!results/level2_profiler/transcripts_ley_compose.json
+!results/level2_profiler/profile_ley_compose_hf-router-google-gemma-4-31b-it.json
+!results/level2_profiler/profile_ley_compose_hf-router-qwen-qwen3-6-35b-a3b-scaleway.json
+!results/level2_profiler/profile_ley_compose_hf-router-zai-org-glm-5-2.json
+!results/level2_profiler/weakness_evolution_ley_compose.json
+
+# Judge-roster diagnostics: evidence for the reported judge configuration.
+!results/level2_profiler/candidate_judges_test.json
+!results/level2_profiler/candidate_judges_test_round2.json
+!results/level2_profiler/glm_logprobs_verification.json
+!results/level2_profiler/qwen3.5-9b_together_logprobs_verification.json
+!results/level2_profiler/qwen3.6-35b-a3b_scaleway_logprobs_verification.json
+
+# Judges evaluated and dropped, kept out of the main directory.
+!results/level2_profiler/archive/
+results/level2_profiler/archive/*
+!results/level2_profiler/archive/profile_ley_compose_groq-llama-3-3-70b-versatile.json
+!results/level2_profiler/archive/profile_ley_compose_hf-router-moonshotai-kimi-k2-6.json
+
+!results/level2_profiler_evasion/
+results/level2_profiler_evasion/*
+!results/level2_profiler_evasion/transcripts_ley_compose__base64.json
+!results/level2_profiler_evasion/transcripts_ley_compose__rot13.json
+!results/level2_profiler_evasion/profile_ley_compose__base64_groq-llama-3-3-70b-versatile.json
+!results/level2_profiler_evasion/profile_ley_compose__rot13_groq-llama-3-3-70b-versatile.json
+!results/level2_profiler_evasion/weakness_evolution_ley_compose__base64.json
+!results/level2_profiler_evasion/weakness_evolution_ley_compose__rot13.json
+
+!results/level2_profiler_multiturn/
+results/level2_profiler_multiturn/*
+!results/level2_profiler_multiturn/transcripts_multiturn_ley_compose.json
+
+# Level 3 (Exploiter) runs. These are versioned deliberately and are NOT regenerable:
+# each run is stochastic RL (LoRA policy gradient) on 4xT4 against a live target
+# assistant, so re-running produces different categories. The JSONL files are the only
+# record of the runs the paper reports.
+#   20260729T164442Z-*  the four reported runs (verified hf_router judge, max_steps=8)
+#   20260721T*          earlier runs kept as evidence for why the judge was replaced
+#                       (they ran with the original self-evaluating LMJudge)
+# Four directories per timestamp = the four accelerate ranks of one run, not four runs.
+#
+# The whitelist is per artifact type on purpose: it versions the run records (~2.3 MB)
+# while keeping trained adapters and tokenizer dumps out (a single tokenizer.json is
+# 32 MB, and the base tokenizer is redownloadable).
+!results/level3_exploiter/
+results/level3_exploiter/*
+!results/level3_exploiter/*/
+results/level3_exploiter/*/*
+!results/level3_exploiter/*/config.json
+!results/level3_exploiter/*/failure_report.json
+!results/level3_exploiter/*/history.jsonl
+!results/level3_exploiter/*/roast_dataset.jsonl
+
+# Scenario catalogue lives in Alquimia-ai/roast-me; copy the .example.yaml files locally.
+config/plugins.yaml
+config/strategies.yaml

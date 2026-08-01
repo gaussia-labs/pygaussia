@@ -1,0 +1,12 @@
+{
+  "model": "Qwen/Qwen3.6-35B-A3B:scaleway",
+  "sample_size": 40,
+  "seed": 7,
+  "no_logprobs": 0,
+  "empty_content": 0,
+  "comparable": 40,
+  "agree": 40,
+  "agreement_rate": 1.0,
+  "mismatches": [],
+  "empty_content_probe_ids": []
+}

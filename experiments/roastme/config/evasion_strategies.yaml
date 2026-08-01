@@ -1,0 +1,51 @@
+# EVASION strategies (promptfoo-inspired): how an already-generated query is disguised or
+# delivered to try to slip past the assistant's defences. Different from
+# config/strategies.yaml, which defines how a query is BUILT from the KB -- this operates
+# afterwards, on the finished text, whatever engine produced it.
+#
+# kind: static     -> deterministic transformation, no attacker LLM.
+# kind: dynamic    -> uses an attacker LLM to refine/iterate the query.
+# kind: multiturn  -> needs a stateful conversation session (target_client.ConversationSession).
+# implemented: when false, the id is documented but src/evasion.py has no function registered
+# for it yet, and using it fails loudly.
+evasion_strategies:
+  - id: base64
+    name: Base64 encoding
+    kind: static
+    implemented: true
+    description: >
+      Encodes the query in Base64 with an instruction to decode it before answering.
+
+  - id: rot13
+    name: ROT13 encoding
+    kind: static
+    implemented: true
+    description: >
+      Encodes the query with ROT13 with an instruction to decode it before answering.
+
+  - id: jailbreak_simple
+    name: Simple iterative jailbreak
+    kind: dynamic
+    implemented: false
+    description: >
+      Refines the query with a lightweight attacker LLM until it evades the target's
+      defences. Pending: needs a generate/evaluate loop against the target before the
+      final query can be frozen.
+
+  - id: composite_jailbreak
+    name: Composite jailbreak
+    kind: dynamic
+    implemented: false
+    description: >
+      Chains several known techniques (DAN, Skeleton Key, ...). Pending: needs a library
+      of known jailbreak templates.
+
+  - id: crescendo
+    name: Gradual escalation (Crescendo)
+    kind: multiturn
+    implemented: false
+    description: >
+      Escalates the request gradually across conversation turns, backing off when the
+      assistant resists. Pending: the ConversationSession scaffold (target_client.py)
+      proves the session persists turn to turn, but does not implement the
+      escalation/backtrack logic yet.

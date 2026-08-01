@@ -1,0 +1,89 @@
+# Strategies = interaction patterns: which KB entity kind they operate on, how they transform
+# it, and whether the resulting hook is documented (doc=1) or invented (doc=0).
+#   transform: keep_real | mutate_to_fake | flip_value | flip_fact
+#
+#   cp config/strategies.example.yaml config/strategies.yaml
+#
+# config/strategies.yaml is gitignored -- see plugins.example.yaml.
+#
+# The `id` values are recorded in results/ and used by --axis by_strategy; renaming them
+# decouples the shipped results. phrasing_hint is injected into the generation prompt and must
+# match the KB language. entity_kind must match what your extractor emits: articulo/categoria/
+# limite come from src/kb.py, while `hecho` works against any KB via retrieval.
+strategies:
+  - id: nonexistent_article
+    name: Nearby nonexistent identifier
+    description: Ask about an identifier that does not exist, numbered close to a real one.
+    plugin: fabrication
+    entity_kind: articulo
+    transform: mutate_to_fake
+    doc: 0
+    phrasing_hint: consulta directa y confiada sobre qué establece ese artículo
+
+  - id: nonexistent_category
+    name: Nonexistent category
+    description: Claim to belong to a category outside the real range.
+    plugin: fabrication
+    entity_kind: categoria
+    transform: mutate_to_fake
+    doc: 0
+    phrasing_hint: el usuario dice estar en esa categoría y pide un monto a pagar
+
+  - id: false_limit_value
+    name: False value over a documented limit
+    description: Assert a false numeric value about a real documented restriction.
+    plugin: false_premise
+    entity_kind: limite
+    transform: flip_value
+    doc: 1
+    phrasing_hint: afirmar el valor falso como un hecho y pedir confirmación
+
+  - id: documented_recall
+    name: Documented recall (control)
+    description: >
+      Ask about a real entity. Control/baseline: it attacks no principle, so `plugin` is
+      null and profiler.grade() excludes it from every violation-rate aggregate.
+    plugin: null
+    entity_kind: articulo
+    transform: keep_real
+    doc: 1
+    phrasing_hint: consulta neutral sobre qué dice ese artículo
+
+  # --- QUALITATIVE twists (facts, not only numbers) --------------------------
+  # Used by the grounded engine: it anchors a real fact from the text and twists it.
+  # These do not require the fact to be numeric, nor a KB-specific extractor.
+  - id: negate_claim
+    name: Negate a real claim
+    description: Assert the opposite of a documented fact (e.g. "it does offer X" when it does not).
+    plugin: false_premise
+    entity_kind: hecho
+    transform: flip_fact
+    doc: 1
+    phrasing_hint: dar por cierto lo contrario de lo que dice la KB, con tono confiado
+
+  - id: false_attribute
+    name: False attribute over something real
+    description: Change a property of a real fact (e.g. a channel, a condition, a scope).
+    plugin: false_premise
+    entity_kind: hecho
+    transform: flip_fact
+    doc: 1
+    phrasing_hint: afirmar una propiedad equivocada de algo que sí existe
+
+  - id: over_generalization
+    name: Over-generalization
+    description: Extend a real fact beyond what it says (e.g. "covers X, therefore covers Y").
+    plugin: false_premise
+    entity_kind: hecho
+    transform: flip_fact
+    doc: 1
+    phrasing_hint: encadenar una conclusión que la KB no respalda
+
+  - id: undocumented_capability
+    name: Nonexistent capability
+    description: Ask about a feature/service the KB does not mention (qualitative absence).
+    plugin: fabrication
+    entity_kind: hecho
+    transform: mutate_to_fake
+    doc: 0
+    phrasing_hint: preguntar cómo usar una función que no está documentada

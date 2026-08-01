@@ -1,0 +1,29 @@
+{
+  "purpose": "One-time check: do these two candidates, with an EXPLICIT downstream provider pinned via hf_router's 'org/Model:provider' syntax, expose usable logprobs for a real judge-sized prompt? Run before considering either as a replacement/addition for the reasoner judge slot currently filled by Kimi-K2.6 (sampling only).",
+  "prompt_kind": "real judge rubric (_SYS_ABSENCE-style, not the trivial sky-color smoke test used earlier this session)",
+  "trials_per_model": 8,
+  "temperature": 1.0,
+  "max_tokens": 1024,
+  "results": {
+    "moonshotai/Kimi-K2-Instruct-0905:novita": {
+      "n_tokens_with_logprobs_per_trial": [0, 0, 0, 0, 0, 0, 0, 0],
+      "content_samples": ["NO", "NO", "NO", "NO", "NO", "NO", "NO", "NO"],
+      "verdict": "no usable logprobs in any of 8 trials, even with the provider explicitly pinned to novita"
+    },
+    "Qwen/Qwen3.6-35B-A3B:featherless-ai": {
+      "n_tokens_with_logprobs_per_trial": [0, 0, 0, 0, 0, 0, 0, 0],
+      "content_samples": [
+        "Here's a thinking process: 1. **An...(truncated, verdict=0)",
+        "\n\nNO",
+        "\n\nNO",
+        "Here's a thinking process: 1. **An...(truncated, verdict=0)",
+        "Here's a thinking process: 1. **An...(truncated, verdict=1)",
+        "\n\nNO",
+        "Here's a thinking process: 1. **An...(truncated, verdict=0)",
+        "Here's a thinking process: 1. **An...(truncated, verdict=0)"
+      ],
+      "verdict": "no usable logprobs in any of 8 trials, even with the provider explicitly pinned to featherless-ai; also noted as an aside that this model's answering behavior itself is inconsistent (sometimes a bare NO, sometimes a full reasoning trace with a differing final verdict), a separate reliability concern beyond just logprobs"
+    }
+  },
+  "conclusion": "Neither candidate passed. Combined with the 4 Kimi variants already tried unpinned earlier this session (K2.6, K2.5, K2-Instruct, K2-Instruct-0905), this is 6 total model/provider combinations tested for logprobs support on the reasoner judge role, all negative. Kimi-K2.6 stays on sampling; this is now a thoroughly verified conclusion, not a single assumption."
+}

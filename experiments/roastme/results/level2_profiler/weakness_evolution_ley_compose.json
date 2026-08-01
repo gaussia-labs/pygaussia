@@ -1,0 +1,114 @@
+{
+  "config": {
+    "dataset": "results/level1_probes/dataset_ley_compose.json",
+    "kb": "ley_compose",
+    "mode": "merged_from_separate_runs",
+    "top_k": 3,
+    "axis": "by_strategy",
+    "note": "gemma+GLM-5.2 graded together in one invocation (5 iterations, logprobs-based); Qwen3.6-35B-A3B:scaleway graded separately in a second invocation (5 iterations, also logprobs-based) once it was verified and added to the roster in place of Kimi-K2.6."
+  },
+  "per_judge": {
+    "hf_router:google/gemma-4-31B-it": {
+      "iterations": [
+        {
+          "i": 0,
+          "ranking": [
+            "rag_absence_attempt",
+            "graph_edge_false_premise",
+            "grounded_false_fact",
+            "false_limit_value",
+            "nonexistent_article",
+            "nonexistent_category",
+            "graph_absence_articulo",
+            "graph_absence_categoria"
+          ],
+          "means": {
+            "rag_absence_attempt": 0.5,
+            "graph_edge_false_premise": 0.1856,
+            "grounded_false_fact": 0.0927,
+            "false_limit_value": 0.0,
+            "nonexistent_article": 0.0,
+            "nonexistent_category": 0.0,
+            "graph_absence_articulo": 0.0,
+            "graph_absence_categoria": 0.0
+          },
+          "method": "logprobs"
+        }
+      ],
+      "stability": {
+        "topk_jaccard_mean": null,
+        "kendall_tau_mean": null,
+        "rank_churn": {},
+        "note": "not recomputed in this merged run -- gemma/GLM and Kimi-K2.6 were graded in separate invocations; see the run log for each judge's own iteration count and fallback_k."
+      }
+    },
+    "hf_router:zai-org/GLM-5.2": {
+      "iterations": [
+        {
+          "i": 0,
+          "ranking": [
+            "rag_absence_attempt",
+            "graph_edge_false_premise",
+            "grounded_false_fact",
+            "false_limit_value",
+            "nonexistent_article",
+            "nonexistent_category",
+            "graph_absence_articulo",
+            "graph_absence_categoria"
+          ],
+          "means": {
+            "rag_absence_attempt": 0.5871,
+            "graph_edge_false_premise": 0.2204,
+            "grounded_false_fact": 0.1125,
+            "false_limit_value": 0.0006,
+            "nonexistent_article": 0.0,
+            "nonexistent_category": 0.0,
+            "graph_absence_articulo": 0.0,
+            "graph_absence_categoria": 0.0
+          },
+          "method": "logprobs"
+        }
+      ],
+      "stability": {
+        "topk_jaccard_mean": null,
+        "kendall_tau_mean": null,
+        "rank_churn": {},
+        "note": "not recomputed in this merged run -- gemma/GLM and Kimi-K2.6 were graded in separate invocations; see the run log for each judge's own iteration count and fallback_k."
+      }
+    },
+    "hf_router:Qwen/Qwen3.6-35B-A3B:scaleway": {
+      "iterations": [
+        {
+          "i": 0,
+          "ranking": [
+            "rag_absence_attempt",
+            "graph_edge_false_premise",
+            "grounded_false_fact",
+            "false_limit_value",
+            "nonexistent_article",
+            "nonexistent_category",
+            "graph_absence_articulo",
+            "graph_absence_categoria"
+          ],
+          "means": {
+            "rag_absence_attempt": 0.2,
+            "graph_edge_false_premise": 0.1875,
+            "grounded_false_fact": 0.0449,
+            "false_limit_value": 0.0,
+            "nonexistent_article": 0.0,
+            "nonexistent_category": 0.0,
+            "graph_absence_articulo": 0.0,
+            "graph_absence_categoria": 0.0
+          },
+          "method": "logprobs"
+        }
+      ],
+      "stability": {
+        "topk_jaccard_mean": null,
+        "kendall_tau_mean": null,
+        "rank_churn": {},
+        "note": "not recomputed in this merged run -- gemma/GLM and Kimi-K2.6 were graded in separate invocations; see the run log for each judge's own iteration count and fallback_k."
+      }
+    }
+  }
+}

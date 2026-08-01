@@ -1,0 +1,15 @@
+{
+  "model": "zai-org/GLM-5.2",
+  "sample_size": 40,
+  "seed": 7,
+  "no_logprobs": 0,
+  "empty_content": 2,
+  "comparable": 38,
+  "agree": 38,
+  "agreement_rate": 1.0,
+  "mismatches": [],
+  "empty_content_probe_ids": [
+    "rag__absence__00",
+    "graphrag__fp__010"
+  ]
+}
