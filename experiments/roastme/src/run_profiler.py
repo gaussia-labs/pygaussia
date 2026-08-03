@@ -18,10 +18,10 @@ Outputs in results/level2_profiler/:
 
 With --evasion <strategy_id>, every query is wrapped (see evasion.py) before hitting the
 target, and ALL outputs go to results/level2_profiler_evasion/ instead — a separate
-folder, not just a different filename, because profiler.ipynb globs
-`profile_{KB}_*.json` in results/level2_profiler/ and that glob's `*` would also match a
-merely-suffixed name (e.g. `profile_ley_compose__base64_...json`), silently mixing
-evasion-wrapped profiles into the baseline view.
+folder, not just a different filename: anything that globs `profile_{KB}_*.json` in
+results/level2_profiler/ would also match a merely-suffixed name (e.g.
+`profile_ley_compose__base64_...json`), silently mixing evasion-wrapped profiles into the
+baseline view.
 """
 
 from __future__ import annotations
