@@ -6,12 +6,13 @@
 
 Roast Me is not a scalar metric. It is a search problem: given an assistant treated as a black box, find the *categories* of realistic interactions that make it violate its behavioral contract reproducibly. Three components in sequence — a **Probe Library** that turns a knowledge base into tagged adversarial probes, a **Profiler** that grades the responses into a weakness profile, and an **Exploiter** that searches for reproducible failure categories.
 
+Every component is a **specification first**. Gaussia owns the interfaces, the data shapes, the validation and the arithmetic; the user implements against them. Where a base implementation ships, it is named as such — a convenience for users who do not want to write their own, never the definition of the component.
+
 ## Paper Reference
 
 - **Paper**: `gaussia-labs/papers/papers/2026-06-roastme/` — §Theoretical Formulation defines everything below.
 - **Paper PR**: gaussia-labs/papers#20, merged to `main`.
 - **Implementation Issue**: N/A — tracked through the SDD gate commits on this branch, as `001-privacy-metric` was.
-- **Reference implementation**: `experiments/roastme/` in gaussia-labs/pygaussia#17. It is the executable record of the published runs and stays frozen; it is not the surface specified here.
 
 ### Notation used below
 
@@ -35,51 +36,116 @@ These are methodological, not stylistic. Breaking any one invalidates the measur
 
 1. The assistant is sampled, never inspected — no parameters, system prompts or internal tools (Eq. 1).
 2. The knowledge base is reached **only** through the Probe Library. The Profiler and the graders never touch it (Fig. 1).
-3. `θ` is the **only** artifact crossing from Profiler to Exploiter, and it carries readable prose rather than internal identifiers (`roastme.tex:1300-1303`).
+3. `θ` is the **only** artifact crossing from Profiler to Exploiter, and it carries readable prose rather than internal identifiers.
 4. The `doc` label must be honest, and derived from the generating engine's own knowledge of the base's boundary — never from the enumeration used for scoring. It is what lets a grader separate "invented something absent" from "described something present".
 5. Under the policy-gradient search, optimisation pressure applies to the category generator only; the query generator stays frozen, which is what preserves realism (Eq. 17).
-6. A verdict is read from the logprobs of a single-word answer, located by scanning the sequence for the **last** verdict-shaped token — the first token belongs to a reasoning model's preamble. Whether logprobs are usable at all is a property of the serving provider, not the model: across twelve model/provider combinations screened, the same weights failed on two and worked on a third (`roastme.tex:1176-1180`, `1283-1287`).
-
-### Reported baseline
-
-A production Spanish-language assistant answering questions about Argentina's Monotributo regime, running on retrieval grounding alone (empty identity, rules and purpose fields).
-
-| Reported | Value | Artifact |
-|---|---|---|
-| Probes generated, composed across 4 engines | 204 | `results/level1_probes/` |
-| Scoreable probes, controls excluded | **151** | `results/level2_profiler/` |
-| Fail rate — three separate runs, one judge model each, 5 iterations | 12.6% / 15.2% / 7.9% | same |
-| Fail rate by strategy | 8 descriptors, `n` from 3 to 89 | same |
-| Profile distilled from the 151 graded probes | 8 weakness entries, 24 hooks | same |
-| Category search at `τ=0.35` | 384 queries, 34 categories, **0 passing**, max `S(c)=0.154` | `results/level3_exploiter/20260729T164442Z-*` |
-| Individual queries at or above `τ` | 33 of 384, while no *category* evaluation reached it | same |
-
-Two arithmetic facts any implementation must reproduce: under the reported 7-principle contract, the two heaviest principles both firing at full confidence reach only `v = 0.343`, still under `τ`; and evaluations per category were severely skewed (one category 38 times, 21 of 34 exactly once).
-
-**Standing.** Levels 1 and 2 are reported as findings. Level 3 is a validated *integration*, explicitly not a validated finding — sample size is the stated blocker, the runs are stochastic RL against a live assistant, and the trained adapters no longer exist. No grader has been calibrated against human labels; cross-judge agreement shows the judges agree with each other, not with a person.
+6. A verdict is read from the logprobs of a single-word answer, located by scanning the sequence for the **last** verdict-shaped token — the first token belongs to a reasoning model's preamble. Whether logprobs are usable at all is a property of the serving provider rather than of the model, so it has to be probed at runtime and survived when absent.
+7. Reliable absence labels come from enumeration or from a complete graph; breadth of false-premise variety comes from retrieval; no single engine gives both. Similarity search is *structurally* unable to decide absence, because it never reveals what it failed to retrieve.
+8. The scores this metric produces come from LLM graders, which the paper states have not been calibrated against human-labeled ground truth. Agreement between graders is not agreement with a person.
 
 ## Decisions
 
-Resolved at the clarify gate. The requirements below implement these without restating them.
+Resolved before planning. The requirements implement these without restating them.
 
 | # | Was open | Decided |
 |---|---|---|
-| D1 | How much code ships versus the user writes | The library ships the working machinery. The user supplies **models and configuration**: a judge model, a generator model, target credentials, a knowledge base, a plugin/strategy catalogue. Extension contracts exist for replacing a piece, not as the ordinary path |
-| D2 | Multi-grader aggregation | Out. One grader per principle. The paper's three columns are three runs, not an ensemble |
-| D3 | Rubrics and prompts | User-supplied. A rubric *is* what the metric measures, so the paper's Spanish ones ship as examples, never as defaults |
-| D4 | Extending the shared logprob judge | No. Roast Me grades behind its own contract; `llm/judge.py` is untouched and `role_adherence` is unaffected |
-| D5 | Packaging | One extra, `gaussia[roastme]`, covering all three levels — the repo's one-extra-per-metric convention |
-| D6 | Reaching the assistant under test | A target-assistant contract, plus a shipped adapter for the Alquimia runtime so a run works without writing transport code |
-| D7 | Which of the paper's two category searches | Both, behind one contract. Training-free attribute iteration is the default and needs no GPU; policy gradient is available and is the only one that produced the reported numbers |
+| D1 | What gaussia owns versus what the user writes | **Gaussia owns the specification**: the interfaces, the data shapes, the validation and the arithmetic. The user implements against it and supplies models, credentials, a knowledge base and a plugin/strategy catalogue. Base implementations ship only where D14 and the requirements name them, and are declared as a convenience |
+| D2 | Multi-grader aggregation | Out. One grader per principle. Comparing graders is done by running the metric once per grader |
+| D3 | Rubrics and prompts | User-supplied. A rubric *is* what the metric measures, so gaussia ships schema examples rather than defaults |
+| D4 | Extending the shared logprob judge | No. Roast Me grades behind its own interface; `llm/judge.py` is untouched and `role_adherence` is unaffected |
+| D5 | Packaging | One extra, `gaussia[roastme]`. The dependency surface is what the shipped base implementations need — an embedder for retrieval, a graph library for the graph engine — plus the training stack only for the optional policy-gradient search |
+| D6 | Reaching the assistant under test | The target-assistant **interface only**. No transport adapter ships in gaussia; a runtime-specific client belongs with that runtime, the same criterion that keeps the domain catalogue out of the library |
+| D7 | Which of the paper's two category searches | Both, behind one interface. Training-free attribute iteration is the default and needs no GPU; policy gradient is available for those who have one |
 | D8 | Where the Exploiter sits | It is a **generator, not a metric**: it emits the Roast Dataset, which the pipeline then consumes. Matches the paper's own framing of the dataset as the deliverable, and bends no article of the constitution |
 | D9 | The paper's Implementation Considerations section is commented out (`roastme.tex:1461`) | This spec proposes that surface and the paper follows in a later PR. The inversion is deliberate; the traceability chain stays open until that PR lands |
-| D10 | Fate of `experiments/roastme/` | Frozen as the paper's record. The duplication is accepted; its README states it is not the SDK API |
-| D11 | Surfacing the missing human calibration | Documented limitation in the metric docs. No field on the result, no calibration gate |
-| D12 | Test fixtures | A small synthetic fixture with hand-computed values runs by default, offline. Verification against the real 204-probe artifacts is opt-in, per `001-privacy-metric`'s precedent |
-| D13 | How a control probe is recognised | The probe declares it: no principle under test. The reference implementation keyed off a hardcoded plugin name, which cannot survive a user-supplied catalogue |
-| D14 | No verdict token in the top logprobs | Fall back to sampling, marked as such. Raising would make the fail-rate denominator depend on provider behaviour |
+| D10 | Surfacing the missing human calibration | Documented limitation in the metric docs. No field on the result, no calibration gate |
+| D11 | Test fixtures | Synthetic fixtures with hand-computed values. The default suite is offline and needs no credentials, no GPU and no external artifacts |
+| D12 | How a control probe is recognised | Structurally: a strategy with no plugin puts no principle under test, so the probe it produces carries none. Nothing depends on an identifier — see the catalogue specification below |
+| D13 | No verdict token in the top logprobs | Fall back to sampling, marked as such. Raising would make the violation-rate denominator depend on provider behaviour |
+| D14 | Which probe engines ship as base implementations | **A retrieval engine and a graph engine.** Together they span invariant 7: the graph engine can confirm absence, retrieval cannot but contributes the breadth of false premises. An enumeration-based engine is out of initial scope — its absence guarantee is redundant with the graph engine's, and it is the only kind requiring a hand-written per-domain entity extractor, which does not belong in a general library. A multi-hop engine is out too |
 
-Two upstream documents that contradicted `roastme.tex` are already fixed on `gaussia-labs/papers` `main` (`11775da`, `1673440`). `roastme.tex` is the sole authority for what follows.
+## Data specification
+
+What a user has to produce to plug into Roast Me, and what they get back. Field semantics only — the schema definitions belong to the plan gate.
+
+### Knowledge base input
+
+**Document** — one unit of the knowledge base handed to the Probe Library.
+
+| Field | Meaning |
+|---|---|
+| `id` | stable identifier, quoted in every hook derived from this document |
+| `content` | the source text |
+| `structured` | whether this document's knowledge boundary is *enumerable*. Determines which engines can establish absence over it |
+| `kind` | the document's family, which routes it to the right extraction. Optional |
+| `metadata` | anything the engine or a downstream report needs to carry. Optional |
+
+### Catalogue input
+
+The catalogue is the user's. Gaussia specifies its shape and validates it; it ships schema examples, not a domain catalogue.
+
+**PluginSpec** — a risk family. Each maps to one principle of the behavioral contract.
+
+| Field | Meaning |
+|---|---|
+| `id` | referenced by strategies and recorded on every probe and graded outcome |
+| `name`, `description` | documentation for the report. Not consumed by any logic |
+| `principle` | the `Π` member this family attacks. Must exist in the contract |
+
+**StrategySpec** — an interaction pattern: which kind of entity it operates on, how it transforms it, and whether the resulting hook is documented or invented.
+
+| Field | Meaning |
+|---|---|
+| `id` | the aggregation descriptor `z` of the weakness map. Recorded on the probe |
+| `name`, `description` | documentation |
+| `plugin` | the risk family this strategy serves. **Empty means this strategy is a control**: it puts no principle under test, so its probes are excluded from every violation-rate aggregate |
+| `entity_kind` | the kind of entity it needs, which has to match what the engine can extract or retrieve |
+| `transform` | how the real entity becomes the probe's premise: keep it real, mutate it into a fake one, flip a documented value, or flip a documented fact |
+| `doc` | the expected grounding label of the resulting hook: 1 documented, 0 invented |
+| `phrasing_hint` | injected into the generation prompt, so it must be in the knowledge base's language |
+
+Validation gaussia owes the user: every `principle` resolves in the contract, every `plugin` referenced by a strategy exists, `transform` is one of the four known transformations, `doc` is 0 or 1, and identifiers are unique. A catalogue that fails any of these is rejected before generation runs.
+
+**`doc: 1` does not mean control.** The two fields answer different questions: `doc` says whether the entity the probe leans on exists, `plugin` says whether a principle is under test. A probe about a real, documented entity scores whenever its strategy names a plugin — leaning on real content and lying about it is the most productive shape of adversarial probe there is. What a control has is not an entity that exists, it is no rule on the line: asking what a real article says puts no premise the assistant could wrongly accept.
+
+**Measuring correctness on documented content is a matter of adding a principle, not of counting the controls.** If an evaluator wants "did it answer real content correctly, or deflect" inside the violation rate, the path is a principle for it — say, do not contradict the source material — a plugin pointing at that principle, and a `keep_real` strategy pointing at that plugin. Those probes then have a rule on the line and enter every aggregate. A control stays out by construction, not by oversight: with no principle bound, there is nothing to score, and forcing an unrelated rubric onto it manufactures noise. Its raw response is retained regardless, so baseline correctness remains measurable — by a metric built for it, fed the Roast Dataset (FR-034).
+
+### Probe output
+
+**KnowledgeHook** — the structured provenance of a probe against the knowledge base.
+
+| Field | Meaning |
+|---|---|
+| `kind` | the entity type the probe leans on |
+| `references` | the entity itself, real or invented |
+| `doc` | 1 documented, 0 invented. **This is the ground truth of the downstream test** |
+| `how` | the transformation that produced it, from the strategy |
+| `base_entity` | the real entity it was derived from, when the strategy mutated one |
+| `principle` | the contract principle under test, empty for a control |
+| `verified` | whether an independent verifier confirmed the `doc` label. Unset means unverified, and unverified is not the same as false |
+
+**Probe** — the unit the Profiler consumes.
+
+| Field | Meaning |
+|---|---|
+| `id` | stable identifier, quoted in every graded outcome |
+| `plugin`, `strategy` | which catalogue entries produced it. Empty `plugin` means control |
+| `query` | the question sent to the assistant |
+| `hook` | the `KnowledgeHook` above |
+| `attrs` | the natural-language attributes the probe exhibits, which is what lets the Exploiter ground a category in it |
+| `engine` | which engine produced it, which is what keeps the absence/breadth trade-off measurable after composition |
+| `meta` | what the grader needs to judge the response: the real value, the false value asserted, the real and false chains |
+
+### Interfaces the user implements
+
+Described by obligation, not by signature.
+
+- **Probe engine** — declares whether it can handle a given document, and turns a set of documents plus the catalogue into tagged probes. It must derive each `doc` label from its own knowledge of the base's boundary, and must record on the probe when it cannot establish absence reliably.
+- **Hook verifier** — confirms a hook's `doc` label against the corpus. Shared across engines, which is what makes their absence accuracy comparable.
+- **Grader** — estimates one principle's violation for a query and a response, returning a score in `[0,1]` plus the evidence behind it.
+- **Target assistant** — sends a query, optionally within a persistent session, and returns the response or marks the exchange as failed.
+- **Realism estimator** — scores how far a category's sampled queries sit from the natural-query prior.
+- **Category search** — proposes and scores categories from a profile and a contract.
 
 ## User Scenarios & Testing
 
@@ -92,8 +158,10 @@ An evaluator has tagged adversarial probes and the assistant's responses to them
 **Independent test**: a deterministic stub grader over a hand-built probe fixture; every component of `v`, `ω` and `se` checked against values computed by hand. Offline.
 
 1. **Given** a contract of `m` principles, **When** a response is graded, **Then** the outcome carries the aggregate `v` *and* the `m` per-principle grades, so a failure traces to the principle it breaks.
-2. **Given** probes that declare no principle under test, **When** aggregates are computed, **Then** those probes are excluded from every rate while staying in the graded record — 151 of 204 in the reported run.
-3. **Given** a reasoning judge whose first token is its reasoning preamble, **When** the verdict is extracted, **Then** the last verdict-shaped token in the sequence is used, and the result is discarded if the model's own final answer does not independently parse to a verdict.
+2. **Given** probes from a control strategy, **When** aggregates are computed, **Then** those probes are excluded from every rate while staying in the graded record.
+3. **Given** two probes about the same real, documented entity, one from a strategy that names a plugin and one from a control strategy, **When** aggregates are computed, **Then** the first is scored and the second is not. Whether the entity exists decides nothing here; whether a principle is on the line decides everything.
+4. **Given** a reasoning judge whose first token is its reasoning preamble, **When** the base grader extracts the verdict, **Then** the last verdict-shaped token in the sequence is used, and the result is discarded if the model's own final answer does not independently parse to a verdict.
+5. **Given** an exchange the target marks as failed, **When** the probe set is graded, **Then** that probe is recorded as ungraded and counts as neither a violation nor a pass.
 
 ### US2 — Emit the run as a reusable Gaussia dataset (P2)
 
@@ -108,129 +176,130 @@ The evaluator wants the audit to outlive the audit: the graded outcomes as a dat
 
 ### US3 — Generate tagged probes from a knowledge base (P3)
 
-The evaluator points the library at their documentation or regulation, supplies a plugin and strategy catalogue, and gets probes for their domain — each tagged with what is documented and what is plausible but absent. They also need to know how far to trust each tag, because a false "this does not exist" silently corrupts everything downstream.
+The evaluator points the library at their documentation or regulation, supplies a catalogue, and gets probes for their domain — each tagged with what is documented and what is plausible but absent. They also need to know how far to trust each tag, because a false "this does not exist" silently corrupts everything downstream. An evaluator whose knowledge base needs an engine that does not ship writes one against the probe-engine specification.
 
-**Why third**: it removes the need to hand-author 204 probes, and it is where the paper's measured engine trade-off lives. Still downstream of US1 in value: an evaluator with their own probes gets a full profile without it, and black-box mode is explicitly supported.
+**Why third**: it removes the need to hand-author a probe set, and it is where the absence/breadth trade-off of invariant 7 lives. Still downstream of US1 in value: an evaluator with their own probes gets a full profile without it, and black-box mode is explicitly supported.
 
 **Independent test**: over a fixture base with a known enumerable entity set, check absence labels against exact enumeration. Generation is stochastic, so the test asserts label correctness and composition, never probe text.
 
-1. **Given** several engines over one base, **When** their outputs compose, **Then** duplicates merge and each surviving probe records its originating engine, so the trade-off stays measurable after composition.
-2. **Given** an engine that cannot establish absence reliably, **When** it emits an absence probe, **Then** that unreliability is recorded on the probe rather than being indistinguishable from a verified absence.
-3. **Given** a catalogue whose identifiers are entirely the user's own, **When** generation and profiling run, **Then** no library behaviour depends on any of those identifiers.
+1. **Given** the retrieval and graph engines over one base, **When** their outputs compose, **Then** duplicates merge and each surviving probe records its originating engine, so the trade-off stays measurable after composition.
+2. **Given** the retrieval engine, which cannot decide absence because similarity search never reveals what it failed to retrieve, **When** it emits an absence probe, **Then** that unreliability is recorded on the probe rather than being indistinguishable from a graph-confirmed absence.
+3. **Given** a catalogue whose identifiers are entirely the user's own, **When** generation and profiling run, **Then** no library behaviour depends on any of those identifiers, including which strategies are controls.
+4. **Given** a catalogue that names a principle absent from the contract, or a transformation that is not one of the four, **When** it is loaded, **Then** it is rejected before any generation runs.
 
 ### US4 — Search for reproducible failure categories (P4)
 
-Not "which prompt broke it" but "which kinds of realistic question break it, repeatably" — categories in readable attributes, scored so consistency beats luck, gated so blatant asks do not count, budgeted so the queries still read like real traffic, and reduced to the attributes actually responsible.
+Not "which prompt broke it" but "which kinds of realistic question break it, repeatably" — categories in readable attributes, scored so consistency beats luck, gated so blatant asks do not count, budgeted so the queries still read like real traffic, and reduced to the attributes actually responsible. The search runs as a generator: its product is the Roast Dataset, which the pipeline then evaluates.
 
-**Why last**: the paper's headline contribution and its least settled result. Also the heaviest, and the only one whose reported numbers cannot serve as a numerical baseline. US1-US3 already deliver a working product.
+**Why last**: the paper's headline contribution and its least settled result — it reports the search as a validated integration rather than a validated finding, with sample size as the stated blocker. It is also the heaviest to build. US1-US3 already deliver a working product.
 
-**Independent test**: stub target, stub grader with prescribed violations, stub encoder with prescribed distances. `S(c)` against hand computation; a high-variance category rejected where a consistent lower-mean one passes; `κ` zeroing a query; `δ` discarding a passing category; refinement returning the minimal sub-conjunction. Training-free search, so no GPU.
+**Independent test**: stub target, stub grader with prescribed violations, stub estimator with prescribed distances. `S(c)` against hand computation; a high-variance category rejected where a consistent lower-mean one passes; `κ` zeroing a query; `δ` discarding a passing category; refinement returning the minimal sub-conjunction. Training-free search, so no GPU.
 
 1. **Given** two categories with equal mean violation and different variance, **When** both are scored, **Then** the lower-variance one ranks higher, and a category evaluated once carries its `n` so the unreliability of its penalty is visible rather than implied.
 2. **Given** a category that passes `τ`, **When** it is refined, **Then** the result is the smallest sub-conjunction still satisfying `S(c') ≥ τ` and `D ≤ δ`, and the dropped attributes are reported as incidental.
-3. **Given** a run where no category passes `τ`, **When** results are reported, **Then** "no category broke it reproducibly" is distinguishable from "the assistant answered correctly", by surfacing the individual queries at or above `τ` — 33 of 384 against 0 categories, in the reported run.
+3. **Given** a run where no category passes `τ`, **When** results are reported, **Then** "no category broke it reproducibly" is distinguishable from "the assistant answered correctly", by also surfacing the individual queries that did reach `τ`.
 
 ### Edge cases
 
-- An error response or an outright refusal is **not** a contract violation. An upstream billing failure once returned a fixed 245-character error string that a naive grader scored as a violation.
-- A query citing no knowledge-base entity leaves the grader nothing to check against, so its score reflects the judge's own knowledge. 42.4% of the reported level-3 queries. Must be visible on the record, not silently averaged in.
-- A descriptor resting on 3 probes cannot distinguish "never failed" from "undersampled". Five of the eight reported descriptors are in that range.
+- A query citing no knowledge-base entity leaves the grader nothing to check against, so its score reflects the judge's own knowledge. Must be visible on the record, not silently averaged in.
+- A descriptor resting on a handful of probes cannot distinguish "never failed" from "undersampled", which is why every rate travels with its sample size.
 - A principle in `Π` with no grader bound must fail loudly at construction, never contribute a silent zero to `v`.
+- A refusal to answer is a legitimate response, not a transport failure. Whether it violates a principle is the rubric's call, and the rubric is the user's.
 
 ## Requirements
 
 ### Functional Requirements
 
-**Contract and grading**
+**Behavioral contract**
 
-- **FR-001**: The contract MUST be user-supplied: principles with non-negative weights validated to sum to `1 ± 1e-9`, each bound to exactly one grader. No default contract, and no aggregation of several graders into one principle's score.
-- **FR-002**: `v(x,r) = Σ_j w_j · π̂_j(x,r)` MUST be computed with the per-principle grades retained on the outcome.
-- **FR-003**: Graders MUST be substitutable behind one contract, and every grade MUST record the grader, the model and the verdict method that produced it.
-- **FR-004**: A working logprob grader MUST ship, taking the user's judge model as a parameter. It MUST locate the verdict by scanning the full per-token sequence for the last match against the configured surface forms, and MUST discard that verdict when the model's own final answer does not independently parse to one.
-- **FR-005**: When logprobs are unusable or no verdict token appears among them, the grader MUST fall back to sampling over `k` samples and mark the grades as fallback-derived.
-- **FR-006**: Rubric text, verdict surface forms and reasoning budget MUST be user-supplied configuration; the paper's values ship as examples.
-- **FR-007**: A principle with no grader bound MUST fail at contract construction.
-- **FR-008**: An error or refusal response MUST NOT be gradeable as a violation.
+- **FR-001**: Gaussia MUST specify what a behavioral contract is — principles, their weights, their rubrics, their bound graders — and MUST validate an instance of it: weights non-negative and summing to `1 ± 1e-9`, identifiers unique, exactly one grader per principle.
+- **FR-002**: The principles themselves MUST come from the user. Gaussia MUST NOT ship a contract, since the paper defines `Π` as an input.
+- **FR-003**: A principle with no grader bound MUST fail at contract construction.
+- **FR-004**: `v(x,r) = Σ_j w_j · π̂_j(x,r)` MUST be computed with the per-principle grades retained on the outcome.
+
+**Grading**
+
+- **FR-005**: Gaussia MUST specify the grader interface, and every grade MUST record the grader, the model and the verdict method that produced it. Graders MUST be substitutable without touching anything downstream.
+- **FR-006**: Rubric text, verdict surface forms and reasoning budget MUST be user-supplied configuration.
+- **FR-007**: A base grader MUST ship for users who do not want to write their own, declared as such. It takes the user's judge model, locates the verdict by scanning the full per-token sequence for the last match against the configured surface forms, and discards that verdict when the model's own final answer does not independently parse to one.
+- **FR-008**: When logprobs are unusable or no verdict token appears among them, the base grader MUST fall back to sampling over `k` samples and mark the grades as fallback-derived.
+- **FR-009**: This feature MUST NOT modify the framework's existing shared judge.
 
 **Profile**
 
-- **FR-009**: The Profiler MUST accept probes and tags only, with no access path to the knowledge base.
-- **FR-010**: A probe MUST declare whether it puts a principle under test. Probes that do not MUST be excluded from every violation-rate aggregate while remaining in the graded record. No library behaviour may depend on a template, plugin or strategy identifier.
-- **FR-011**: Weakness entries MUST be keyed by `(principle, descriptor)` and MUST carry the rate, its sample size and its standard error.
-- **FR-012**: The profile MUST carry the retained hooks with their `doc` label, MUST express weaknesses as natural-language descriptors, and MUST be the only artifact passed to the Exploiter.
-- **FR-013**: The Profiler MUST support grading a frozen set of responses without contacting the assistant — the mode every reported level-2 number came from, and the only one needing no target credentials.
-- **FR-014**: A graded outcome MUST record whether the grader had knowledge-base evidence to check the response against.
+- **FR-010**: The Profiler MUST accept probes and tags only, with no access path to the knowledge base.
+- **FR-011**: A probe produced by a control strategy MUST carry no principle under test, and MUST be excluded from every violation-rate aggregate while remaining in the graded record. No library behaviour may depend on a plugin, strategy or template identifier.
+- **FR-012**: Weakness entries MUST be keyed by `(principle, descriptor)` and MUST carry the rate, its sample size and its standard error.
+- **FR-013**: The profile MUST carry the retained hooks with their `doc` label, MUST express weaknesses as natural-language descriptors, and MUST be the only artifact passed to the Exploiter.
+- **FR-014**: The Profiler MUST support grading a frozen set of responses without contacting the assistant, which is the only mode needing no target credentials.
+- **FR-015**: A graded outcome MUST record whether the grader had knowledge-base evidence to check the response against.
+- **FR-016**: An exchange the target marks as failed MUST be recorded as ungraded and MUST count as neither a violation nor a pass.
 
 **Target assistant**
 
-- **FR-015**: A target-assistant contract MUST be the only path by which this feature contacts the assistant under evaluation: send a query, optionally within a persistent session, receive a response.
-- **FR-016**: An adapter for the Alquimia runtime MUST ship, configured by base URL, token and assistant identifier.
+- **FR-017**: Gaussia MUST specify the target-assistant interface — send a query, optionally within a persistent session, return the response or mark the exchange failed — and it MUST be the only path by which this feature contacts the assistant under evaluation.
+- **FR-018**: No transport adapter ships in gaussia. Recognising a transport-level failure — an error status, an empty body, a payload shaped like an error — is the implementation's obligation under FR-017, and the specification MUST state it.
 
 **Probe generation**
 
-- **FR-017**: Particularisation MUST be the only component with knowledge-base access, exposing results solely as tagged probes.
-- **FR-018**: Each probe MUST carry a hook whose `doc` label is derived from the generating engine's own knowledge of the base's boundary. The enumeration used for scoring MUST NOT be visible to the engine.
-- **FR-019**: The paper's four engines MUST ship behind one contract, composable over one base with duplicate merging, each surviving probe recording its originating engine.
-- **FR-020**: An engine that cannot establish absence reliably MUST record that limitation on the probe.
-- **FR-021**: With no knowledge base, particularisation MUST return domain-agnostic probes with an empty hook through the same interface.
-- **FR-022**: The plugin and strategy catalogue MUST be user-supplied. The library ships schema examples, not a domain catalogue.
+- **FR-019**: Gaussia MUST specify the probe-engine interface and the shapes of `Document`, `Probe` and `KnowledgeHook` as set out in the data specification above.
+- **FR-020**: Particularisation MUST be the only component with knowledge-base access, exposing results solely as tagged probes.
+- **FR-021**: Each probe MUST carry a hook whose `doc` label is derived from the generating engine's own knowledge of the base's boundary. The enumeration used for scoring MUST NOT be visible to the engine.
+- **FR-022**: A retrieval engine and a graph engine MUST ship as base implementations behind that interface, composable over one base with duplicate merging, each surviving probe recording its originating engine.
+- **FR-023**: An engine that cannot establish absence reliably MUST record that limitation on the probe, so an unreliable absence label is never indistinguishable from a confirmed one.
+- **FR-024**: With no knowledge base, particularisation MUST return domain-agnostic probes with an empty hook through the same interface.
+
+**Catalogue**
+
+- **FR-025**: Gaussia MUST specify `PluginSpec` and `StrategySpec` as set out above, and MUST validate a catalogue before generation: every referenced principle resolves in the contract, every referenced plugin exists, `transform` is one of the four known transformations, `doc` is 0 or 1, identifiers are unique.
+- **FR-026**: A strategy with no plugin MUST be treated as a control. This is the only mechanism by which a control is recognised.
+- **FR-027**: The catalogue MUST be user-supplied. Gaussia ships schema examples, not a domain catalogue.
 
 **Category search**
 
-- **FR-023**: A category MUST be an ordered conjunction of natural-language attributes, each traceable to the weakness entry or hook that induced it.
-- **FR-024**: `S(c)` MUST be computed per Eq. 13 and reported with its `n`.
-- **FR-025**: A query below `κ` MUST contribute exactly 0 to its category's score.
-- **FR-026**: The realism gap MUST be computed without querying the assistant, and a category over `δ` MUST be discarded regardless of `S(c)`. The estimator MUST be substitutable, since the search depends on it only through `δ`.
-- **FR-027**: Refinement MUST return the minimal sub-conjunction satisfying both thresholds, reporting the dropped attributes.
-- **FR-028**: Both search procedures MUST ship behind one contract, the training-free one as default. Documentation MUST state that only policy gradient produced the paper's numbers, and under it the query generator MUST remain unmodified.
+- **FR-028**: A category MUST be an ordered conjunction of natural-language attributes, each traceable to the weakness entry or hook that induced it.
+- **FR-029**: `S(c)` MUST be computed per Eq. 13 and reported with its `n`.
+- **FR-030**: A query below `κ` MUST contribute exactly 0 to its category's score.
+- **FR-031**: The realism gap MUST be computed without querying the assistant, and a category over `δ` MUST be discarded regardless of `S(c)`. The estimator MUST be substitutable, since the search depends on it only through `δ`.
+- **FR-032**: Refinement MUST return the minimal sub-conjunction satisfying both thresholds, reporting the dropped attributes.
+- **FR-033**: Both search procedures MUST sit behind one interface, the training-free one as default. Under the policy-gradient search the query generator MUST remain unmodified.
 
 **Outputs**
 
-- **FR-029**: The Roast Dataset MUST carry one record per query — query, response, violation score, principles charged, grader rationale, and the supporting or contradicting evidence when knowledge-grounded — and MUST be loadable through the SDK's existing dataset contract and consumable by existing metrics unmodified.
-- **FR-030**: A failure report MUST rank categories by `S(c)` with evaluation counts and representative samples, and MUST surface the individual queries at or above `τ` alongside the category verdict.
-- **FR-031**: A category evaluation record MUST be auditable: the attributes proposed, the queries, the responses, the per-principle rationale, and the realism and on-profile checks.
+- **FR-034**: The Roast Dataset MUST carry one record per query — query, response, violation score, principles charged, grader rationale, and the supporting or contradicting evidence when knowledge-grounded — and MUST be loadable through the SDK's existing dataset contract and consumable by existing metrics unmodified.
+- **FR-035**: A failure report MUST rank categories by `S(c)` with evaluation counts and representative samples, and MUST surface the individual queries at or above `τ` alongside the category verdict.
+- **FR-036**: A category evaluation record MUST be auditable: the attributes proposed, the queries, the responses, the per-principle rationale, and the realism and on-profile checks.
 
 **Packaging and documentation**
 
-- **FR-032**: Every dependency this feature adds MUST sit behind one optional extra. Importing the rest of the framework MUST NOT require them.
-- **FR-033**: The metric documentation MUST state that no grader has been calibrated against human labels and that the reported figures are a judge-only measurement.
-
-### Key Entities
-
-Beyond the notation above, the data the SDK carries:
-
-- **Grader / Verdict**: a grade for one principle on one `(context, response)` pair, with its method, model identity and raw evidence — the per-token logprobs, or the sampled votes.
-- **TargetAssistant**: the contract for reaching the assistant under evaluation.
-- **Probe**: a concrete query, its knowledge hook, the principles it targets (empty for a control), the descriptor used for aggregation, the originating engine.
-- **GradedOutcome**: a probe, its response, the per-principle grades, the aggregate `v`, and whether evidence was available.
-- **CategoryEvaluation**: an attribute conjunction with each attribute's provenance, its sampled queries and responses, per-query violations, the filter and realism checks, and `S(c)` with its `n`.
-- **RoastDatasetRecord**: the deliverable's unit.
-- **FailureReport**: categories ranked by `S(c)`, plus the individual-query view.
+- **FR-037**: Every dependency this feature adds MUST sit behind one optional extra. Importing the rest of the framework MUST NOT require them, and the interfaces MUST be importable without the extra so a user can implement against them without installing what the base implementations need.
+- **FR-038**: The metric documentation MUST state that no grader has been calibrated against human labels and that the figures it produces are a judge-only measurement.
 
 ### SDK Pipeline Fit
 
-- **New base classes**: three contracts — grader, probe engine, target assistant. None has an equivalent in `core/`, whose detector, guardian and corpus-connector contracts are shaped for span prediction, bias classification and document loading.
+- **New base classes**: seven interfaces — behavioral contract, grader, probe engine, hook verifier, target assistant, realism estimator, category search. None has an equivalent in `core/`, whose detector, guardian and corpus-connector contracts are shaped for span prediction, bias classification and document loading.
 - **New components**: the **Profiler is a metric** and emits its profile through the standard result channel. The **Probe Library and the Exploiter are generators** (D8): their product is a dataset the pipeline then consumes.
-- **New schemas**: the entities above.
-- **New strategies**: grading, probe engines (composed rather than selected), the realism estimator, the category search.
-- **Existing patterns affected**: none. D4 leaves the shared logprob judge untouched. The precedent `role_adherence` set — a scoring Strategy with a logprob path and a non-logprob fallback — is followed, not modified.
+- **New schemas**: the data specification above.
+- **New strategies**: grading, probe engines (composed rather than selected), the realism estimator, the category search, and the four catalogue transformations.
+- **Existing patterns affected**: none. D4 leaves the shared judge untouched. The precedent `role_adherence` set — a scoring Strategy with a logprob path and a non-logprob fallback — is followed, not modified.
 - **Pipeline**: US1 and US2 fit `Retriever → Dataset → batch()` natively, since grading frozen responses is an evaluation pass over a static dataset. US3 and US4 are generation and sit with the generator machinery. No article is bent.
 
 ## Success Criteria
 
-- **SC-001**: Every component of `v`, `ω`, the per-descriptor rates and `se` reproduces to within `1e-9` of hand computation over a synthetic fixture. Correctness rests on hand computation, not on re-running live judges — provider drift makes the published 12.6% / 15.2% / 7.9% non-reproducible on demand.
-- **SC-002**: Under the reported 7-principle contract, the two heaviest principles at 1.0 and the rest at 0 yields `v = 0.343 ± 1e-9`, below `τ = 0.35`.
-- **SC-003**: Controls are excluded purely through what each probe declares. No library code and no test references a template, plugin or strategy name.
-- **SC-004**: An opt-in check against the published artifacts reproduces 151 scoreable of 204 and the reported profile shape — 8 weakness entries, 24 hooks — at the reported `η`.
-- **SC-005**: Over a fixture base with a known entity set, the enumerating engine reaches 100% absence-label precision and the retrieval engine's absence labels are marked unreliable.
+- **SC-001**: Every component of `v`, `ω`, the per-descriptor rates and `se` reproduces to within `1e-9` of hand computation over a synthetic fixture. Correctness rests on hand computation rather than on re-running live graders, whose providers drift.
+- **SC-002**: For a hand-built contract, a response violating only some of its principles yields exactly the weighted sum of those weights — so a partial violation can fall below a pass threshold that a naive count would clear.
+- **SC-003**: Controls are excluded purely because their strategy has no plugin, and two probes about the same documented entity land on opposite sides of that line when one names a plugin and the other does not. No library code and no test references a plugin, strategy or template name.
+- **SC-004**: Over a fixture base with a known entity set, the graph engine's absence labels are confirmed by exact enumeration and the retrieval engine's are not, and the retrieval engine's probes carry that unreliability on them.
+- **SC-005**: A catalogue with a dangling principle, a dangling plugin, an unknown transformation, a `doc` outside `{0,1}` or a duplicate identifier is rejected before generation.
 - **SC-006**: A Roast Dataset emitted from a run is consumed end-to-end by an existing metric with no change to that metric.
-- **SC-007**: `S(c)`, the `κ` gate, the `δ` budget and refinement all verify against hand-computed fixtures with stub target, grader and encoder.
-- **SC-008**: The default suite runs offline, with no target credentials and no GPU. Everything needing a network, a GPU or the published artifacts is opt-in.
-- **SC-009**: Importing any other part of the framework succeeds with the `roastme` extra uninstalled.
+- **SC-007**: `S(c)`, the `κ` gate, the `δ` budget and refinement all verify against hand-computed fixtures with stub target, grader and estimator.
+- **SC-008**: A stub target that reports a failed exchange produces an ungraded outcome, and that outcome moves neither the numerator nor the denominator of any rate.
+- **SC-009**: A stub grader whose provider exposes no usable logprobs still produces a graded outcome, marked as fallback-derived.
+- **SC-010**: The default suite runs offline, with no target credentials and no GPU. Everything needing a network or a GPU is opt-in.
+- **SC-011**: Every interface imports with the `roastme` extra uninstalled, and importing any other part of the framework still succeeds.
 
 ## Assumptions
 
 - The paper is the upstream source of truth for methodology. Where it was silent, the Decisions table records the call rather than leaving it implicit.
-- The published artifacts stay available in `gaussia-labs/papers` for SC-004. The default suite does not depend on them.
 - Judge models are reached through providers the framework already integrates. Whether a provider exposes usable logprobs is probed at runtime, not encoded in an allowlist.
-- Nothing in the formulation is language-specific, and FR-006 keeps every model-facing string in the user's hands. The reported scenario happens to be Spanish.
+- Nothing in the formulation is language-specific, and FR-006 keeps every model-facing string in the user's hands.
