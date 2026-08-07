@@ -26,7 +26,7 @@ from gaussia.schemas.roastme import RoastBatch, RoastDatasetRecord
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from gaussia.schemas.roastme import GradedOutcome, Probe
+    from gaussia.schemas.roastme import GradedOutcome, PrincipleGrade, Probe
 
 DEFAULT_LANGUAGE = "english"
 
@@ -39,6 +39,16 @@ and ``evidence_available`` is what keeps the two apart.
 """
 
 
+def charged_principles(grades: Sequence[PrincipleGrade]) -> list[str]:
+    """The principles a response is charged with: those its grades score above zero.
+
+    Shared with the Exploiter, which builds records from generated queries that have no probe
+    behind them. The charging rule has to be one function, or the same response would be
+    charged differently depending on which component wrote the record.
+    """
+    return [grade.principle for grade in grades if grade.score > 0.0]
+
+
 def to_record(probe: Probe, outcome: GradedOutcome) -> RoastDatasetRecord:
     """One Roast Dataset record: the exchange, its score, and the grades that justify it.
 
@@ -49,7 +59,7 @@ def to_record(probe: Probe, outcome: GradedOutcome) -> RoastDatasetRecord:
         query=probe.query,
         response=outcome.response,
         violation=outcome.violation,
-        principles_charged=[grade.principle for grade in outcome.grades if grade.score > 0.0],
+        principles_charged=charged_principles(outcome.grades),
         rationale=outcome.grades,
         evidence=_evidence(probe),
         evidence_available=outcome.evidence_available,

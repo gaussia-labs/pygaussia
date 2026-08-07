@@ -147,7 +147,7 @@ An interaction pattern.
 |---|---|---|---|
 | `id` | `str` | `min_length=1` | The aggregation descriptor `z` of the weakness map. |
 | `name` | `str` | — | Documentation. |
-| `description` | `str` | — | Documentation. |
+| `description` | `str` | `min_length=1` | **Not documentation.** Its comma-separated clauses become the probe's attributes, and from there the prose descriptor of the weakness map — the only thing about a strategy allowed to cross to the Exploiter (FR-013). Comma-separated so a category can be grounded in part of a pattern rather than all of it. Constrained non-empty because an empty description leaves the weakness map with nothing sayable, and a catalogue that validates and then fails mid-profile is what FR-025 exists to prevent. |
 | `plugin` | `str \| None` | default `None` | The risk family served. **`None` means control** (FR-026): no principle under test, so the probes it produces are excluded from every violation-rate aggregate. |
 | `entity_kind` | `str` | `min_length=1` | The entity type this strategy needs, in the **user's own vocabulary** — gaussia never interprets it. Validated against what the configured engines declare they handle, so a typo fails loudly instead of yielding no probes. |
 | `transform` | `str` | must be a registered key | How the real entity becomes the probe's premise. Stays a string because it is user configuration; the registry resolves it to a `Transform` **once**, at validation, and nothing branches on it afterwards. |
