@@ -73,6 +73,7 @@ class StubGrader(Grader):
         return PrincipleGrade(
             principle=principle.id,
             score=self.scores[(query, principle.id)],
+            grader=type(self).__name__,
             method=self.method,
             model=self.model,
             evidence={"rubric": principle.rubric, "meta": meta or {}},

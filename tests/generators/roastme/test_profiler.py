@@ -165,15 +165,47 @@ class TestWhatCrossesToTheExploiter:
             for identifier in fx.OPAQUE_IDENTIFIERS:
                 assert identifier not in entry.descriptor
 
-    def test_the_source_strategy_is_stripped(self):
-        """FR-013: it exists for auditing and must not travel on what crosses."""
+    def test_no_identifier_survives_anywhere_on_the_weakness_map(self):
+        """FR-013: `source_strategy` exists for auditing and must not travel on what crosses.
+
+        Asserted over the serialised entry rather than over the field, because nothing sets
+        `source_strategy` today: `entry.source_strategy is None` holds whether or not the
+        stripping works, and would keep holding if the descriptor itself started carrying the
+        identifier. The scan fails on either.
+        """
         result, _ = _run()
-        assert all(entry.source_strategy is None for entry in result.profile.weaknesses)
+        crossed = [entry.model_dump_json() for entry in result.profile.weaknesses]
+
+        assert crossed != []
+        for entry in crossed:
+            for identifier in fx.OPAQUE_IDENTIFIERS:
+                assert identifier not in entry
 
     def test_the_retained_hooks_keep_their_doc_label(self):
         result, _ = _run()
         assert result.profile.hooks != []
         assert all(hook.doc in (0, 1) for hook in result.profile.hooks)
+
+    def test_the_retained_hooks_cross_whole(self):
+        """The exemption FR-013 itself makes, and why it is not a hole in invariant 3.
+
+        A hook carries the user's vocabulary — `kind` is the strategy's `entity_kind`, `how` is
+        the transform key — and it crosses with both intact, because FR-013 requires the retained
+        hooks *themselves* on the profile, and a hook stripped of what was done to which kind of
+        entity is no longer provenance an evaluator can act on.
+
+        What invariant 3 forbids is the Exploiter *steering* on that vocabulary, and that is
+        enforced where the profile is read rather than by blanking fields here: the shipped
+        consumers read `references` and `doc` and nothing else — `JudgeOnProfileFilter`, pinned
+        in `test_on_profile.py`, and `AttributeIterationSearch`, which grounds an attribute on
+        `references` alone. Same convention as `Probe.engine`: recorded for reading, never
+        branched on.
+        """
+        result, _ = _run()
+
+        assert result.profile.hooks != []
+        assert all(hook.kind == fx.ENTITY_KIND for hook in result.profile.hooks)
+        assert {hook.how for hook in result.profile.hooks} <= {fx.TRANSFORM_KEEP, fx.TRANSFORM_INVENT}
 
     def test_the_hooks_of_the_probes_that_broke_it_are_retained(self):
         """US1: an evaluator needs to know which specific entities broke the assistant."""
@@ -208,6 +240,24 @@ class TestEvidenceFlag:
         outcome = _outcome(result, "pb-blackbox")
         assert outcome.evidence_available is False
         assert outcome.violation == pytest.approx(fx.BLACKBOX_VIOLATION, abs=TOLERANCE)
+
+
+class TestTheWeightTolerance:
+    def test_a_contract_at_the_edge_of_the_tolerance_produces_a_result(self):
+        """The `ProfilerResult.overall_rate` half of the bound `violation_score` restores.
+
+        FR-001 accepts weights summing to `1 + 1e-9` so a contract assembled from decimals is not
+        rejected for float noise. Every rate downstream is bounded by 1.0, so a run against such
+        a contract where some probe violates every principle would otherwise fail on the seam
+        between the two — on the assistant's worst response rather than on anything wrong.
+        """
+        contract = fx.tolerance_edge_contract(fx.stub_grader())
+        result = Profiler(contract=contract, target=fx.recorded_target()).profile(fx.probes())
+
+        assert fx.EDGE_WEIGHT_SUM > 1.0
+        assert _outcome(result, "pb-4").violation == 1.0
+        assert result.overall_rate <= 1.0
+        assert all(entry.rate <= 1.0 for entry in result.profile.weaknesses)
 
 
 class TestNoKnowledgeBaseAccess:

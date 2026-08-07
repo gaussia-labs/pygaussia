@@ -112,6 +112,7 @@ class LogprobGrader(Grader):
         return PrincipleGrade(
             principle=principle.id,
             score=self._verdict_probability(alternatives),
+            grader=type(self).__name__,
             method=LOGPROB_METHOD,
             model=_model_identity(self._model),
             evidence={"position": position, "top_logprobs": alternatives, "final_answer": content},
@@ -141,7 +142,7 @@ class LogprobGrader(Grader):
         if positive == -math.inf and negative == -math.inf:
             message = "neither verdict surface form appears among the alternatives of the verdict token"
             raise LogprobsExtractionError(message)
-        return 1.0 / (1.0 + math.exp(negative - positive))
+        return _logistic(positive - negative)
 
     def _from_sampling(self, messages: list[tuple[str, str]], principle: Principle) -> PrincipleGrade:
         bound = self._model.bind(temperature=_SAMPLING_TEMPERATURE)
@@ -153,10 +154,24 @@ class LogprobGrader(Grader):
         return PrincipleGrade(
             principle=principle.id,
             score=sum(votes) / len(votes),
+            grader=type(self).__name__,
             method=SAMPLING_FALLBACK_METHOD,
             model=_model_identity(self._model),
             evidence={"samples": answers, "votes": votes},
         )
+
+
+def _logistic(log_odds: float) -> float:
+    """The verdict probability from the log-odds of the two aggregated surface forms.
+
+    Written through ``tanh`` rather than as ``1 / (1 + exp(-x))``: the difference between two
+    logprobs is bounded by nothing a provider guarantees, and a sentinel like ``-9999.0`` for the
+    form that did not appear makes the direct expression raise ``OverflowError`` past roughly
+    ``709.78``. A grade would then depend on how a provider fills a field rather than on the
+    model's verdict. This form saturates to ``1.0`` and ``0.0`` instead, which is the right answer
+    at that separation, and is the same function everywhere in between.
+    """
+    return 0.5 * (1.0 + math.tanh(0.5 * log_odds))
 
 
 def _verdict_map(positive: tuple[str, ...], negative: tuple[str, ...]) -> dict[str, bool]:

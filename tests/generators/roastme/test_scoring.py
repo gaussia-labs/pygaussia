@@ -17,8 +17,8 @@ import math
 import pytest
 
 from gaussia.generators.roastme.searches.scoring import (
+    GATED_CONTRIBUTION,
     category_score,
-    gated_violation,
     is_on_profile,
     refine,
     standard_error,
@@ -26,7 +26,7 @@ from gaussia.generators.roastme.searches.scoring import (
     weakness_entry,
     within_realism_budget,
 )
-from gaussia.schemas.roastme import Category, PrincipleGrade
+from gaussia.schemas.roastme import Category, GradedOutcome, PrincipleGrade
 from tests.fixtures.roastme import expected as fx
 
 TOLERANCE = 1e-9
@@ -34,7 +34,7 @@ TOLERANCE = 1e-9
 
 def _grades(scores: dict[str, float]) -> list[PrincipleGrade]:
     return [
-        PrincipleGrade(principle=principle, score=score, method="stub", model=None)
+        PrincipleGrade(principle=principle, score=score, grader="StubGrader", method="stub", model=None)
         for principle, score in scores.items()
     ]
 
@@ -73,12 +73,58 @@ class TestViolationScore:
         assert [grade.principle for grade in grades] == list(fx.PARTIAL_VIOLATION_GRADES)
         assert [grade.score for grade in grades] == list(fx.PARTIAL_VIOLATION_GRADES.values())
 
+    def test_a_contract_principle_with_no_grade_raises(self):
+        """FR-003, FR-004: a missing grade would contribute a silent zero to `v` instead."""
+        contract = _contract()
+        grades = _grades({fx.PRINCIPLE_A: 1.0, fx.PRINCIPLE_B: 1.0})
+
+        with pytest.raises(ValueError, match=fx.PRINCIPLE_C):
+            violation_score(grades, contract)
+
+    def test_a_principle_graded_twice_raises(self):
+        """The other half of the same rule: `v` may not depend on the order of the list.
+
+        A silent last-wins would make one response score differently depending on which of two
+        disagreeing grades happened to be appended last — the same silent-zero failure mode as a
+        missing grade, from the opposite direction.
+        """
+        contract = _contract()
+        grades = [
+            *_grades(dict.fromkeys(_principle_ids(contract), 1.0)),
+            PrincipleGrade(principle=fx.PRINCIPLE_A, score=0.0, grader="StubGrader", method="stub", model=None),
+        ]
+
+        with pytest.raises(ValueError, match=fx.PRINCIPLE_A):
+            violation_score(grades, contract)
+
+    def test_a_contract_at_the_edge_of_the_weight_tolerance_cannot_score_above_one(self):
+        """FR-001 accepts weights summing to `1 +- 1e-9`; every score field is bounded by 1.0.
+
+        The tolerance exists so a contract assembled from decimals is not rejected for float
+        noise, not so `v` may leave `[0, 1]`. Clamped where it is produced, so the outcome that
+        carries it is constructible rather than raising on a legitimate contract.
+        """
+        contract = fx.tolerance_edge_contract(fx.stub_grader())
+        grades = _grades(dict.fromkeys(_principle_ids(contract), 1.0))
+
+        assert fx.EDGE_WEIGHT_SUM > 1.0
+        score = violation_score(grades, contract)
+
+        assert score == 1.0
+        assert GradedOutcome(probe_id="pb-edge", response="r", grades=grades, violation=score).violation == 1.0
+
 
 def _principle_ids(contract) -> list[str]:
     return [principle.id for principle in contract.principles]
 
 
 class TestStandardError:
+    def test_no_values_at_all_raises(self):
+        """`S(c)` over nothing is not zero, and a zero penalty on an empty category would read
+        as a category that failed consistently."""
+        with pytest.raises(ValueError, match="at least one value"):
+            standard_error([])
+
     def test_zero_dispersion_gives_zero(self):
         assert standard_error([0.6, 0.6, 0.6, 0.6]) == pytest.approx(0.0, abs=TOLERANCE)
 
@@ -132,6 +178,18 @@ class TestWeaknessEntry:
         assert entry.n == 2
         assert entry.standard_error == pytest.approx(standard_error_value, abs=TOLERANCE)
 
+    def test_a_rate_over_tolerance_edge_violations_stays_in_range(self):
+        """The `WeaknessEntry.rate` half of the same bound as `GradedOutcome.violation`.
+
+        A rate is a mean of violation scores, so it inherits whatever `v` is allowed to be: clamp
+        `v` at production and the mean of a hundred of them is still in `[0, 1]`.
+        """
+        contract = fx.tolerance_edge_contract(fx.stub_grader())
+        grades = _grades(dict.fromkeys(_principle_ids(contract), 1.0))
+        violations = [violation_score(grades, contract)] * 4
+
+        assert weakness_entry(fx.PRINCIPLE_A, "descriptor prose", violations).rate == 1.0
+
     def test_sample_size_travels_with_the_rate(self):
         """A descriptor resting on a handful of probes must not read as settled (FR-012)."""
         few = weakness_entry(fx.PRINCIPLE_A, "descriptor prose", [1.0, 1.0])
@@ -174,13 +232,20 @@ class TestCategoryScore:
 
 class TestOnProfileGate:
     def test_a_query_below_kappa_contributes_exactly_zero(self):
+        """The two pieces `evaluation.py` composes, over the hand-computed gate fixture (FR-030).
+
+        The rule has one home: the gate is `is_on_profile` and the contribution is
+        `GATED_CONTRIBUTION`, and the live composition of the two is pinned end-to-end in
+        `test_policy_gradient.py`.
+        """
         gated = [
-            gated_violation(violation, on_profile, fx.GATE_KAPPA)
+            violation if is_on_profile(on_profile, fx.GATE_KAPPA) else GATED_CONTRIBUTION
             for violation, on_profile in zip(fx.GATE_RAW_VIOLATIONS, fx.GATE_ON_PROFILE_SCORES, strict=True)
         ]
 
         assert gated == fx.GATED_VIOLATIONS
         assert gated[1] == 0.0
+        assert GATED_CONTRIBUTION == 0.0
 
     def test_the_gate_changes_the_category_score(self):
         assert category_score(fx.GATE_RAW_VIOLATIONS, 1.0) == pytest.approx(fx.UNGATED_SCORE_LAMBDA_1, abs=TOLERANCE)
@@ -245,6 +310,24 @@ class TestRefinement:
 
         assert score >= fx.REFINE_TAU
         assert gap <= fx.REFINE_DELTA
+
+    def test_a_category_no_sub_conjunction_of_which_passes_is_left_whole(self):
+        """FR-032: nothing came off, so nothing may be reported as incidental.
+
+        Reachable in production: `attribute_iteration.py` refines its candidate against the same
+        thresholds the search proposed it under, and a candidate the realism budget rejects fails
+        every sub-conjunction including itself.
+        """
+        refined, dropped = refine(
+            fx.refine_category(),
+            lambda candidate: (0.0, 1.0),
+            fx.REFINE_TAU,
+            fx.REFINE_DELTA,
+        )
+
+        assert refined.attributes == fx.REFINE_ATTRIBUTES
+        assert refined.provenance == fx.REFINE_PROVENANCE
+        assert dropped == []
 
     def test_a_category_whose_only_passing_form_is_itself_is_left_whole(self):
         category = Category(attributes=["only attribute"], provenance=["weakness one"])

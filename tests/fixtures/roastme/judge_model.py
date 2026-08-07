@@ -30,6 +30,20 @@ def token_entry(token: str, alternatives: dict[str, float]) -> dict[str, Any]:
     }
 
 
+def raw_token_entry(token: str, logprobs: dict[str, float]) -> dict[str, Any]:
+    """One per-token entry whose alternatives are given as logprobs rather than probabilities.
+
+    The sibling of `token_entry`, for the values a probability cannot express: a provider filling
+    in a sentinel such as `-9999.0` for a surface form it did not rank is reporting a probability
+    of roughly `1e-4343`, which no float can round-trip.
+    """
+    return {
+        "token": token,
+        "logprob": max(logprobs.values()),
+        "top_logprobs": [{"token": name, "logprob": logprob} for name, logprob in logprobs.items()],
+    }
+
+
 class StubResponse:
     """What a LangChain chat model returns, reduced to what a logprob grader reads."""
 

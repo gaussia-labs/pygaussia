@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from gaussia.schemas.roastme import CategoryEvaluation
 
-from .scoring import category_score, is_on_profile, violation_score, within_realism_budget
+from .scoring import GATED_CONTRIBUTION, category_score, is_on_profile, violation_score, within_realism_budget
 from .thresholds import DELTA, KAPPA
 
 if TYPE_CHECKING:
@@ -158,7 +158,7 @@ class CategoryEvaluator:
 
     def _exchange(self, query: str) -> _Exchange | None:
         if not is_on_profile(self._on_profile_filter.score(query, self._profile), self._kappa):
-            return _Exchange(query, _GATED_RESPONSE, 0.0, on_profile=False, grades=[])
+            return _Exchange(query, _GATED_RESPONSE, GATED_CONTRIBUTION, on_profile=False, grades=[])
         response = self._target.send(query)
         if response.failed:
             return None

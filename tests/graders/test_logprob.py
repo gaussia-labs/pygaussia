@@ -18,7 +18,7 @@ import pytest
 
 from gaussia.graders.logprob import LogprobGrader
 from gaussia.schemas.roastme import GraderConfig, Principle
-from tests.fixtures.roastme.judge_model import StubJudgeModel, token_entry
+from tests.fixtures.roastme.judge_model import StubJudgeModel, raw_token_entry, token_entry
 
 TOLERANCE = 1e-9
 
@@ -41,6 +41,10 @@ FIRST_TOKEN_SCORE = 0.2222222222222222
 # The sampling fallback over k = 4: three of four samples say the principle was violated.
 FALLBACK_SAMPLES = ["YES", "NO", "YES", "YES"]
 FALLBACK_SCORE = 0.75
+
+# What a provider reports for a surface form it did not rank. Nothing forbids it, and it puts the
+# two aggregated logprobs about 9999 apart — an exponent no float can carry.
+SENTINEL_LOGPROB = -9999.0
 
 
 def _config(fallback_samples: int = 4) -> GraderConfig:
@@ -78,11 +82,17 @@ class TestVerdictLocation:
 
     def test_the_grade_records_its_own_provenance(self):
         """FR-005: substituting a grader must leave everything downstream untouched, which is
-        only true if the grade carries the grader, the model and the verdict method itself."""
+        only true if the grade carries the grader, the model and the verdict method itself.
+
+        The three are not interchangeable: one grader reads its verdict by two methods, and a
+        rule-based grader has no model at all — so which implementation ran has to be recorded in
+        its own right, or a report comparing two graders cannot say which produced what.
+        """
         model = StubJudgeModel(token_entries=TOKEN_SEQUENCE, final_content="YES")
         grade = _grade(model)
 
         assert grade.principle == "no_invention"
+        assert grade.grader == LogprobGrader.__name__
         assert grade.method.strip() != ""
         assert "fallback" not in grade.method
         assert grade.model is not None
@@ -170,3 +180,50 @@ class TestSamplingFallback:
 
         assert 0.0 <= grade.score <= 1.0
         assert grade.evidence != {}
+
+    def test_the_fallback_grade_names_the_same_grader(self):
+        """FR-005: which implementation ran does not change with how it reached its verdict."""
+        model = StubJudgeModel(
+            token_entries=TOKEN_SEQUENCE,
+            final_content="YES",
+            sample_contents=FALLBACK_SAMPLES,
+            logprobs_supported=False,
+        )
+        grade = _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert grade.grader == LogprobGrader.__name__
+        assert "fallback" in grade.method
+
+
+class TestASeparationNoExponentCanCarry:
+    """A provider is free to report a sentinel logprob for a form it did not rank."""
+
+    def test_a_sentinel_against_the_positive_form_grades_zero(self):
+        model = StubJudgeModel(
+            token_entries=[raw_token_entry("NO", {"YES": SENTINEL_LOGPROB, "NO": -0.01})],
+            final_content="NO",
+        )
+        grade = _grade(model)
+
+        assert grade.score == 0.0
+        assert "fallback" not in grade.method
+
+    def test_a_sentinel_against_the_negative_form_grades_one(self):
+        model = StubJudgeModel(
+            token_entries=[raw_token_entry("YES", {"YES": -0.01, "NO": SENTINEL_LOGPROB})],
+            final_content="YES",
+        )
+        grade = _grade(model)
+
+        assert grade.score == 1.0
+        assert "fallback" not in grade.method
+
+    def test_a_form_absent_from_the_alternatives_is_the_same_case(self):
+        """The aggregate of no match is `-inf`, which is the limit of the sentinel above."""
+        model = StubJudgeModel(
+            token_entries=[raw_token_entry("YES", {"YES": -0.01, "maybe": -5.0})],
+            final_content="YES",
+        )
+        grade = _grade(model)
+
+        assert grade.score == 1.0

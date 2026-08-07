@@ -202,8 +202,8 @@ gaussia's construction and that substituting them changes what the search measur
 `FailureReport` records which implementation of each produced it. That last part is the one that matters
 in practice — a mediocre shipped query generator would otherwise make the whole Exploiter look mediocre
 with nothing pointing at the swappable part. It follows the recording convention already in the data
-model: `Probe.engine` names the engine that produced a probe, `PrincipleGrade.model` names the grader's
-model.
+model: `Probe.engine` names the engine that produced a probe, `PrincipleGrade.grader` and
+`PrincipleGrade.model` name the grader that produced a grade and the model it read it from.
 
 ### Why the query generator and the on-profile filter are separate interfaces
 
