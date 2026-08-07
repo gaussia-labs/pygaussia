@@ -19,12 +19,18 @@ both:
 
   * On binary values (k ones out of n) the uncorrected sample variance is exactly p(1-p), so
     the expression collapses to the binomial standard error sqrt(p(1-p)/n) that `data-model.md`
-    names for the weakness map. The two literals for `(B, descriptor two)` below differ in the
-    17th decimal for exactly that reason, which is well inside the 1e-9 tolerance.
+    names for the weakness map — exactly, in real arithmetic: the collapse costs no precision
+    and explains no discrepancy between literals.
   * At n = 1 the deviation is identically zero, so se is zero *by construction* and
     `S(c) = mean - lambda*se` degenerates to the raw mean — the fact FR-040 cites to justify
     the `ge=2` floor (SC-013). Bessel's correction would divide by zero there instead of
     yielding zero, so the uncorrected form is the only one that makes SC-013's statement true.
+
+Every literal below is written as the closed form quoted beside it evaluates in double
+precision. The two orderings of that closed form are not bit-identical — `sqrt(a/n)` and
+`sqrt(a)/sqrt(n)` can land one ULP apart, and `test_expected_fixtures.py` recomputes them the
+second way — so the literals are pinned to the first, which is the ordering `scoring.py` uses.
+Every assertion against them is made to 1e-9, fifteen orders of magnitude wider than that gap.
 
 Identifiers for plugins, strategies, transforms and entity kinds are deliberately meaningless
 strings. SC-003 requires that no library behaviour and no test assertion depend on what a
@@ -154,7 +160,7 @@ EXPECTED_OUTCOMES = 8
 SE_RATE_075_N4 = 0.21650635094610965  # sqrt(0.75*0.25/4) = sqrt(0.046875)
 SE_RATE_050_N4 = 0.25  # sqrt(0.50*0.50/4) = sqrt(0.0625)
 SE_RATE_025_N4 = 0.21650635094610965  # sqrt(0.25*0.75/4) = sqrt(0.046875)
-SE_RATE_050_N2 = 0.35355339059327373  # sqrt(0.50*0.50/2) = sqrt(0.125)
+SE_RATE_050_N2 = 0.3535533905932738  # sqrt(0.50*0.50/2) = sqrt(0.125)
 
 # Per-principle grade vectors per strategy group, and the rate, sample size and standard error
 # each one produces. Descriptor group one is queries one to four; group two is five and six. The
@@ -207,8 +213,8 @@ GATE_ON_PROFILE_SCORES = [0.9, 0.1]
 GATE_KAPPA = 0.5
 GATED_VIOLATIONS = [1.0, 0.0]
 GATED_MEAN = 0.5
-GATED_SE = 0.35355339059327373  # sqrt(2 * 0.5^2) / 2 = sqrt(0.5) / 2
-GATED_SCORE_LAMBDA_1 = 0.14644660940672627  # 0.5 - sqrt(0.5)/2
+GATED_SE = 0.3535533905932738  # sqrt(2 * 0.5^2) / 2 = sqrt(0.5) / 2
+GATED_SCORE_LAMBDA_1 = 0.1464466094067262  # 0.5 - sqrt(0.5)/2
 UNGATED_SCORE_LAMBDA_1 = 1.0  # 1.0 - 1.0*0.0, had neither query been gated
 
 # SC-013: at n = 1 the penalty vanishes for every lambda, which is why the floor is 2.
@@ -222,8 +228,9 @@ REALISM_GAP_OVER = 0.30000001
 REALISM_DELTA = 0.3
 
 # Refinement. The evaluation of every sub-conjunction is prescribed, so the minimal one is a fact
-# about the fixture and not about a search. Only two subsets satisfy both S(c') >= tau = 0.5 and
-# D <= delta = 0.3, and the smaller of them is unique, so no tie-break is being asserted.
+# about the fixture and not about a search. Three subsets satisfy both S(c') >= tau = 0.5 and
+# D <= delta = 0.3 — the whole conjunction, one pair and one singleton — and the smallest of them
+# is unique, so no tie-break is being asserted.
 REFINE_ATTRIBUTES = ["mentions an unpublished exception", "asks in the second person", "quotes a figure"]
 REFINE_PROVENANCE = ["weakness one", "weakness two", "hook one"]
 REFINE_TAU = 0.5
@@ -257,6 +264,25 @@ def contract(grader: StubGrader) -> BehavioralContract:
             Principle(id=PRINCIPLE_A, weight=WEIGHT_A, rubric="rubric for A", grader=grader),
             Principle(id=PRINCIPLE_B, weight=WEIGHT_B, rubric="rubric for B", grader=grader),
             Principle(id=PRINCIPLE_C, weight=WEIGHT_C, rubric="rubric for C", grader=grader),
+        ]
+    )
+
+
+# A contract FR-001 accepts and whose weights nonetheless sum to more than 1.0: the tolerance
+# exists so a contract assembled from decimals is not rejected for float noise, and 5e-10 is
+# inside it. Every principle violated outright is then the worst case v can reach, which is
+# where the `le=1.0` bounds of the schemas meet the `1 +- 1e-9` the validator grants.
+EDGE_WEIGHT_C = 0.2000000005
+EDGE_WEIGHT_SUM = 1.0000000005  # 0.5 + 0.3 + 0.2000000005
+
+
+def tolerance_edge_contract(grader: StubGrader) -> BehavioralContract:
+    """The same three principles, weighted to the far edge of what FR-001 tolerates."""
+    return BehavioralContract(
+        principles=[
+            Principle(id=PRINCIPLE_A, weight=WEIGHT_A, rubric="rubric for A", grader=grader),
+            Principle(id=PRINCIPLE_B, weight=WEIGHT_B, rubric="rubric for B", grader=grader),
+            Principle(id=PRINCIPLE_C, weight=EDGE_WEIGHT_C, rubric="rubric for C", grader=grader),
         ]
     )
 

@@ -185,9 +185,18 @@ class TestCategoryScoreLiterals:
         assert _score(fx.SPIKY_VIOLATIONS, 2.0) == pytest.approx(fx.SPIKY_SCORE_LAMBDA_2, abs=TOLERANCE)
 
     def test_the_two_categories_share_a_mean_and_differ_in_dispersion(self):
-        assert pytest.approx(fx.SPIKY_MEAN, abs=TOLERANCE) == fx.CONSISTENT_MEAN
-        assert fx.CONSISTENT_SE < fx.SPIKY_SE
-        assert fx.CONSISTENT_SCORE_LAMBDA_1 > fx.SPIKY_SCORE_LAMBDA_1
+        """Asserted over the two violation vectors, not over the literals they were reduced to.
+
+        `SPIKY_MEAN` and `CONSISTENT_MEAN` are both written `0.6`, so comparing them to each
+        other says nothing about whether the vectors below them still share a mean — which is the
+        property US4 scenario 1 rests on.
+        """
+        consistent = sum(fx.CONSISTENT_VIOLATIONS) / len(fx.CONSISTENT_VIOLATIONS)
+        spiky = sum(fx.SPIKY_VIOLATIONS) / len(fx.SPIKY_VIOLATIONS)
+
+        assert spiky == pytest.approx(consistent, abs=TOLERANCE)
+        assert _standard_error(fx.CONSISTENT_VIOLATIONS) < _standard_error(fx.SPIKY_VIOLATIONS)
+        assert _score(fx.CONSISTENT_VIOLATIONS, 1.0) > _score(fx.SPIKY_VIOLATIONS, 1.0)
 
     def test_the_gated_vector_is_the_raw_one_with_the_off_profile_query_zeroed(self):
         gated = [

@@ -202,10 +202,20 @@ class TargetResponse(BaseModel):
 
 
 class PrincipleGrade(BaseModel):
-    """One grader's estimate for one principle on one response."""
+    """One grader's estimate for one principle on one response.
+
+    ``grader``, ``method`` and ``model`` are the three things FR-005 requires every grade to
+    record, and none of them stands in for another: which implementation produced the verdict, how
+    it read it, and which model it read it from. One grader reaches its verdict by two methods —
+    the logprob path and the sampling fallback — and a rule-based grader has no model at all, so
+    neither field identifies the grader. It is required rather than defaulted for the same reason:
+    nothing legitimately produces a grade anonymously. Same convention as ``Probe.engine`` and
+    ``FailureReport.components``: recorded for reading, never branched on.
+    """
 
     principle: str = Field(min_length=1)
     score: float = Field(ge=0.0, le=1.0)
+    grader: str = Field(min_length=1)
     method: str = Field(min_length=1)
     model: str | None = None
     evidence: dict[str, Any] = Field(default_factory=dict)

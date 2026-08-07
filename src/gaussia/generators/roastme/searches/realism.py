@@ -45,7 +45,10 @@ is discarded. It is a starting point, not a calibrated constant: no grader or es
 been calibrated against human labels (FR-038).
 """
 
-# Keeps a zero-norm embedding from turning a similarity into a warning and then into a NaN.
+# Keeps a zero-norm embedding from turning a similarity into a warning and then into a NaN. It
+# floors the divisor instead of being added to it: `norm + eps` would shrink every other row by
+# `1/(1 + eps/norm)`, enough to leave a query pointing exactly where a natural one points reading
+# as a whisker away from the prior rather than on it.
 _EPSILON = 1e-12
 
 
@@ -80,5 +83,5 @@ class EmbeddingRealismEstimator(RealismEstimator):
 
 
 def _unit_rows(vectors: np.ndarray) -> np.ndarray:
-    normalised: np.ndarray = vectors / (np.linalg.norm(vectors, axis=1, keepdims=True) + _EPSILON)
+    normalised: np.ndarray = vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), _EPSILON)
     return normalised

@@ -132,6 +132,7 @@ class KeywordGrader(Grader):
         return PrincipleGrade(
             principle=principle.id,
             score=1.0 if hit else 0.0,
+            grader=type(self).__name__,
             method="keyword-rule",
             model=None,
             evidence={"marker": hit, "rubric": principle.rubric},

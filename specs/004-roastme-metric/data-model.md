@@ -58,6 +58,12 @@ Model validator (FR-001):
 - `id` values unique;
 - every principle carries a grader.
 
+The tolerance is about accepting the contract, not about widening what a score may be. A response
+breaking every principle of a contract weighted to `1 + 1e-9` would put `v` a hair over the `le=1.0`
+that `GradedOutcome.violation`, `WeaknessEntry.rate` and `ProfilerResult.overall_rate` all carry, so
+`violation_score` bounds `v` by `1.0` where it produces it; the other two are means of those and
+inherit the bound rather than restating it.
+
 Gaussia ships no contract instance (FR-002). The paper defines `Π` as an input to the method, so a
 default would be the library deciding what counts as a failure.
 
@@ -243,6 +249,7 @@ One grader's estimate for one principle on one response.
 |---|---|---|---|
 | `principle` | `str` | `min_length=1` | Which principle was charged. |
 | `score` | `float` | `ge=0.0, le=1.0` | `π̂_j(x, r)`. |
+| `grader` | `str` | `min_length=1` | Which grader implementation produced the grade (FR-005). Required, not defaulted: nothing legitimately produces a grade anonymously, and neither of the two fields below identifies the grader — one grader reaches its verdict by two `method`s, and a rule-based grader has no `model`. Same convention as `Probe.engine`: recorded for reading, never branched on. |
 | `method` | `str` | `min_length=1` | How the verdict was obtained — the logprob path, or the sampling fallback (FR-005, FR-008). |
 | `model` | `str \| None` | default `None` | The grader's model identity, `None` for a rule-based grader. |
 | `evidence` | `dict` | default `{}` | The raw basis: the per-token logprobs, or the sampled votes. What makes a grade auditable rather than asserted. |
@@ -327,7 +334,7 @@ framework's metric base, because Roast Me does not emit through the metric pipel
 | `FailureReport` field | Type | Notes |
 |---|---|---|
 | `categories` | `list[CategoryEvaluation]` | Ranked by `S(c)` descending (FR-035). |
-| `queries_over_threshold` | `list[RoastDatasetRecord]` | Individual queries at or above `τ`, surfaced alongside the category verdict so "no category broke it reproducibly" stays distinguishable from "it answered correctly". |
+| `queries_over_threshold` | `list[RoastDatasetRecord]` | Individual queries that were asked and reached `τ`, surfaced alongside the category verdict so "no category broke it reproducibly" stays distinguishable from "it answered correctly". Asked is a second condition and not implied by the score: a query below `κ` is never sent (FR-030) and carries `0.0` with no response and no grades, and `τ` is `ge=0.0` — so at `τ = 0` its zero clears the threshold. `on_profile` is what records that a query was asked, and surfacing one that was not would put a violation with no rationale into the report, which FR-036 forbids. |
 | `components` | `dict[str, str]` | Which implementation of each substitutable piece produced this report — the search, the query generator, the on-profile filter, the realism estimator — plus the `κ` and `δ` actually in force and whether each was supplied or recommended (FR-039, FR-041). Two of the shipped three are gaussia's own construction rather than the paper's, so a weak report has to be attributable to the piece that can be swapped instead of to the method. Same convention as `Probe.engine` and `PrincipleGrade.model`: recorded for reading, never branched on. |
 
 ### The output boundary
