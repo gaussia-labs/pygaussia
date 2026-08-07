@@ -164,27 +164,27 @@ interface at a recorded response set.
 
 ## Phase 5: US3 — Probe Library (Green)
 
-- [ ] T036 [US3] `src/gaussia/generators/roastme/probes/transforms.py` — the four `Transform`
+- [x] T036 [US3] `src/gaussia/generators/roastme/probes/transforms.py` — the four `Transform`
       implementations and the registry that resolves the catalogue string **once**, so nothing branches on
       it afterwards (FR-025)
-- [ ] T037 [US3] `src/gaussia/generators/roastme/probes/catalogue.py` — validate a catalogue against a
+- [x] T037 [US3] `src/gaussia/generators/roastme/probes/catalogue.py` — validate a catalogue against a
       contract **and against the configured engines' declared entity kinds** before generation runs
       (FR-025, FR-026, FR-027)
-- [ ] T038 [P] [US3] `src/gaussia/generators/roastme/probes/retrieval.py` — the retrieval engine,
+- [x] T038 [P] [US3] `src/gaussia/generators/roastme/probes/retrieval.py` — the retrieval engine,
       recording on every absence probe that its label is unreliable (FR-021, FR-023)
-- [ ] T039 [P] [US3] `src/gaussia/generators/roastme/probes/graph.py` — the graph engine, confirming
+- [x] T039 [P] [US3] `src/gaussia/generators/roastme/probes/graph.py` — the graph engine, confirming
       absence from the complete graph (FR-021)
-- [ ] T040 [P] [US3] `src/gaussia/generators/roastme/probes/grag.py` — the multi-hop engine, false
+- [x] T040 [P] [US3] `src/gaussia/generators/roastme/probes/grag.py` — the multi-hop engine, false
       premises spanning several entities (FR-021, FR-022)
-- [ ] T041 [P] [US3] `src/gaussia/generators/roastme/probes/enumeration.py` — the enumeration engine,
+- [x] T041 [P] [US3] `src/gaussia/generators/roastme/probes/enumeration.py` — the enumeration engine,
       opt-in, refusing to run until an `EntityEnumerator` is injected. Reads `Document.structured` to know
       whether a document's boundary can be enumerated (FR-022, D14)
-- [ ] T042 [US3] `src/gaussia/generators/roastme/probes/library.py` and `__init__.py` — compose the
+- [x] T042 [US3] `src/gaussia/generators/roastme/probes/library.py` and `__init__.py` — compose the
       applicable engines, merge duplicates, record the originating engine, run the first three by default
       and the enumeration engine only when configured, and return domain-agnostic probes with an empty
       hook when there is no knowledge base. **`probes/__init__.py` must not import any engine** (FR-020,
       FR-022, FR-024, FR-037)
-- [ ] T043 [US3] T022 and T023 pass
+- [x] T043 [US3] T022 and T023 pass
 
 **Checkpoint**: probes can be generated from a knowledge base and a user-supplied catalogue.
 
