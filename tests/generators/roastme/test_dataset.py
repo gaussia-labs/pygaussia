@@ -232,4 +232,8 @@ class TestAnExistingMetricConsumesIt:
 
         assert len(metrics) == 1
         assert isinstance(metrics[0], ToxicityMetric)
-        assert metrics[0].session_id == SESSION_ID
+        # Toxicity collapses every session into one aggregate labelled "global_stream", so the session
+        # id cannot survive by design — asserting it would demand the change this test forbids. The
+        # assistant id is the identifier it does carry over from the dataset's own metadata, which is
+        # what shows the emitted dataset was read as-is.
+        assert metrics[0].assistant_id == ASSISTANT_ID

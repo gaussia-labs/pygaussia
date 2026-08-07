@@ -135,16 +135,16 @@ would truncate the run, and `--cov-fail-under=50`, which would fail for a reason
 
 ## Phase 3: US1 — Profiler (Green)
 
-- [ ] T030 [US1] `src/gaussia/generators/roastme/searches/scoring.py` — the violation score, the
+- [x] T030 [US1] `src/gaussia/generators/roastme/searches/scoring.py` — the violation score, the
       weakness-map rate with its sample size and standard error, `S(c)`, the `κ` and `δ` comparisons and
       refinement. Pure functions over values: no I/O, no model (FR-004, FR-012, FR-029…FR-032)
-- [ ] T031 [US1] `src/gaussia/graders/logprob.py` and `__init__.py` — the shipped base grader: last
+- [x] T031 [US1] `src/gaussia/graders/logprob.py` and `__init__.py` — the shipped base grader: last
       verdict-shaped token in the sequence, discarded when the final answer does not independently parse
       to one, sampling fallback over `k` marked as fallback-derived (FR-007, FR-008)
-- [ ] T032 [US1] `src/gaussia/generators/roastme/profiler.py` — drive the injected target over a probe
+- [x] T032 [US1] `src/gaussia/generators/roastme/profiler.py` — drive the injected target over a probe
       set, grade each response, aggregate the weakness map and the retained hooks, strip strategy
       identifiers from what crosses, and emit `ProfilerResult` (FR-010…FR-016)
-- [ ] T033 [US1] T018, T019 and T020 pass
+- [x] T033 [US1] T018, T019 and T020 pass
 
 **Checkpoint**: a profile can be built with no credentials, no network and no GPU, by pointing the target
 interface at a recorded response set.
@@ -153,10 +153,10 @@ interface at a recorded response set.
 
 ## Phase 4: US2 — Roast Dataset (Green)
 
-- [ ] T034 [US2] `src/gaussia/generators/roastme/dataset.py` — the output-boundary conversion, filling
+- [x] T034 [US2] `src/gaussia/generators/roastme/dataset.py` — the output-boundary conversion, filling
       every required framework field as specified and carrying the record's own fields as turn metadata
       (FR-034)
-- [ ] T035 [US2] T021 passes
+- [x] T035 [US2] T021 passes
 
 **Checkpoint**: a run's output is consumable by an existing metric unmodified.
 
