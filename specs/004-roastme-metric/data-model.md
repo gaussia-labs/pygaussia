@@ -63,9 +63,20 @@ default would be the library deciding what counts as a failure.
 
 ## Configuration
 
-The thresholds the method takes as parameters. The paper defines them as inputs and fixes no values, so
-they are required rather than defaulted: a default would be gaussia deciding how hard a category has to
-fail before it counts. Grouped per component so nothing carries a knob it does not use.
+The thresholds the method takes as parameters, grouped per component so nothing carries a knob it does
+not use. The paper fixes no values, so which ones gaussia may fill in is decided by what the value *is*
+(spec D17, D18, FR-040, FR-041):
+
+- **Required.** `τ` and `η` say how badly the assistant has to behave before it counts. That is the user's
+  judgement about their own domain, and a shipped number would become a cross-user standard nobody chose.
+  Frictionless first runs come from the worked configuration in `examples/roastme/`, where the value is
+  visible and copied rather than inherited.
+- **Defaulted.** `λ` and `queries_per_category` are statistical convention — a one-standard-error lower
+  bound exists outside gaussia. `pool_size` is a knob of an implementation gaussia writes.
+- **Resolved from the component.** `κ` and `δ` are compared against numbers a *substitutable* component
+  produces, so their meaning travels with the implementation, not with the config. Each ships its own
+  recommendation; a component that recommends nothing and is used with nothing supplied fails at
+  construction.
 
 **`GraderConfig`** — for the shipped logprob grader (FR-006, FR-007, FR-008)
 
@@ -81,13 +92,28 @@ fail before it counts. Grouped per component so nothing carries a knob it does n
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
-| `tau` | `float` | `ge=0.0, le=1.0` | `τ`: the score a category must reach to pass. |
-| `lambda_` | `float` | `ge=0.0` | `λ`: how hard inconsistency is penalised in `S(c)`. |
-| `kappa` | `float` | — | `κ`: the on-profile score a query must reach to count at all. |
-| `delta` | `float` | `ge=0.0` | `δ`: how far a category's queries may drift from the natural-query prior. |
-| `eta` | `float` | `ge=0.0, le=1.0` | `η`: how strong a weakness must be to be worth attacking. |
-| `queries_per_category` | `int` | `ge=1` | The `n` behind `S(c)`. Small `n` makes the standard-error penalty unreliable in both directions at once. |
-| `pool_size` | `int` | `ge=1` | How many of the highest-scoring query/response pairs the training-free search keeps before intersecting their attributes. A method parameter the paper leaves open, so it is required rather than invented at implementation time. |
+| `tau` | `float` | `ge=0.0, le=1.0`, required | `τ`: the score a category must reach to pass. |
+| `eta` | `float` | `ge=0.0, le=1.0`, required | `η`: how strong a weakness must be to be worth attacking. |
+| `lambda_` | `float` | `ge=0.0`, default `1.0` | `λ`: how hard inconsistency is penalised in `S(c)`. The default is the conventional one-standard-error lower bound; raise it for a stricter reading. |
+| `queries_per_category` | `int` | `ge=2`, default `10` | The `n` behind `S(c)`. The floor is 2, not 1: at `n = 1` the standard error is zero by construction, so `S(c)` degenerates to the raw mean and the penalty silently stops existing. Small `n` above the floor still makes the penalty unreliable in both directions at once. |
+| `pool_size` | `int` | `ge=1`, default `20` | How many of the highest-scoring query/response pairs the training-free search keeps before intersecting their attributes. A knob of gaussia's own search rather than a parameter of the method, so gaussia owns its value. |
+| `kappa` | `float \| None` | default `None` | `κ`: the on-profile score a query must reach to count at all. `None` means "take it from the configured on-profile filter". |
+| `delta` | `float \| None` | `ge=0.0`, default `None` | `δ`: how far a category's queries may drift from the natural-query prior. `None` means "take it from the configured realism estimator". |
+
+`kappa` and `delta` are resolved once, when the Exploiter is constructed, and the resolved values are what
+every downstream comparison sees:
+
+| Configured component | Value supplied? | Result |
+|---|---|---|
+| recommends a threshold | no | the component's recommendation |
+| recommends a threshold | yes | the supplied value, always |
+| recommends nothing | no | **construction fails**, naming the component and the parameter |
+| recommends nothing | yes | the supplied value |
+
+The third row is the point of the mechanism. A `κ` calibrated for a filter scoring `[0,1]` is a no-op
+against one scoring `[0,100]` — it admits every query, the run completes, and the report looks populated.
+Validating a range would not catch it, since the value is inside both ranges. Only the component that owns
+the scale can supply a meaningful number, so when it does not, nothing else may.
 
 ## `Document`
 
@@ -174,17 +200,18 @@ What the Probe Library emits.
 |---|---|---|---|
 | `id` | `str` | `min_length=1` | Quoted in every graded outcome. |
 | `query` | `str` | `min_length=1` | The question to send. |
-| `hook` | `KnowledgeHook` | — | Provenance. |
+| `hook` | `KnowledgeHook \| None` | default `None` | Knowledge-base provenance. `None` is the "empty hook" FR-024 requires for a domain-agnostic probe generated with no knowledge base: such a probe leans on no entity, so fabricating a placeholder hook would put an invented entity into the profile's retained hooks `H`, which is exactly what the Exploiter grounds `C_θ` on. |
 | `plugin` | `str \| None` | default `None` | `None` means control. |
 | `strategy` | `str` | `min_length=1` | The descriptor used for aggregation. |
 | `attrs` | `list[str]` | default `[]` | The natural-language attributes the probe exhibits, which is how the Exploiter grounds a category in it. |
 | `engine` | `str \| None` | default `None` | Which engine produced it. Keeps the trade-off measurable after composition (FR-022). |
 | `meta` | `dict` | default `{}` | What a grader needs to judge: the real value, the false value asserted, the real and false chains. |
 
-Model validator: `plugin is None` if and only if `hook.principle is None`. Control-ness would otherwise be
-encoded in two places that can silently disagree, and FR-011 makes it load-bearing for every aggregate — a
-probe with an empty plugin but a principle set would be excluded from the rates while still charging a
-principle.
+Model validator: **where a hook is present**, `plugin is None` if and only if `hook.principle is None`.
+Control-ness would otherwise be encoded in two places that can silently disagree, and FR-011 makes it
+load-bearing for every aggregate — a probe with an empty plugin but a principle set would be excluded from
+the rates while still charging a principle. `plugin` stays the authoritative marker either way (FR-026), so
+a hookless probe is still recognisably a control or not.
 
 ## `TargetResponse`
 
@@ -294,12 +321,14 @@ framework's metric base, because Roast Me does not emit through the metric pipel
 | `violation` | `float \| None` | `None` for an ungraded exchange, same convention as `GradedOutcome`. |
 | `principles_charged` | `list[str]` | — |
 | `rationale` | `list[PrincipleGrade]` | The grades that justify the score. |
-| `evidence` | `str \| None` | The supporting or contradicting source text, when knowledge-grounded. `None` in black-box mode — which US2 requires be distinguishable from "sought and not found", so `evidence_available` on the outcome carries that distinction rather than overloading `None`. |
+| `evidence` | `str \| None` | The supporting or contradicting source text, when knowledge-grounded. `None` in black-box mode — which US2 requires be distinguishable from "sought and not found", so `evidence_available` carries that distinction rather than overloading `None`. |
+| `evidence_available` | `bool` | Whether the grader had knowledge-base evidence to check against, carried through from `GradedOutcome` (FR-015). It travels on the record rather than being inferred from `evidence`, because that is what keeps "no evidence existed" distinguishable from "evidence was sought and not found" across the output boundary. |
 
 | `FailureReport` field | Type | Notes |
 |---|---|---|
 | `categories` | `list[CategoryEvaluation]` | Ranked by `S(c)` descending (FR-035). |
 | `queries_over_threshold` | `list[RoastDatasetRecord]` | Individual queries at or above `τ`, surfaced alongside the category verdict so "no category broke it reproducibly" stays distinguishable from "it answered correctly". |
+| `components` | `dict[str, str]` | Which implementation of each substitutable piece produced this report — the search, the query generator, the on-profile filter, the realism estimator — plus the `κ` and `δ` actually in force and whether each was supplied or recommended (FR-039, FR-041). Two of the shipped three are gaussia's own construction rather than the paper's, so a weak report has to be attributable to the piece that can be swapped instead of to the method. Same convention as `Probe.engine` and `PrincipleGrade.model`: recorded for reading, never branched on. |
 
 ### The output boundary
 

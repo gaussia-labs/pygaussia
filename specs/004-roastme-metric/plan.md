@@ -19,6 +19,27 @@ This file was substantially rewritten, so the diff is large. The changes, in one
   does not run by default"; "How optional dependencies fail"; the open decision below.
 - **Grown**: interfaces from seven to ten, probe engines from two to four.
 
+## What changed after approval
+
+Three things were approved with open questions still in them. Closing them changed the design in one
+place, which is why this is stated here rather than only in the sections below.
+
+- **The three pluggable pieces ship** (spec FR-039). The earlier position — the estimator ships, the
+  query generator and the filter do not — left the Exploiter unable to run out of the box, which meant
+  the invention was going to happen anyway, in every user's code, untested. It ships as a tested class
+  labelled a reference implementation instead, and the failure report records which implementations
+  produced it.
+- **Thresholds split three ways** (spec D17, FR-040) instead of all being required. `τ` and `η` remain
+  the user's; `λ`, `n` and the shipped search's own knobs get defaults; `n = 1` is now rejected rather
+  than allowed, because it silently disables the inconsistency penalty.
+- **A threshold whose scale belongs to a substitutable component takes its default from that component**
+  (spec D18, FR-041). An earlier draft of this change proposed that components declare their score
+  *range* and that gaussia validate `κ` against it. That does not work: a `κ` calibrated for a `[0,1]`
+  filter is inside a `[0,100]` filter's range too, so the check passes and the gate quietly admits
+  everything. Recommending the threshold from the component catches exactly that case.
+- **The policy-gradient search is now testable** (spec FR-033, SC-014), which removes the only unchecked
+  gate box in this document. See "Why the policy-gradient search injects its policy and its optimiser".
+
 ## Summary
 
 Translate the Roast Me methodology from `papers/2026-06-roastme/` into the SDK as a specification the
@@ -27,16 +48,15 @@ user implements against. Ten abstract interfaces land in `core/`; the Pydantic s
 a generator subsystem that drives an injected target assistant and produces the Roast Dataset, which the
 framework's existing pipeline then consumes (spec D15).
 
-Base implementations ship for grading and for probe generation, each declared as a convenience rather
-than as the definition of its component (spec D1). The arithmetic gaussia owns — the violation score,
+Base implementations ship for grading, for probe generation and for the Exploiter's three pluggable
+pieces, each declared as a reference implementation rather than as the definition of its component
+(spec D1, FR-039). The arithmetic gaussia owns — the violation score,
 the weakness map with its standard errors, `S(c)`, the `κ` gate, the `δ` budget, refinement — is kept in
 modules with no I/O so it is verifiable against hand-computed fixtures with no network and no GPU.
 
-**One question for the reviewer**, and it is the only thing here that is not decided: the paper defines
-`τ`, `λ`, `κ`, `δ` and `η` as parameters of the method and fixes no values. This plan makes them
-**required** inputs with no defaults, on the grounds that a default would be gaussia deciding how hard a
-category has to fail before it counts. If you would rather ship recommended values, say so and the
-config models get defaults.
+Nothing in this document is open. The three questions it previously left to the reviewer — which
+pluggable pieces ship, and how the method's thresholds are supplied — are decided below and in spec D17
+and D18.
 
 ## Technical Context
 
@@ -104,7 +124,7 @@ every interface. No network, no GPU, no external artifacts in the default suite 
 
 ### Simplicity Gate
 
-- [x] **No speculative features**: the plan implements FR-001…FR-038 and nothing else. No plug-in
+- [x] **No speculative features**: the plan implements FR-001…FR-041 and nothing else. No plug-in
   discovery, no caching, no async fan-out, no retry policy beyond the sampling fallback FR-008 requires.
 - [x] **No premature abstractions**: every interface has a real consumer in scope. A *category generator*
   is deliberately **not** an interface: the training-free search has none — it intersects a pool — so
@@ -117,13 +137,14 @@ every interface. No network, no GPU, no external artifacts in the default suite 
 ### Testing Gate
 
 - [x] Tests precede implementation, and every success criterion has a task that asserts it.
-- [ ] **`PolicyGradientSearch` ships with no automated coverage and needs your approval.** It trains a
-  LoRA policy; the CI runner has no GPU, so nothing verifies it. Article III is non-negotiable, so this
-  box is left unchecked deliberately rather than absorbed into a footnote. Testing a training step on CPU
-  would assert that the step runs, not that the search searches — a test that passes while telling nobody
-  anything. What bounds the risk: the criterion that decides whether a category passes lives in
-  `searches/scoring.py` with full hand-computed coverage, so what is uncovered is the optimisation loop,
-  not the decision rule. The class is marked `requires_gpu`, a marker the repo already defines.
+- [x] **`PolicyGradientSearch` is covered except for the weight update itself** (SC-014). An earlier draft
+  left this box unchecked, on the argument that testing a training step on CPU asserts that the step runs
+  rather than that the search searches. That is true and it answers the wrong question: the search is a
+  loop that samples queries, gates them on `κ` and `δ`, scores them, turns the score into a reward and
+  stops on a budget — and only the last step, applying the gradient, needs a GPU. Injecting the policy and
+  the update step puts the other four under hand-computed coverage. What remains uncovered is one call
+  into `trl`, third-party code this repo does not test anywhere else. The class stays marked
+  `requires_gpu` for the end-to-end path, a marker the repo already defines.
 
 ### Pipeline Gate
 
@@ -154,34 +175,35 @@ re-export, because they require numpy. That file's own docstring says so. The ru
 "abstractions with no heavy imports are re-exported; ones that would drag a dependency are imported
 directly", and Roast Me's ten fall on the light side of it.
 
-### [NEEDS DECISION — ALEX] Which pluggable pieces ship a working implementation
+### Which pluggable pieces ship a working implementation
 
-Not "what the run returns" — that is settled. This is about which of the ten interfaces come with an
-implementation in the box, so a user can run without writing code.
-
-Settled by the approved spec: the four probe engines (D14, FR-022) and the logprob grader (FR-007) ship.
-The entity enumerator does not, because enumerating a domain's entities is domain knowledge rather than a
+Which of the ten interfaces come with an implementation in the box, so a user can run without writing
+code. The probe engines (D14, FR-022) and the logprob grader (FR-007) were settled at the spec gate. The
+entity enumerator ships none, because enumerating a domain's entities is domain knowledge rather than a
 technique.
 
-Open, and it is a product call rather than a technical one:
+**The Exploiter's three ship** (FR-039), and only one of them has the paper behind it:
 
-| Piece | Ships? | The case for | The case against |
-|---|---|---|---|
-| **Realism estimator** | probably yes | the paper gives the construction — expected cosine distance from a prior pool — and the framework already has the embedder it needs | none material |
-| **Query generator** | unclear | the Exploiter cannot run at all without one | the paper names it as a role and gives no construction, so shipping one means inventing it |
-| **On-profile filter** | unclear | same: without one, the `κ` gate has nothing to compare against | same: the paper deliberately leaves `f` abstract, so a shipped default is our invention that every user inherits |
+| Piece | Provenance | Marked as |
+|---|---|---|
+| **Realism estimator** | the paper's own construction: expected cosine distance from a prior pool | reference implementation |
+| **Query generator** | gaussia's; the paper names the role and gives no construction | reference implementation, stated as gaussia's own |
+| **On-profile filter** | gaussia's; the paper leaves `f` abstract on purpose | reference implementation, stated as gaussia's own |
 
-The honest position: **the query generator and the filter are in the same situation**, and an earlier
-draft of this plan treated them differently on the same premise, which was wrong. Either both ship as
-declared inventions, or neither ships and the Exploiter refuses to run until both are supplied.
+An earlier draft argued for shipping only the estimator, on the grounds that a shipped default for the
+other two is an invention every user inherits. The flaw is that it does not avoid the invention, it only
+moves it: with neither shipped the Exploiter refuses to run, so every user writes the same two
+LLM-prompting classes by copying the example — the same invention, with no tests and no coverage behind
+it. Level 3 is also the paper's headline contribution, and making it unrunnable out of the box is the
+one outcome nothing in the spec asks for.
 
-Whichever way it goes, spec D1 needs to agree: it currently says base implementations ship "only where
-D14 and the requirements name them", and no requirement names any of these three. That is one line in
-the spec once the decision is made.
-
-The rest of this plan is written for **the estimator shipping and the other two not** — the only reading
-the paper supports on its own. It degrades in one direction: if the query generator and the filter ship
-too, two files and two tasks are added and D1 is widened.
+What keeps this honest rather than merely convenient: the docs say plainly that two of the three are
+gaussia's construction and that substituting them changes what the search measures, and every
+`FailureReport` records which implementation of each produced it. That last part is the one that matters
+in practice — a mediocre shipped query generator would otherwise make the whole Exploiter look mediocre
+with nothing pointing at the swappable part. It follows the recording convention already in the data
+model: `Probe.engine` names the engine that produced a probe, `PrincipleGrade.model` names the grader's
+model.
 
 ### Why the query generator and the on-profile filter are separate interfaces
 
@@ -196,6 +218,63 @@ The `κ` gate compares against a score of how on-profile and indirect a single q
 semantic judgement about one query, not arithmetic over values, so it cannot live in `scoring.py` with
 the rest. Separating it lets `scoring.py` stay a pure-function module that takes the filter's output as a
 number.
+
+### Why a threshold's default lives on the component that defines its scale
+
+`κ` and `δ` are the two thresholds gaussia compares against a number a *substitutable* component
+produces. `τ` and `η` are not: they sit on rates gaussia computes itself, always in `[0,1]`.
+
+That difference is the whole design. A filter returning `[0,1]` and one returning `[0,100]` are both
+valid implementations of the same interface, and a `κ` of `0.6` gates sensibly against the first and
+admits every query against the second. The failure is silent in the worst way: the run completes, the
+report is populated, and the gate the paper relies on to keep blatant asks from counting was never
+applied.
+
+So the shipped filter and the shipped estimator each declare the threshold they recommend, `ExploiterConfig`
+holds `κ` and `δ` as optional, and resolution happens once at Exploiter construction:
+
+| Configured component | User supplied the threshold? | Result |
+|---|---|---|
+| ships with a recommendation | no | the component's value is used |
+| ships with a recommendation | yes | the user's value wins, always |
+| declares no recommendation | no | **construction fails**, naming the component and the parameter |
+| declares no recommendation | yes | the user's value is used |
+
+The rejected alternative, recorded because it looks correct: have components declare their score *range*
+and validate the threshold against it. It fails on the exact case that motivates the mechanism — `0.6` is
+inside `[0,100]`, so the check passes and nothing is caught. It also costs more code. Recommending the
+threshold is both smaller and sound, because the recommendation is meaningless outside the scale it came
+from and therefore cannot be inherited across a substitution.
+
+This is the same shape as the `entity_kind` validation (FR-025): a component declares what gaussia cannot
+infer, and gaussia refuses to run rather than producing a result that looks fine.
+
+### Why the policy-gradient search injects its policy and its optimiser
+
+The search is five steps in a loop: sample `k` queries from the policy, drop the ones failing `κ` or `δ`,
+send the survivors to the target and grade them, turn the graded outcomes into a reward, apply the
+update. Only the fifth needs a GPU.
+
+Building the policy and the optimiser inside the class makes all five untestable together. Taking both as
+constructor arguments makes the first four testable with a stub policy that returns fixed queries and
+fixed log-probabilities, and a stub update step that records what it was asked to apply. The tests then
+assert the things that can be silently wrong — that exactly `k` queries were requested, that the gates
+dropped the right ones, that the reward matches hand computation, that the loop stopped on the budget.
+
+The seam is not introduced for testing alone: the policy is a model the user supplies, which is the same
+dependency-inversion the rest of the subsystem already applies to graders, engines and the target.
+
+Two consequences worth stating, because both could be read as inconsistencies:
+
+- **The two collaborator abstractions do not go in `core/`.** They stay in `policy_gradient.py`, so the
+  interface count in the spec stays at ten. `core/` holds the specification a user implements against, and
+  a user substituting the search wholesale never sees these — they are collaborators of one shipped
+  implementation. This is the same line already drawn around a category *generator*, which the Simplicity
+  Gate keeps out of the interface set for the same reason.
+- **The RL stack is imported by `policy_update.py`, not by the loop.** Otherwise the CPU tests would need
+  the `roastme-rl` extra installed to import the module they test, which would drag the training stack into
+  the default suite and undo the point of the extra. The loop module imports nothing heavy; the single
+  module that does is the one marked `requires_gpu`.
 
 ### Why the enumeration engine ships but does not run by default
 
@@ -263,7 +342,8 @@ user writes.
 `searches/scoring.py` holds `S(c)`, the `κ` comparison, the `δ` comparison, refinement and the weakness
 map's rates and standard errors as functions over values, with no I/O and no model. SC-007 then verifies
 the criterion that decides whether a category passes without constructing a search, a target or an
-estimator. It is also what bounds the untested surface of the policy-gradient search.
+estimator. It is also what both searches share: the decision rule is one covered module, so switching
+search procedure cannot change what counts as a failing category.
 
 ### How optional dependencies fail
 
@@ -300,10 +380,10 @@ exchange (SC-008), and a grader whose provider exposes no usable logprobs (SC-00
 | `src/gaussia/core/transform.py` | `Transform` | Strategy |
 | `src/gaussia/core/target_assistant.py` | `TargetAssistant` (FR-017, FR-018) | Adapter |
 | `src/gaussia/core/query_generator.py` | `QueryGenerator`: category → concrete queries (FR-033) | Strategy |
-| `src/gaussia/core/on_profile_filter.py` | `OnProfileFilter`: how on-profile one query is, for the `κ` gate (FR-030) | Strategy |
-| `src/gaussia/core/realism_estimator.py` | `RealismEstimator` (FR-031) | Strategy |
+| `src/gaussia/core/on_profile_filter.py` | `OnProfileFilter`: how on-profile one query is, for the `κ` gate, plus the `κ` it recommends on its own scale (FR-030, FR-041) | Strategy |
+| `src/gaussia/core/realism_estimator.py` | `RealismEstimator`, plus the `δ` it recommends (FR-031, FR-041) | Strategy |
 | `src/gaussia/core/category_search.py` | `CategorySearch` (FR-033) | Strategy |
-| `src/gaussia/schemas/roastme.py` | Every model in `data-model.md`, including `TargetResponse` and the three config models | Models |
+| `src/gaussia/schemas/roastme.py` | Every model in `data-model.md`, including `TargetResponse` and the two config models | Models |
 | `src/gaussia/graders/__init__.py` | Re-exports the shipped grader | Module facade |
 | `src/gaussia/graders/logprob.py` | `LogprobGrader` (FR-007, FR-008) | Adapter |
 | `src/gaussia/generators/roastme/__init__.py` | Re-exports `ProbeLibrary`, `Profiler`, `Exploiter` — no engine imports | Module facade |
@@ -321,14 +401,20 @@ exchange (SC-008), and a grader whose provider exposes no usable logprobs (SC-00
 | `src/gaussia/generators/roastme/searches/__init__.py` | Module init | Module facade |
 | `src/gaussia/generators/roastme/searches/scoring.py` | `S(c)`, the gates, refinement, rates and standard errors (FR-012, FR-029…FR-032) | Pure functions |
 | `src/gaussia/generators/roastme/searches/attribute_iteration.py` | The training-free search; the default | Strategy |
-| `src/gaussia/generators/roastme/searches/realism.py` | Base realism estimator: expected cosine distance from a prior pool, using an injected embedder — the instantiation the paper gives for `δ` | Adapter |
-| `src/gaussia/generators/roastme/searches/policy_gradient.py` | The policy-gradient search, behind `roastme-rl`, marked `requires_gpu` | Strategy |
+| `src/gaussia/generators/roastme/searches/realism.py` | Base realism estimator: expected cosine distance from a prior pool, using an injected embedder — the instantiation the paper gives for `δ` — and the `δ` it recommends (FR-039, FR-041) | Adapter |
+| `src/gaussia/generators/roastme/searches/query_generation.py` | Base query generator: a category's attributes to concrete queries through the user's model. Gaussia's own construction, declared as such (FR-039) | Adapter |
+| `src/gaussia/generators/roastme/searches/on_profile.py` | Base on-profile filter, and the `κ` it recommends. Gaussia's own construction, declared as such (FR-039, FR-041) | Adapter |
+| `src/gaussia/generators/roastme/searches/thresholds.py` | Threshold resolution: component recommendation, user override, refusal (FR-041, SC-012) | Pure functions |
+| `src/gaussia/generators/roastme/searches/policy_gradient.py` | The policy-gradient loop, and the two collaborator abstractions it samples from and applies through. Imports nothing heavy, so it runs in the default suite (FR-033, SC-014) | Strategy |
+| `src/gaussia/generators/roastme/searches/policy_update.py` | The training-backed update step behind `roastme-rl`: the only module here that imports the RL stack, and the only one marked `requires_gpu` | Adapter |
 | `tests/generators/roastme/test_profiler.py` | Grade retention (FR-004), control exclusion by empty plugin including the pair over one documented entity (SC-003), ungraded outcomes (SC-008) | Pytest |
 | `tests/generators/roastme/test_dataset.py` | The conversion and its field fills; an existing metric consumes the result unchanged (SC-006) | Pytest |
 | `tests/generators/roastme/test_catalogue.py` | Every rejection path (SC-005) | Pytest |
 | `tests/generators/roastme/test_library.py` | Composition, duplicate merging, absence reliability (SC-004), the enumeration engine refusing to run without an enumerator | Pytest |
 | `tests/generators/roastme/test_scoring.py` | `v`, rates, standard errors, `S(c)`, the gates, refinement (SC-001, SC-002, SC-007) | Pytest |
-| `tests/generators/roastme/test_exploiter.py` | The report ranked by `S(c)` with the queries at or above `τ` surfaced (FR-035), an auditable evaluation record (FR-036), and the refusal to run with no on-profile filter supplied | Pytest |
+| `tests/generators/roastme/test_exploiter.py` | The report ranked by `S(c)` with the queries at or above `τ` surfaced (FR-035), an auditable evaluation record (FR-036), and the implementations recorded on the report (FR-039) | Pytest |
+| `tests/generators/roastme/test_thresholds.py` | The four resolution paths, and `n = 1` rejected with the fixture showing the penalty vanishing (SC-012, SC-013) | Pytest |
+| `tests/generators/roastme/test_policy_gradient.py` | Sampling, gating, reward and stopping with a stub policy and a stub update step, on CPU (SC-014) | Pytest |
 | `tests/graders/test_logprob.py` | Last-token location, discard on unparsed answer, fallback marking (SC-009) | Pytest |
 | `tests/fixtures/roastme/` | Deterministic doubles for all ten interfaces plus hand-computed probe fixtures | Test doubles |
 | `docs/advanced/roastme.mdx` | The subsystem page, alongside `generators` and `prompt-optimizer` (FR-038) | Docs |
@@ -367,6 +453,10 @@ plausibly have leaked:
 
 ## Complexity Tracking
 
-Two items need the reviewer's explicit call: the unchecked box in the Testing Gate (the policy-gradient
-search has no automated coverage) and the open decision on which pluggable pieces ship. Both are stated
-where they arise rather than repeated here.
+No gate box is left unchecked and no decision is left open. Two additions to the surface are worth
+naming, both bought deliberately:
+
+- `OnProfileFilter` and `RealismEstimator` each carry a recommended threshold beyond their scoring method.
+  One attribute apiece, in exchange for making a silent gate failure impossible (FR-041).
+- `PolicyGradientSearch` takes two collaborators it could have constructed itself. That is what moves its
+  loop from uncovered to covered (SC-014), and it matches the injection the rest of the subsystem uses.

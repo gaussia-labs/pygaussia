@@ -4,12 +4,15 @@
 **Created**: 2026-08-03
 **Status**: Planned
 
-> **Amended after approval.** Four scope changes: Roast Me does not ride the metric pipeline (D15); the
-> target-assistant interface is received by both the Profiler and the Exploiter (D16, FR-014, FR-017);
-> two extras instead of one (D5); all four probe engines ship, three by default (D14, FR-022). The first
-> three were requested at the plan gate; the fourth is a product decision. Factual corrections and the
-> reading path for this round are in the pull request description, so this document stays a
-> specification rather than a changelog.
+> **Amended twice after approval.** At the plan gate, four scope changes: Roast Me does not ride the
+> metric pipeline (D15); the target-assistant interface is received by both the Profiler and the
+> Exploiter (D16, FR-014, FR-017); two extras instead of one (D5); all four probe engines ship, three by
+> default (D14, FR-022). After the tasks gate, the three parameter questions this document had left to
+> the reviewer, now decided: the Exploiter's three pluggable pieces ship base implementations (D1,
+> FR-039); the method's thresholds split into user-owned and library-defaulted (D17, FR-040); and a
+> threshold measured on a substitutable component's own scale takes its default from that component
+> (D18, FR-041). Factual corrections and the reading path are in the pull request description, so this
+> document stays a specification rather than a changelog.
 
 ## Overview
 
@@ -61,7 +64,7 @@ Resolved before planning. The requirements implement these without restating the
 
 | # | Was open | Decided |
 |---|---|---|
-| D1 | What gaussia owns versus what the user writes | **Gaussia owns the specification**: the interfaces, the data shapes, the validation and the arithmetic. The user implements against it and supplies models, credentials, a knowledge base and a plugin/strategy catalogue. Base implementations ship only where D14 and the requirements name them, and are declared as a convenience |
+| D1 | What gaussia owns versus what the user writes | **Gaussia owns the specification**: the interfaces, the data shapes, the validation and the arithmetic. The user implements against it and supplies models, credentials, a knowledge base and a plugin/strategy catalogue. Base implementations ship where D14 and the requirements name them — grading, probe generation, and the Exploiter's query generator, on-profile filter and realism estimator (FR-039) — each declared as a reference implementation rather than as the definition of its component |
 | D2 | Multi-grader aggregation | Out. One grader per principle. Comparing graders is done by running the metric once per grader |
 | D3 | Rubrics and prompts | User-supplied. A rubric *is* what the metric measures, so gaussia ships schema examples rather than defaults |
 | D4 | Extending the shared logprob judge | No. Roast Me grades behind its own interface; `llm/judge.py` is untouched and `role_adherence` is unaffected |
@@ -77,6 +80,8 @@ Resolved before planning. The requirements implement these without restating the
 | D14 | Which probe engines ship, and which run | **All four ship**: retrieval, graph, multi-hop and enumeration. The first three **run by default** and together span invariant 7 — though note this is not the set the paper evaluated: its canonical dataset was produced by retrieval, graph and enumeration, and the multi-hop engine appears in no trade-off table — the graph engine confirms absence, retrieval contributes the breadth of false premises. The enumeration engine is **opt-in**, because it is the only one that cannot run on a knowledge base alone: it needs the user to supply an enumerator for their domain's entities. Shipping it rather than omitting it keeps the strongest absence guarantee available to whoever can afford to write that enumerator |
 | D15 | Whether Roast Me rides the framework's metric pipeline | **No.** There is no dataset to load: Roast Me *generates* the dataset that roasts the assistant. It is a generator subsystem — the Probe Library, the Profiler and the Exploiter produce the Roast Dataset, and that dataset is what enters the pipeline for existing metrics to consume. No component subclasses the framework's metric base class. This is not a deviation: the framework's generator base is already a plain class, and non-metric subsystems already sit alongside metrics rather than inside them |
 | D16 | How the assistant under test is reached | Through the target-assistant interface, received by **both the Profiler and the Exploiter**. The user implements it for their own transport — a hosted API, a local model, a browser page — and returns the response as the specified model; gaussia consumes only that interface and drives the exchange. Replaying a recorded response set is an implementation of the same interface, not a separate mode, which is what keeps the credential-free path (FR-014) from being a special case |
+| D17 | Which method thresholds gaussia is allowed to default | Split by what the value *is*, not by whether the paper names it. `τ` and `η` stay **required**: they say how badly the assistant has to behave before it counts, which is the user's judgement about their own domain, and a shipped value would quietly become a cross-user standard nobody chose. `λ` and the queries-per-category `n` are **defaulted**: they are statistical convention, and a conservative lower bound at one standard error already exists outside gaussia. `pool_size` is defaulted because it is a knob of an implementation gaussia writes, not a parameter of the method. Frictionless first runs come from a complete worked configuration in the examples (FR-040), not from hiding the two thresholds that are genuinely the user's |
+| D18 | Where the default lives for a threshold measured on a substitutable component's scale | On the component. `κ` and `δ` are compared against numbers the on-profile filter and the realism estimator produce, so their meaning depends on whichever implementation is configured — a value calibrated for one scale is not merely suboptimal on another, it silently stops gating. Each implementation therefore declares the threshold it recommends; gaussia uses that when the user supplies none, and **refuses to construct** when a configured component recommends nothing. A user who swaps the component is obliged to supply the number, and a user who keeps the shipped one never sees the parameter |
 
 ## Data specification
 
@@ -164,8 +169,8 @@ contract is a model, not an interface.
 - **Grader** — estimates one principle's violation for a query and a response, returning a score in `[0,1]` plus the evidence behind it.
 - **Target assistant** — sends a query, optionally within a persistent session, and returns the response or marks the exchange as failed. Received by the Profiler and the Exploiter alike (D16).
 - **Query generator** — samples concrete queries that satisfy a category's attributes. Separate from the search on purpose: invariant 5 requires it stay unmodified while the search is optimised, and that is only checkable if the two are distinct.
-- **On-profile filter** — scores how on-profile and indirect a single query is, which is what the `κ` gate compares against. A semantic judgement about one query, not an aggregate.
-- **Realism estimator** — scores how far a category's sampled queries sit from the natural-query prior, which is what `δ` bounds.
+- **On-profile filter** — scores how on-profile and indirect a single query is, which is what the `κ` gate compares against. A semantic judgement about one query, not an aggregate. Because the scale is its own, it also declares the `κ` it recommends, or declares none and obliges the user to supply one (D18).
+- **Realism estimator** — scores how far a category's sampled queries sit from the natural-query prior, which is what `δ` bounds. It declares the `δ` it recommends on the same terms.
 - **Category search** — proposes categories from a profile and scores them. It owns how categories are proposed, which is what differs between the two procedures the paper gives: one trains a generator, the other intersects a pool of high-scoring pairs. A category *generator* is therefore not a separate interface — the training-free procedure has none.
 
 ## User Scenarios & Testing
@@ -265,7 +270,7 @@ Not "which prompt broke it" but "which kinds of realistic question break it, rep
 
 - **FR-019**: Gaussia MUST specify every interface listed under "Interfaces the user implements" above, and the shapes of `Document`, `Probe` and `KnowledgeHook` as set out in the data specification.
 - **FR-020**: Particularisation MUST be the only component with knowledge-base access, exposing results solely as tagged probes.
-- **FR-021**: Each probe MUST carry a hook whose `doc` label is derived from the generating engine's own knowledge of the base's boundary. The enumeration used for scoring MUST NOT be visible to the engine.
+- **FR-021**: Each probe derived from a knowledge base MUST carry a hook whose `doc` label is derived from the generating engine's own knowledge of the base's boundary. The enumeration used for scoring MUST NOT be visible to the engine.
 - **FR-022**: Four engines MUST ship as base implementations behind that interface — retrieval, graph, multi-hop and enumeration — composable over one knowledge base with duplicate merging, each surviving probe recording its originating engine. The first three MUST run by default; the enumeration engine MUST be opt-in and MUST declare that it cannot run until the user supplies an enumerator for their domain's entities.
 - **FR-023**: An engine that cannot establish absence reliably MUST record that limitation on the probe, so an unreliable absence label is never indistinguishable from a confirmed one.
 - **FR-024**: With no knowledge base, particularisation MUST return domain-agnostic probes with an empty hook through the same interface.
@@ -283,7 +288,7 @@ Not "which prompt broke it" but "which kinds of realistic question break it, rep
 - **FR-030**: A query below `κ` MUST contribute exactly 0 to its category's score.
 - **FR-031**: The realism gap MUST be computed without querying the assistant, and a category over `δ` MUST be discarded regardless of `S(c)`. The estimator MUST be substitutable, since the search depends on it only through `δ`.
 - **FR-032**: Refinement MUST return the minimal sub-conjunction satisfying both thresholds, reporting the dropped attributes.
-- **FR-033**: Both search procedures MUST sit behind one interface, the training-free one as default. The query generator MUST be a separate injectable, and under the policy-gradient search it MUST remain unmodified.
+- **FR-033**: Both search procedures MUST sit behind one interface, the training-free one as default. The query generator MUST be a separate injectable, and under the policy-gradient search it MUST remain unmodified. The policy-gradient search MUST receive the policy it samples from and the weight-update step it applies as injected collaborators, so its sampling, gating, reward and stopping behaviour is verifiable with neither a GPU nor a trained model.
 
 **Outputs**
 
@@ -295,6 +300,12 @@ Not "which prompt broke it" but "which kinds of realistic question break it, rep
 
 - **FR-037**: Every dependency this feature adds MUST sit behind one optional extra. Importing the rest of the framework MUST NOT require them, and the interfaces MUST be importable without the extra so a user can implement against them without installing what the base implementations need.
 - **FR-038**: The metric documentation MUST state that no grader has been calibrated against human labels and that the figures it produces are a judge-only measurement.
+
+**Method parameters and shipped defaults**
+
+- **FR-039**: A base implementation MUST ship for the query generator, the on-profile filter and the realism estimator, each declared a reference implementation. Only the estimator's construction comes from the paper; the other two are gaussia's own and MUST say so, because the alternative is not neutrality — with none of them the Exploiter cannot run at all, and every user would reimplement the same two classes with no tests behind them. Every failure report MUST record which implementation of each produced it, so a weak result is attributable to the substitutable part.
+- **FR-040**: `τ` and `η` MUST be required with no default. `λ`, the queries-per-category `n` and any parameter of a shipped search implementation MUST carry defaults the user can override. `n` MUST be at least 2: at `n = 1` the standard error is zero by construction, so `S(c)` silently degenerates to the raw mean and the inconsistency penalty stops existing. A complete worked configuration MUST ship in the examples, so the required values are copied from a visible reference rather than guessed.
+- **FR-041**: `κ` and `δ` MUST be optional, and when unset MUST be taken from the configured on-profile filter and realism estimator respectively. A component that declares no recommended threshold and is used with none supplied MUST fail at construction, naming the component and the parameter. No configured combination may fall back to a value calibrated for a different component's scale.
 
 ### SDK Pipeline Fit
 
@@ -318,6 +329,9 @@ Not "which prompt broke it" but "which kinds of realistic question break it, rep
 - **SC-009**: A stub grader whose provider exposes no usable logprobs still produces a graded outcome, marked as fallback-derived.
 - **SC-010**: The default suite runs offline, with no target credentials and no GPU. Everything needing a network or a GPU is opt-in.
 - **SC-011**: Every interface imports with the `roastme` extra uninstalled, and importing any other part of the framework still succeeds.
+- **SC-012**: With the shipped filter and estimator and no thresholds supplied beyond `τ` and `η`, the Exploiter constructs and runs. Substituting a filter that recommends no `κ`, with no `κ` supplied, fails at construction naming both the component and the parameter — it does not run with the shipped filter's value.
+- **SC-013**: `queries_per_category = 1` is rejected at configuration, and a hand-computed fixture shows why: at `n = 1` the penalised score equals the unpenalised mean.
+- **SC-014**: The policy-gradient search's query sampling, `κ` and `δ` gating, reward computation and stopping condition all verify against hand computation with a stub policy and a stub update step, on CPU. The only uncovered surface is the third-party weight update itself.
 
 ## Assumptions
 
