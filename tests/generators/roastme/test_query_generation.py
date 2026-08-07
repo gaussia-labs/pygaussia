@@ -102,6 +102,32 @@ class TestTheShortReply:
         assert "Write 4 distinct questions" in model.prompts()[0]
         assert "Write 2 distinct questions" in model.prompts()[1]
 
+    def test_the_re_ask_tells_the_model_what_it_already_wrote(self):
+        """Otherwise the likeliest reply to "write 2 more" is the two it just wrote.
+
+        The duplicates are then discarded and the attempt is spent making no progress, so an
+        amnesiac re-ask can burn the whole budget and fail a run that would have succeeded.
+        """
+        _, model = _generate([["one", "two"], ["three", "four"]], count=4)
+        first, second = model.prompts()
+
+        assert "already written" not in first
+        assert "already written" in second
+        assert "- one" in second
+        assert "- two" in second
+
+    def test_the_first_ask_carries_no_exclusions(self):
+        """Nothing has been written yet, so the clause would be an empty instruction."""
+        _, model = _generate([["one", "two"]], count=2)
+
+        assert "already written" not in model.prompts()[0]
+
+    def test_a_shortfall_of_one_is_asked_for_in_the_singular(self):
+        """ "Write 1 distinct questions" reads as carelessness to the model as much as to a reader."""
+        _, model = _generate([["one", "two"], ["three"]], count=3)
+
+        assert "Write 1 question." in model.prompts()[1]
+
     def test_re_asking_stops_as_soon_as_the_sample_is_full(self):
         queries, model = _generate([["one", "two"], ["three", "four"], ["five", "six"]], count=4)
 

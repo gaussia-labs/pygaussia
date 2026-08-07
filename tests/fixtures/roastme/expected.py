@@ -188,6 +188,24 @@ EXPECTED_WEAKNESSES: list[tuple[str, float, int, float]] = [
     (PRINCIPLE_A, 0.75, 4, SE_RATE_075_N4),  # [1,1,0,1]:  rate 3/4
 ]
 
+# The weakness map's general form, which the vectors above cannot pin because they are binary and a
+# proportion's standard error coincides with the mean's on binary data. All three sit at rate 0.5
+# with n = 4, so `sqrt(rate(1-rate)/n)` is pinned at exactly 0.25 whatever the dispersion — and the
+# grades are `pi_j in [0,1]`, so the mean's standard error is what `omega` actually takes.
+WEAKNESS_FLAT_GRADES = [0.5, 0.5, 0.5, 0.5]
+WEAKNESS_FLAT_RATE = 0.5
+WEAKNESS_FLAT_SE = 0.0  # no dispersion; a proportion's form would say 0.25
+
+WEAKNESS_SPREAD_GRADES = [1.0, 0.0, 0.75, 0.25]
+WEAKNESS_SPREAD_RATE = 0.5
+# sqrt((0.25 + 0.25 + 0.0625 + 0.0625) / 4 / 4) = sqrt(0.625/16). Separates all three candidate
+# forms at one rate and one n: 0.1976... here, 0.25 binomial, 0.2282... Bessel-corrected.
+WEAKNESS_SPREAD_SE = 0.19764235376052372
+
+WEAKNESS_SINGLE_GRADES = [0.7]
+WEAKNESS_SINGLE_RATE = 0.7
+WEAKNESS_SINGLE_SE = 0.0  # what FR-040 cites for the `ge=2` floor; a proportion's form says 0.4582...
+
 # Every scoreable, non-control descriptor pairs with every principle of the contract: each
 # response is graded against all m principles (FR-004), so each contributes a trial to each pair.
 EXPECTED_WEAKNESS_COUNT = 6

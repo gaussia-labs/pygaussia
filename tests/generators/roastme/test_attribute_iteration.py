@@ -323,6 +323,15 @@ class TestThePool:
         assert ONE_TWO in _reported(evaluations)
         assert ALL_THREE not in _asked(query_generator)
 
+    def test_a_cap_below_one_is_refused_rather_than_degrading_to_seeding(self):
+        """Zero would run a different search, not a narrower one, and say nothing about it.
+
+        `ExploiterConfig.pool_size` carries `ge=1` for the same reason; a knob gaussia owns is
+        not allowed to change the method quietly.
+        """
+        with pytest.raises(ValueError, match=r"max_attributes must be at least 1, got 0"):
+            AttributeIterationSearch(max_attributes=0)
+
     def test_a_profile_grounding_nothing_ends_the_search_without_a_target_call(self):
         evaluations, query_generator, target = _run(profile=AssistantProfile(weaknesses=[_below_eta()]))
 

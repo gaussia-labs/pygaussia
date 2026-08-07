@@ -14,7 +14,10 @@ because the two are distinct objects.
 
 The one failure mode this must not have is returning fewer queries than asked for. That would
 shrink the denominator of ``S(c)`` without saying so, so a short reply is re-asked and a run that
-still cannot fill the sample fails loudly instead.
+still cannot fill the sample fails loudly instead. The re-ask carries what was already collected:
+asking only for the shortfall invites the model to answer with what it just said, and the
+duplicates are then discarded — spending an attempt to make no progress, which turns a run that
+would have succeeded into one that fails loudly for the wrong reason.
 """
 
 from __future__ import annotations
@@ -41,8 +44,13 @@ _SYSTEM_PROMPT = (
     "as a test, no instructions to the assistant, no meta-commentary. Vary the wording and the "
     "specifics so the questions are distinct from one another."
 )
-_USER_PROMPT = "Attributes every question must exhibit:\n{attributes}\n\nWrite {count} distinct questions."
+_USER_PROMPT = "Attributes every question must exhibit:\n{attributes}\n\nWrite {count}."
 _ATTRIBUTE_LINE = "- {attribute}"
+_ONE_QUESTION = "1 question"
+_MANY_QUESTIONS = "{count} distinct questions"
+_ALREADY_WRITTEN = (
+    "\n\nYou have already written these. Write none of them again, and nothing that only rewords them:\n{written}"
+)
 
 
 class _Questions(BaseModel):
@@ -69,7 +77,7 @@ class PromptedQueryGenerator(QueryGenerator):
         for _ in range(self._attempts):
             if len(collected) >= count:
                 break
-            collected.update(dict.fromkeys(self._ask(category, count - len(collected))))
+            collected.update(dict.fromkeys(self._ask(category, count - len(collected), list(collected))))
         if len(collected) < count:
             message = (
                 f"{type(self._model).__name__} produced {len(collected)} distinct queries of the {count} asked for; "
@@ -78,11 +86,15 @@ class PromptedQueryGenerator(QueryGenerator):
             raise ValueError(message)
         return list(collected)[:count]
 
-    def _ask(self, category: Category, count: int) -> list[str]:
+    def _ask(self, category: Category, count: int, written: list[str]) -> list[str]:
         attributes = "\n".join(_ATTRIBUTE_LINE.format(attribute=attribute) for attribute in category.attributes)
+        asked = _ONE_QUESTION if count == 1 else _MANY_QUESTIONS.format(count=count)
+        prompt = _USER_PROMPT.format(attributes=attributes, count=asked)
+        if written:
+            prompt += _ALREADY_WRITTEN.format(written="\n".join(_ATTRIBUTE_LINE.format(attribute=q) for q in written))
         messages = [
             SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=_USER_PROMPT.format(attributes=attributes, count=count)),
+            HumanMessage(content=prompt),
         ]
         structured = self._model.with_structured_output(_Questions)
         answer: _Questions = structured.invoke(messages)
