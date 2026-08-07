@@ -108,6 +108,12 @@ explainability = [
     "transformers>=4.35.0",
 ]
 
+roastme = [
+    "sentence-transformers>=5.0.0",
+    "torch>=2.0.0",
+    "networkx>=3.0",
+]
+
 metrics = [
     "gaussia[context,conversational,bestof,agentic,humanity,toxicity,bias,regulatory,vision]",
 ]
