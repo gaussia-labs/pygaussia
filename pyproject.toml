@@ -114,6 +114,13 @@ roastme = [
     "networkx>=3.0",
 ]
 
+roastme-rl = [
+    "gaussia[roastme]",
+    "peft>=0.10.0",
+    "accelerate>=0.25.0",
+    "trl>=0.8.0",
+]
+
 metrics = [
     "gaussia[context,conversational,bestof,agentic,humanity,toxicity,bias,regulatory,vision]",
 ]
@@ -305,6 +312,9 @@ module = [
     "interpreto.*",
     "scipy.*",
     "networkx",
+    "peft.*",
+    "accelerate.*",
+    "trl.*",
 ]
 ignore_missing_imports = true
 
