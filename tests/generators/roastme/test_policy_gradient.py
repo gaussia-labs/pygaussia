@@ -98,7 +98,7 @@ def _profile() -> AssistantProfile:
     )
 
 
-def _run():
+def _run(failures: dict[str, str] | None = None, on_profile_scores: dict[str, float] | None = None):
     policy = StubPolicy()
     update_step = StubPolicyUpdateStep()
     query_generator = StubQueryGenerator(
@@ -108,7 +108,8 @@ def _run():
         }
     )
     target = RecordedTarget(
-        responses={query: f"response to {query}" for query in [*SURVIVING_QUERIES, *UNREALISTIC_QUERIES]}
+        responses={query: f"response to {query}" for query in [*SURVIVING_QUERIES, *UNREALISTIC_QUERIES]},
+        failures=failures,
     )
     search = PolicyGradientSearch(policy=policy, update_step=update_step, iterations=ITERATIONS)
     evaluations = search.search(
@@ -123,7 +124,7 @@ def _run():
         ),
         target,
         query_generator,
-        RecommendingOnProfileFilter(ON_PROFILE_SCORES),
+        RecommendingOnProfileFilter(on_profile_scores or ON_PROFILE_SCORES),
         RecommendingRealismEstimator(REALISM_GAPS),
     )
     return evaluations, policy, update_step, query_generator, target
@@ -184,11 +185,39 @@ class TestReward:
 
         assert rewards[SURVIVING_ATTRS] == pytest.approx(EXPECTED_REWARD, abs=TOLERANCE)
 
-    def test_a_discarded_candidate_earns_nothing(self):
+    def test_a_gated_candidate_stays_in_the_batch_earning_nothing(self):
+        """Rejected on realism is a judgement, so it belongs in the batch with a zero.
+
+        Present-with-zero and absent are not interchangeable: an update step that centres rewards
+        on a batch baseline gets a different gradient from each, so the batch has to be what the
+        policy actually sampled rather than only what survived.
+        """
         _, _, update_step, _, _ = _run()
         rewards = {tuple(category.attributes): reward for category, _, reward in update_step.batches[0]}
 
-        assert rewards.get(UNREALISTIC_ATTRS, 0.0) == pytest.approx(0.0, abs=TOLERANCE)
+        assert UNREALISTIC_ATTRS in rewards
+        assert rewards[UNREALISTIC_ATTRS] == pytest.approx(0.0, abs=TOLERANCE)
+
+    def test_a_candidate_the_target_dropped_entirely_is_absent_from_the_batch(self):
+        """A transport failure teaches the policy nothing, so it must not teach it a zero.
+
+        The distinction the gated case above does not cover: that candidate was judged, this one
+        was never answered. Rewarding it zero would push the policy away from a category the
+        assistant may well break, on the strength of the transport dropping — and would let a
+        failed exchange count as a pass, which FR-016 forbids.
+
+        Every query has to clear ``kappa`` here. One below it yields a legitimate zero without
+        ever being sent (FR-030), which is a measurement rather than an absence of one, so it
+        would leave the candidate scoreable and hide the case under test.
+        """
+        dropped = dict.fromkeys(SURVIVING_QUERIES, "gateway timeout")
+        all_on_profile = dict.fromkeys([*SURVIVING_QUERIES, *UNREALISTIC_QUERIES], 0.9)
+        evaluations, _, update_step, _, _ = _run(failures=dropped, on_profile_scores=all_on_profile)
+        batch = {tuple(category.attributes) for category, _, _ in update_step.batches[0]}
+
+        assert SURVIVING_ATTRS not in batch
+        assert UNREALISTIC_ATTRS in batch
+        assert all(tuple(evaluation.category.attributes) != SURVIVING_ATTRS for evaluation in evaluations)
 
     def test_the_log_probability_the_policy_reported_is_passed_through(self):
         """The update step needs it; the search must not recompute or discard it."""
