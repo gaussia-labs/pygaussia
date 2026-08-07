@@ -1,10 +1,15 @@
-"""The base realism estimator — **the paper's own construction**, as a reference implementation.
+"""The base realism estimator: the paper's divergence, on a **nearest-neighbour** estimator of it.
 
 ``delta`` bounds ``D_hat(Q_c || N)``: how far a category's sampled queries sit from the prior over
-natural traffic. The paper instantiates that divergence as an expected cosine distance from a pool
-of natural queries, and this is that instantiation. Substituting it changes how strict the realism
-budget is, but not what the search is measuring — which is the one thing that separates this module
-from ``query_generation`` and ``on_profile``, both of which are gaussia's own construction (FR-039).
+natural traffic. The quantity is the paper's; **this estimator of it is not**, and FR-039 makes the
+distinction matter. The paper writes ``1 - E[cos(E(q), E(q_N))]`` with the expectation over both
+draws — the mean cosine to the *whole* pool — and offers a cheaper centroid variant. This module
+takes each query's distance to its *nearest* pool member instead, for the reason below.
+
+The consequence, stated because it is systematic rather than incidental: a maximum is never below a
+mean, so this estimator's ``D`` is never above the paper's, and the realism gate is therefore never
+stricter than the paper's and usually looser. Over a deliberately diverse pool the gap is enough to
+flip the gate. Whether that is the right trade is a live question and not a settled one.
 
 Two properties the construction has to keep:
 
@@ -15,10 +20,10 @@ Two properties the construction has to keep:
   and in practice in ``[0, 1]``; the recommendation below is a starting point on that scale and
   means nothing on another one.
 
-The expectation is taken over the category's queries, which is the direction of the divergence:
-each query's distance is to its *nearest* natural neighbour, because a natural query resembles
-something in the pool while its mean distance to a diverse pool says more about the pool's spread
-than about the query.
+Why nearest rather than the paper's mean: a query is natural if it resembles *something* real, and
+its mean distance to a diverse pool says more about how spread the pool is than about the query. The
+paper's centroid variant is a third option, and the one to reach for if the looseness above matters
+more than that argument.
 
 The embedder is injected. The framework already specifies one, and encoding vectors is not this
 estimator's job — so the same estimator runs against whatever model the user already has.

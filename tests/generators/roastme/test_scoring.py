@@ -133,8 +133,14 @@ class TestStandardError:
         assert standard_error(fx.SINGLE_VIOLATIONS) == pytest.approx(fx.SINGLE_SE, abs=TOLERANCE)
 
     def test_matches_the_binomial_form_on_binary_values(self):
-        """`data-model.md` asks for one quantity computed one way; on binary values it is the
-        binomial standard error, which is what the weakness map is specified in terms of."""
+        """The coincidence, pinned so it is not mistaken for the definition.
+
+        On binary values the uncorrected standard error of the mean equals `sqrt(p(1-p)/n)`, which
+        is why the weakness map's binary fixtures can be read either way. It is a coincidence and
+        not the specification: `v = sum(w_j * pi_j)` is continuous — a logistic grade, a vote
+        fraction, or a weighted sum over several principles — and the two forms part company as
+        soon as it is. `test_zero_dispersion_gives_zero` above is what holds that line.
+        """
         for values in (
             fx.WEAKNESS_GROUP_ONE[fx.PRINCIPLE_A],
             fx.WEAKNESS_GROUP_ONE[fx.PRINCIPLE_B],
@@ -189,6 +195,27 @@ class TestWeaknessEntry:
         violations = [violation_score(grades, contract)] * 4
 
         assert weakness_entry(fx.PRINCIPLE_A, "descriptor prose", violations).rate == 1.0
+
+    @pytest.mark.parametrize(
+        ("grades", "rate", "standard_error_value"),
+        [
+            (fx.WEAKNESS_FLAT_GRADES, fx.WEAKNESS_FLAT_RATE, fx.WEAKNESS_FLAT_SE),
+            (fx.WEAKNESS_SPREAD_GRADES, fx.WEAKNESS_SPREAD_RATE, fx.WEAKNESS_SPREAD_SE),
+            (fx.WEAKNESS_SINGLE_GRADES, fx.WEAKNESS_SINGLE_RATE, fx.WEAKNESS_SINGLE_SE),
+        ],
+    )
+    def test_fractional_grades_pin_the_general_form_of_the_rate_and_its_error(self, grades, rate, standard_error_value):
+        """The vectors above are binary, where a proportion's error coincides with the mean's.
+
+        Graders return `pi_j in [0,1]` — a logistic probability or a vote fraction — so the binary
+        vectors cannot tell the two forms apart. These three sit at one rate and one `n` so that
+        `sqrt(rate(1-rate)/n)` is a constant across them and only the mean's form tracks the
+        dispersion. `omega` is a mean of grades, not a count of them.
+        """
+        entry = weakness_entry(fx.PRINCIPLE_A, "descriptor prose", grades)
+
+        assert entry.rate == pytest.approx(rate, abs=TOLERANCE)
+        assert entry.standard_error == pytest.approx(standard_error_value, abs=TOLERANCE)
 
     def test_sample_size_travels_with_the_rate(self):
         """A descriptor resting on a handful of probes must not read as settled (FR-012)."""

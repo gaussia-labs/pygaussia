@@ -69,14 +69,28 @@ class _Attribute(NamedTuple):
 class AttributeIterationSearch(CategorySearch):
     """Proposes categories by conjoining the attributes that scored highest on their own.
 
+    The cost of a run, stated because the knob below bounds only half of it. Seeding evaluates
+    every attribute the profile grounds — one batch of ``queries_per_category`` target calls per
+    weakness at or above ``eta`` and per retained hook — and that half is bounded by the profile,
+    not by any argument here: a profile carrying forty entries spends forty batches before a single
+    conjunction is tried. What ``max_attributes`` bounds is the second half, refinement, which is
+    the part that would otherwise grow exponentially.
+
     Args:
         max_attributes: How many of the pool's attributes the candidate conjunction may carry.
             Refinement tries every sub-conjunction, so a candidate of length ``l`` costs
-            ``2^l - 1`` evaluations and this is what keeps a run finite. A knob of gaussia's own
-            search rather than a parameter of the method, so gaussia owns its default (FR-040).
+            ``2^l - 1`` evaluations, and capping ``l`` is what keeps that term finite. A knob of
+            gaussia's own search rather than a parameter of the method, so gaussia owns its
+            default (FR-040).
     """
 
     def __init__(self, max_attributes: int = DEFAULT_MAX_ATTRIBUTES) -> None:
+        if max_attributes < 1:
+            # Zero would leave the search seeding and never conjoining, which is not a narrower
+            # search but a different one, silently. `ExploiterConfig.pool_size` carries ge=1 for
+            # the same reason; a knob gaussia owns should refuse a value that changes the method.
+            message = f"max_attributes must be at least 1, got {max_attributes}"
+            raise ValueError(message)
         self._max_attributes = max_attributes
 
     def search(
