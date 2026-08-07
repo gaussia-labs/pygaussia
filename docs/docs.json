@@ -67,7 +67,8 @@
             "pages": [
               "advanced/generators",
               "advanced/prompt-optimizer",
-              "advanced/explainability"
+              "advanced/explainability",
+              "advanced/roastme"
             ]
           }
         ]
