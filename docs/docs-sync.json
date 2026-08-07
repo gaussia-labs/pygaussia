@@ -44,7 +44,8 @@
         "pages": [
           "sdks/python/advanced/generators",
           "sdks/python/advanced/prompt-optimizer",
-          "sdks/python/advanced/explainability"
+          "sdks/python/advanced/explainability",
+          "sdks/python/advanced/roastme"
         ]
       }
     ]

@@ -396,10 +396,12 @@ exchange (SC-008), and a grader whose provider exposes no usable logprobs (SC-00
 | `src/gaussia/generators/roastme/probes/graph.py` | Graph engine; confirms absence from the complete graph | Strategy |
 | `src/gaussia/generators/roastme/probes/grag.py` | Multi-hop engine; false premises spanning several entities | Strategy |
 | `src/gaussia/generators/roastme/probes/enumeration.py` | Enumeration engine; opt-in, requires an injected `EntityEnumerator` (D14) | Strategy |
+| `src/gaussia/generators/roastme/probes/particularisation.py` | The generation flow the four engines share, which they specialise in one step each (FR-021) | Template Method |
 | `src/gaussia/generators/roastme/probes/transforms.py` | The four `Transform` implementations and the registry | Strategy + Registry |
 | `src/gaussia/generators/roastme/probes/catalogue.py` | Catalogue validation, including `entity_kind` against the engines' declared kinds (FR-025, FR-026, SC-005) | Validator |
 | `src/gaussia/generators/roastme/searches/__init__.py` | Module init | Module facade |
 | `src/gaussia/generators/roastme/searches/scoring.py` | `S(c)`, the gates, refinement, rates and standard errors (FR-012, FR-029…FR-032) | Pure functions |
+| `src/gaussia/generators/roastme/searches/evaluation.py` | Evaluating one proposed category: the `δ` check before any target call, the `κ` gate, grading, `S(c)`. Shared by both searches, which is what stops the procedure deciding what counts as a failure (FR-030, FR-031, FR-016) | Template Method |
 | `src/gaussia/generators/roastme/searches/attribute_iteration.py` | The training-free search; the default | Strategy |
 | `src/gaussia/generators/roastme/searches/realism.py` | Base realism estimator: expected cosine distance from a prior pool, using an injected embedder — the instantiation the paper gives for `δ` — and the `δ` it recommends (FR-039, FR-041) | Adapter |
 | `src/gaussia/generators/roastme/searches/query_generation.py` | Base query generator: a category's attributes to concrete queries through the user's model. Gaussia's own construction, declared as such (FR-039) | Adapter |
@@ -416,6 +418,10 @@ exchange (SC-008), and a grader whose provider exposes no usable logprobs (SC-00
 | `tests/generators/roastme/test_thresholds.py` | The four resolution paths, and `n = 1` rejected with the fixture showing the penalty vanishing (SC-012, SC-013) | Pytest |
 | `tests/generators/roastme/test_policy_gradient.py` | Sampling, gating, reward and stopping with a stub policy and a stub update step, on CPU (SC-014) | Pytest |
 | `tests/graders/test_logprob.py` | Last-token location, discard on unparsed answer, fallback marking (SC-009) | Pytest |
+| `tests/generators/roastme/test_contracts.py` | Every double satisfies its `core/` interface, so a third-party implementation has an executable definition of conformance (FR-019) | Pytest |
+| `tests/generators/roastme/test_expected_fixtures.py` | Every hand-computed literal re-derived from its closed form, so a fixture cannot drift into a snapshot of whatever the code produces (SC-001, SC-002) | Pytest |
+| `tests/generators/roastme/test_import_isolation.py` | Each interface and the subsystem import with the extra's dependencies blocked (FR-037, SC-011) | Pytest |
+| `tests/generators/roastme/test_hermeticity.py` | The default suite opens no socket, reads no credential and needs no GPU (SC-010) | Pytest |
 | `tests/fixtures/roastme/` | Deterministic doubles for all ten interfaces plus hand-computed probe fixtures | Test doubles |
 | `docs/advanced/roastme.mdx` | The subsystem page, alongside `generators` and `prompt-optimizer` (FR-038) | Docs |
 | `examples/roastme/catalogue/` | Schema examples, **not** a domain catalogue (FR-027) | Example |

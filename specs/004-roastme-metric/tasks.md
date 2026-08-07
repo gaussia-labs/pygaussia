@@ -195,29 +195,29 @@ interface at a recorded response set.
 Three reference implementations land here. Only the estimator's construction comes from the paper; the
 other two are gaussia's own, and each must say so in its docstring (FR-039).
 
-- [ ] T044 [P] [US4] `src/gaussia/generators/roastme/searches/realism.py` — the base realism estimator:
+- [x] T044 [P] [US4] `src/gaussia/generators/roastme/searches/realism.py` — the base realism estimator:
       expected cosine distance from a prior pool through an injected embedder, which is the instantiation
       the paper gives. Composes the framework's existing embedder rather than encoding vectors itself, and
       declares the `δ` it recommends for its own scale (FR-031, FR-039, FR-041)
-- [ ] T045 [P] [US4] `src/gaussia/generators/roastme/searches/query_generation.py` — the base query
+- [x] T045 [P] [US4] `src/gaussia/generators/roastme/searches/query_generation.py` — the base query
       generator: a category's attributes to concrete queries through the user's model. Gaussia's own
       construction, not the paper's (FR-039)
-- [ ] T046 [P] [US4] `src/gaussia/generators/roastme/searches/on_profile.py` — the base on-profile filter,
+- [x] T046 [P] [US4] `src/gaussia/generators/roastme/searches/on_profile.py` — the base on-profile filter,
       declaring the `κ` it recommends. Gaussia's own construction, not the paper's (FR-039, FR-041)
-- [ ] T047 [US4] `src/gaussia/generators/roastme/searches/thresholds.py` — resolve `κ` and `δ` once:
+- [x] T047 [US4] `src/gaussia/generators/roastme/searches/thresholds.py` — resolve `κ` and `δ` once:
       user value wins, otherwise the configured component's recommendation, otherwise **refuse to
       construct**, naming the component and the parameter (FR-041, SC-012)
-- [ ] T048 [US4] `src/gaussia/generators/roastme/searches/attribute_iteration.py` — the training-free
+- [x] T048 [US4] `src/gaussia/generators/roastme/searches/attribute_iteration.py` — the training-free
       search: the common attributes of the highest-scoring pool, then attribute subsets. No GPU (FR-033)
-- [ ] T049 [US4] `src/gaussia/generators/roastme/exploiter.py` and `src/gaussia/generators/roastme/searches/__init__.py` — compose
+- [x] T049 [US4] `src/gaussia/generators/roastme/exploiter.py` and `src/gaussia/generators/roastme/searches/__init__.py` — compose
       search, query generator, on-profile filter, estimator and target; resolve the thresholds through
       T047 at construction; emit the Roast Dataset and the failure report with the individual queries at
       or above `τ` surfaced alongside the category verdict, and with the implementations and the resolved
       thresholds recorded on it (FR-030, FR-034…FR-036, FR-039, FR-041)
-- [ ] T050 [US4] `src/gaussia/generators/roastme/__init__.py` — re-export `ProbeLibrary`, `Profiler`,
+- [x] T050 [US4] `src/gaussia/generators/roastme/__init__.py` — re-export `ProbeLibrary`, `Profiler`,
       `Exploiter`. **Do not touch `src/gaussia/generators/__init__.py`**: it imports eagerly, and
       registering there would make `import gaussia.generators` require an embedder (FR-037)
-- [ ] T051 [US4] T024, T025 pass, the full default suite passes, and T028 and T029 still hold
+- [x] T051 [US4] T024, T025 pass, the full default suite passes, and T028 and T029 still hold
 
 **Checkpoint**: the whole subsystem runs end to end on any machine, offline, against a recorded target,
 with only `τ` and `η` supplied.
@@ -229,16 +229,16 @@ with only `τ` and `η` supplied.
 The loop is ordinary code and belongs in the default suite. Only the weight update needs the extra, which
 is why the two live in different modules.
 
-- [ ] T052 Add the `roastme-rl` extra to `pyproject.toml`:
+- [x] T052 Add the `roastme-rl` extra to `pyproject.toml`:
       `["gaussia[roastme]", "peft>=0.10.0", "accelerate>=0.25.0", "trl>=0.8.0"]`. Out of the `metrics` and
       `all` aggregates (FR-037)
-- [ ] T053 [US4] `src/gaussia/generators/roastme/searches/policy_gradient.py` — the policy-gradient loop
+- [x] T053 [US4] `src/gaussia/generators/roastme/searches/policy_gradient.py` — the policy-gradient loop
       behind the same search interface, taking the policy it samples from and the update step it applies
       as injected collaborators. Those two abstractions stay in this module rather than in `core/`: they
       are collaborators of one shipped search, not part of the specification a user implements against.
       **Imports nothing heavy**, so T026 runs in the default suite. Leaves the query generator unmodified
       (FR-033, SC-014)
-- [ ] T054 [US4] `src/gaussia/generators/roastme/searches/policy_update.py` — the training-backed update
+- [x] T054 [US4] `src/gaussia/generators/roastme/searches/policy_update.py` — the training-backed update
       step: the only module in the subsystem that imports the RL stack, and the only one marked
       `requires_gpu`, so the default suite deselects it (FR-037)
 
@@ -246,18 +246,18 @@ is why the two live in different modules.
 
 ## Phase 8: Documentation and example
 
-- [ ] T055 `docs/advanced/roastme.mdx` — alongside `generators` and `prompt-optimizer`, not under
+- [x] T055 `docs/advanced/roastme.mdx` — alongside `generators` and `prompt-optimizer`, not under
       `docs/metrics/`, because this is not a metric. Must state that no grader has been calibrated against
       human labels and that the figures are a judge-only measurement (FR-038); that the query generator and
       the on-profile filter are gaussia's own construction rather than the paper's, so substituting them
       changes what the search measures (FR-039); that `κ` and `δ` come from the configured component and
       why (FR-041); and that the training-free search has no published result behind it
-- [ ] T056 Register the page in **both** navigation registries: `advanced/roastme` in `docs/docs.json` and
+- [x] T056 Register the page in **both** navigation registries: `advanced/roastme` in `docs/docs.json` and
       `sdks/python/advanced/roastme` in `docs/docs-sync.json`. The second is the one that publishes to the
       docs site, so listing only the first leaves the page unpublished (FR-038)
-- [ ] T057 [P] `examples/roastme/catalogue/` — schema examples for `PluginSpec` and `StrategySpec`: the
+- [x] T057 [P] `examples/roastme/catalogue/` — schema examples for `PluginSpec` and `StrategySpec`: the
       shape with domain-neutral prose, **not** a domain catalogue (FR-027)
-- [ ] T058 [P] `examples/roastme/jupyter/` — a runnable notebook: build a contract, validate a catalogue,
+- [x] T058 [P] `examples/roastme/jupyter/` — a runnable notebook: build a contract, validate a catalogue,
       profile a recorded response set through the target interface. Carries the complete worked
       `ExploiterConfig`, `τ` and `η` included, so the two required thresholds are copied from a visible
       reference rather than guessed. Mirrors `examples/privacy/jupyter/` (FR-014, FR-040)
@@ -266,10 +266,10 @@ is why the two live in different modules.
 
 ## Phase 9: Polish
 
-- [ ] T059 `uv run ruff check .` passes
-- [ ] T060 `uv run ruff format .` leaves no diff
-- [ ] T061 `uv run mypy src/gaussia` passes
-- [ ] T062 `uv run pytest` passes with the configured coverage floor
+- [x] T059 `uv run ruff check .` passes
+- [x] T060 `uv run ruff format .` leaves no diff
+- [x] T061 `uv run mypy src/gaussia` passes
+- [x] T062 `uv run pytest` passes with the configured coverage floor
 
 ---
 
