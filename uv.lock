@@ -1001,7 +1001,7 @@ wheels = [
 
 [[package]]
 name = "gaussia"
-version = "1.0.0b3"
+version = "1.1.0b2"
 source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
@@ -1084,6 +1084,11 @@ regulatory = [
     { name = "accelerate" },
     { name = "torch" },
 ]
+roastme = [
+    { name = "networkx" },
+    { name = "sentence-transformers" },
+    { name = "torch" },
+]
 toxicity = [
     { name = "hdbscan" },
     { name = "nltk" },
@@ -1130,6 +1135,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2" },
     { name = "langchain-core", specifier = ">=1.2.11" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "networkx", marker = "extra == 'roastme'", specifier = ">=3.0" },
     { name = "nltk", marker = "extra == 'toxicity'", specifier = ">=3.8.0" },
     { name = "numba", marker = "extra == 'toxicity'", specifier = ">=0.57.0" },
     { name = "numpy", marker = "extra == 'humanity'", specifier = ">=1.24.0" },
@@ -1144,6 +1150,7 @@ requires-dist = [
     { name = "requests", marker = "extra == 'evalhub'", specifier = ">=2.33.0" },
     { name = "scikit-learn", marker = "extra == 'toxicity'", specifier = ">=1.3.0,<1.8" },
     { name = "scipy", specifier = ">=1.14.1" },
+    { name = "sentence-transformers", marker = "extra == 'roastme'", specifier = ">=5.0.0" },
     { name = "sentence-transformers", marker = "extra == 'toxicity'", specifier = ">=5.0.0" },
     { name = "sentence-transformers", marker = "extra == 'vision'", specifier = ">=5.0.0" },
     { name = "spacy", marker = "extra == 'privacy-presidio'", specifier = ">=3.7" },
@@ -1151,6 +1158,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'explainability'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'privacy-huggingface'", specifier = ">=2.1" },
     { name = "torch", marker = "extra == 'regulatory'", specifier = ">=2.0.0" },
+    { name = "torch", marker = "extra == 'roastme'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'toxicity'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'vision'", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.65.0" },
@@ -1159,7 +1167,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'privacy-huggingface'", specifier = ">=4.40" },
     { name = "umap-learn", marker = "extra == 'toxicity'", specifier = ">=0.5.6,<0.6.0" },
 ]
-provides-extras = ["context", "conversational", "bestof", "agentic", "role-adherence", "humanity", "toxicity", "bias", "vision", "regulatory", "privacy-presidio", "privacy-huggingface", "explainability", "metrics", "prompt-optimizer", "generators", "evalhub", "all"]
+provides-extras = ["context", "conversational", "bestof", "agentic", "role-adherence", "humanity", "toxicity", "bias", "vision", "regulatory", "privacy-presidio", "privacy-huggingface", "explainability", "roastme", "metrics", "prompt-optimizer", "generators", "evalhub", "all"]
 
 [package.metadata.requires-dev]
 dev = [
