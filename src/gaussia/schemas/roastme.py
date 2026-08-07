@@ -117,11 +117,17 @@ class StrategySpec(BaseModel):
     a ``Transform`` once, during catalogue validation, and nothing branches on it afterwards;
     membership of the registry is checked there rather than here, since ``schemas/`` may not
     depend on the module that owns the registry.
+
+    ``description`` is load-bearing rather than documentation: its clauses become the probe's
+    attributes and from there the prose descriptor of the weakness map, which is the only thing
+    about a strategy allowed to cross to the Exploiter (FR-013). An empty one leaves nothing
+    sayable, so it is rejected here rather than at the point of profiling — a catalogue that
+    validates and then fails mid-run is the failure mode FR-025 exists to prevent.
     """
 
     id: str = Field(min_length=1)
     name: str
-    description: str
+    description: str = Field(min_length=1)
     plugin: str | None = None
     entity_kind: str = Field(min_length=1)
     transform: str = Field(min_length=1)

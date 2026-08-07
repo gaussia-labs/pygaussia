@@ -18,6 +18,11 @@ the set rather than a choice this module makes.
 The order below is the order the method leans on them: the three that invent a premise first,
 since a false premise is the attack, and the one that keeps the entity real last, since that is
 what a control strategy asks for.
+
+The four keys — ``mutate_to_fake``, ``flip_value``, ``flip_fact``, ``keep_real`` — are the ones
+the published catalogue already uses and the ones the specification's own worked example names.
+They are interface, not naming preference: a catalogue is data the user has already written, so
+renaming a key here would reject a catalogue that was valid before.
 """
 
 from __future__ import annotations
@@ -50,7 +55,7 @@ class InventNearMissEntity(Transform):
 
     @property
     def key(self) -> str:
-        return "invent_entity"
+        return "mutate_to_fake"
 
     def apply(self, entity: str) -> str:
         return f"{entity}{_NEAR_MISS_SUFFIX}"
@@ -88,7 +93,7 @@ class KeepDocumentedEntity(Transform):
 
     @property
     def key(self) -> str:
-        return "keep_entity"
+        return "keep_real"
 
     def apply(self, entity: str) -> str:
         return entity
