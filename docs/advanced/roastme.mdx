@@ -49,6 +49,26 @@ uninstalled, so you can implement against them before installing anything: the e
 from their own modules rather than re-exported, which is what keeps
 `from gaussia.generators.roastme import ProbeLibrary, Profiler, Exploiter` free of heavy imports.
 
+## Claude Code skills
+
+Four skills cover the pieces you have to author, each stating the rules the library enforces so a
+mistake surfaces at validation rather than halfway through a run that costs target calls:
+`roastme-plugins`, `roastme-strategies`, `roastme-profiler` and `roastme-exploiter`. They are not part
+of the pip package — they live in
+[`skills/`](https://github.com/gaussia-labs/pygaussia/tree/main/skills) beside the code they describe,
+so they move with the schema instead of drifting from it.
+
+```bash
+git clone --depth 1 https://github.com/gaussia-labs/pygaussia /tmp/pygaussia
+mkdir -p .claude/skills && cp -r /tmp/pygaussia/skills/roastme-* .claude/skills/
+```
+
+Then `/roastme-plugins` in Claude Code, and the same for the other three. Run them in that order for a
+first setup; the last two also list what to check when a run comes back empty.
+
+Skip this section entirely if you are not using Claude Code — everything the skills say is on this page
+and in the two notebooks.
+
 ## The three components
 
 They run in this order, and only the middle one is unavoidable:
