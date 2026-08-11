@@ -19,9 +19,10 @@ from typing import TYPE_CHECKING
 from .particularisation import ParticularisingEngine
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from gaussia.core.entity_enumerator import EntityEnumerator
+    from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import Document
 
 
@@ -32,10 +33,21 @@ class EnumerationProbeEngine(ParticularisingEngine):
         enumerator: The user's enumeration of their domain's entities. Required: without it
             there is no boundary, and a boundary is the whole of what this engine contributes.
         entity_kinds: The entity kinds this engine is being trusted with.
+        transforms: Transform implementations beyond the four shipped. This engine needs them more
+            than the others do: a corpus whose entities are ordinary words is why the enumerator
+            exists, and those same entities are the ones the shipped premise constructions read
+            worst — a `-2` suffix on a multi-word product name reads as a typo rather than as a
+            near miss. No extractor parameter, because the boundary comes from the enumerator
+            rather than from reading the corpus.
     """
 
-    def __init__(self, enumerator: EntityEnumerator, entity_kinds: Iterable[str] = ()) -> None:
-        super().__init__(entity_kinds)
+    def __init__(
+        self,
+        enumerator: EntityEnumerator,
+        entity_kinds: Iterable[str] = (),
+        transforms: Sequence[Transform] = (),
+    ) -> None:
+        super().__init__(entity_kinds, transforms=transforms)
         self._enumerator = enumerator
 
     @property

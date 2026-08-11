@@ -22,11 +22,14 @@ from .graph import entity_graph
 from .particularisation import ParticularisingEngine
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable, Iterator, Sequence
 
     import networkx as nx
 
+    from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import Document
+
+    from .mentions import MentionExtractor
 
 CHAIN_SEPARATOR = " -> "
 
@@ -41,8 +44,14 @@ class MultiHopProbeEngine(ParticularisingEngine):
             probes without bound. A knob of gaussia's own engine, not a parameter of the method.
     """
 
-    def __init__(self, entity_kinds: Iterable[str] = (), max_chains: int = 100) -> None:
-        super().__init__(entity_kinds)
+    def __init__(
+        self,
+        entity_kinds: Iterable[str] = (),
+        max_chains: int = 100,
+        extractor: MentionExtractor | None = None,
+        transforms: Sequence[Transform] = (),
+    ) -> None:
+        super().__init__(entity_kinds, extractor, transforms)
         self._max_chains = max_chains
 
     @property
@@ -55,7 +64,7 @@ class MultiHopProbeEngine(ParticularisingEngine):
         return True
 
     def _entities(self, kind: str, documents: list[Document]) -> frozenset[str]:
-        return frozenset(islice(_chains(entity_graph(documents)), self._max_chains))
+        return frozenset(islice(_chains(entity_graph(documents, self._extractor)), self._max_chains))
 
 
 def _chains(graph: nx.Graph) -> Iterator[str]:

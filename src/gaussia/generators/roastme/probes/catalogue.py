@@ -14,12 +14,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .transforms import TRANSFORMS
+from .transforms import available
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from gaussia.core.probe_engine import ProbeEngine
+    from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import BehavioralContract, Catalogue
 
 
@@ -27,6 +28,7 @@ def validate_catalogue(
     catalogue: Catalogue,
     contract: BehavioralContract,
     engines: Sequence[ProbeEngine],
+    transforms: Sequence[Transform] = (),
 ) -> None:
     """Accept a catalogue, or refuse it naming what is wrong.
 
@@ -34,6 +36,9 @@ def validate_catalogue(
         catalogue: The user's plugins and strategies.
         contract: The principles the plugins must resolve against.
         engines: The engines that will run, which is what makes ``entity_kind`` decidable.
+        transforms: The user's transformations, beyond the four shipped. **Pass the same sequence the
+            engines were given**: a catalogue validated against one set and generated against another
+            is exactly the case where validation stops meaning anything.
 
     Raises:
         ValueError: Any of the six rejections of the specification. Every one is decided here,
@@ -42,7 +47,7 @@ def validate_catalogue(
     _reject_duplicate_identifiers(catalogue)
     _reject_dangling_principles(catalogue, contract)
     _reject_dangling_plugins(catalogue)
-    _reject_unknown_transforms(catalogue)
+    _reject_unknown_transforms(catalogue, transforms)
     _reject_unhandled_entity_kinds(catalogue, engines)
 
 
@@ -81,10 +86,13 @@ def _reject_dangling_plugins(catalogue: Catalogue) -> None:
         raise ValueError(message)
 
 
-def _reject_unknown_transforms(catalogue: Catalogue) -> None:
-    unknown = sorted({strategy.transform for strategy in catalogue.strategies if strategy.transform not in TRANSFORMS})
+def _reject_unknown_transforms(catalogue: Catalogue, transforms: Sequence[Transform]) -> None:
+    # `available` also refuses a supplied key that collides with a shipped one, so a catalogue is
+    # never accepted against an ambiguous registry.
+    registry = available(transforms)
+    unknown = sorted({strategy.transform for strategy in catalogue.strategies if strategy.transform not in registry})
     if unknown:
-        message = f"strategies name transforms outside the closed set {sorted(TRANSFORMS)}: {unknown}"
+        message = f"strategies name transforms outside {sorted(registry)}: {unknown}"
         raise ValueError(message)
 
 

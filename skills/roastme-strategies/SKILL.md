@@ -49,10 +49,24 @@ If what comes back is phone numbers, PDF filenames, URL slugs or footer anchors,
 will generate `len(found) × len(strategies)` nonsense probes and the run will look successful. On one
 real bank corpus this was 210 junk entities across 12 documents.
 
-**The escape is `EnumerationProbeEngine` plus an `EntityEnumerator` you write.** It is the only engine
-that does not use the regex, the only one that can defend an absence label, and it needs no extra — no
-torch, no networkx. Its contract is **completeness**: return the whole set, because a sample turns every
-absence label into a guess. Slice the generated probe list afterwards if you need fewer.
+There are two escapes, and which one you want depends on whether you can enumerate your entities.
+
+**Inject a `MentionExtractor`** and keep the three engines. The default stays the compound-identifier
+reading, so nothing that worked before changes:
+
+```python
+class HeadingExtractor(MentionExtractor):
+    def extract(self, documents):
+        return frozenset(your_reading_of(documents))
+
+
+engine = GraphProbeEngine(entity_kinds={"product"}, extractor=HeadingExtractor())
+```
+
+**Or write an `EntityEnumerator`** and use `EnumerationProbeEngine`, which reads no corpus at all. It is
+the only engine that can defend an absence label, and it needs no extra — no torch, no networkx. Its
+contract is **completeness**: return the whole set, because a sample turns every absence label into a
+guess. Slice the generated probe list afterwards if you need fewer.
 
 ```python
 class MyEnumerator(EntityEnumerator):
@@ -62,12 +76,15 @@ class MyEnumerator(EntityEnumerator):
         return frozenset(...)           # the complete set, read from your corpus
 ```
 
-Two things that decide whether this works:
+Prefer the enumerator when your corpus has a structural source for the whole set — consistent headings,
+a filename convention, a closed table. That is what makes `doc = 0` mean "absent" rather than "not
+retrieved". Prefer the extractor when you cannot enumerate but can recognise a mention on sight.
+
+Two things that decide whether the enumerator works:
 
 - `EnumerationProbeEngine.can_handle` returns `document.structured`, so **mark the enumerable documents
   `structured=True`** or the engine receives `[]` and degenerates to hookless probes.
-- find a *structural* source for the set — consistent headings, a filename convention, a closed table.
-  Reading `## ` headings out of product pages gives a defensible complete list; scraping prose does not.
+- reading `## ` headings out of product pages gives a defensible complete list; scraping prose does not.
 
 ## 1. `description` is not documentation
 

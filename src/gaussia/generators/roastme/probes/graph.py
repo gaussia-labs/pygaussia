@@ -20,27 +20,33 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
-from .particularisation import ParticularisingEngine, extract_mentions
+from .mentions import CompoundTokenExtractor
+from .particularisation import ParticularisingEngine
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from gaussia.schemas.roastme import Document
 
+    from .mentions import MentionExtractor
 
-def entity_graph(documents: Sequence[Document]) -> nx.Graph:
+
+def entity_graph(documents: Sequence[Document], extractor: MentionExtractor | None = None) -> nx.Graph:
     """The co-occurrence graph over the corpus's entity mentions.
 
     Args:
         documents: The knowledge base.
+        extractor: How mentions are read. Defaults to the compound-identifier reading, which is the
+            wrong reading for a corpus of ordinary words — see ``mentions.py``.
 
     Returns:
         A graph whose nodes are the mentions and whose edges are same-document co-occurrence.
         The node set is the corpus boundary; the edges are what the multi-hop engine walks.
     """
+    reader = extractor or CompoundTokenExtractor()
     graph = nx.Graph()
     for document in documents:
-        mentions = sorted(extract_mentions([document]))
+        mentions = sorted(reader.extract([document]))
         graph.add_nodes_from(mentions)
         graph.add_edges_from(combinations(mentions, 2))
     return graph
@@ -59,4 +65,4 @@ class GraphProbeEngine(ParticularisingEngine):
         return True
 
     def _entities(self, kind: str, documents: list[Document]) -> frozenset[str]:
-        return frozenset(entity_graph(documents).nodes)
+        return frozenset(entity_graph(documents, self._extractor).nodes)

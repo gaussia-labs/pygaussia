@@ -1,19 +1,28 @@
-"""The four transformations a catalogue may name, and the registry that resolves them.
+"""The four transformations gaussia ships, and the registry that resolves what a catalogue names.
 
-FR-025 closes the set at four, because ``transform`` is the one catalogue field whose value
-changes what a probe *means*: an unrecognised transformation would produce probes whose ``doc``
-label nobody can trust. A fifth therefore needs FR-025 relaxed as well as a class added here.
+``transform`` is the one catalogue field whose value changes what a probe *means*, so an
+unrecognised string must never resolve to anything: a probe whose premise nobody can account for
+carries a ``doc`` label nobody can trust. What FR-025 buys is that guarantee, and it is kept by
+resolving against a registry rather than by the set being fixed — so the set is **the four shipped
+plus whatever the caller supplies**, and a string outside that is still refused.
+
+Supplying one matters because the four assume the shape of entity the paper's own corpus carries.
+``mutate_to_fake`` suffixes ``-2``, which reads as a near miss of ``POLICY-1`` and as a typo of
+``Cuenta Digital Libre``. ``flip_value`` increments every digit run, so a figure written with
+thousands separators comes back mangled and an entity with no digits comes back unchanged — which
+the engine then labels documented, quietly turning that strategy into a second control. And
+``flip_fact`` prepends an English ``not``. None of the three is wrong for the corpus they were
+written against; all three are wrong for a corpus of Spanish product names, and the answer is to
+pass one that fits rather than to argue with these.
 
 This registry is the single point where the catalogue's string becomes behaviour. Validation
 checks membership, an engine resolves the key once per strategy, and nothing anywhere branches
 on the string; it survives only on ``KnowledgeHook.how``, as a record rather than a dispatch.
 
-Two limits stated rather than hidden. A transformation decides the *text* of a premise and
-never its label — whether the result is documented is the engine's call, derived from its own
-knowledge of the base's boundary (FR-021), so a transformation that leaves an entity untouched
-simply yields a documented hook. And the fact flip carries an English negation: a corpus in
-another language needs the premise built differently, which is a consequence of FR-025 closing
-the set rather than a choice this module makes.
+One limit stated rather than hidden: a transformation decides the *text* of a premise and never
+its label — whether the result is documented is the engine's call, derived from its own knowledge
+of the base's boundary (FR-021), so a transformation that leaves an entity untouched simply
+yields a documented hook.
 
 The order below is the order the method leans on them: the three that invent a premise first,
 since a false premise is the attack, and the one that keeps the entity real last, since that is
@@ -34,7 +43,7 @@ from typing import TYPE_CHECKING
 from gaussia.core.transform import Transform
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 _NEAR_MISS_SUFFIX = "-2"
 _NEGATION = "not "
@@ -107,23 +116,56 @@ _CLOSED_SET: tuple[Transform, ...] = (
 )
 
 TRANSFORMS: Mapping[str, Transform] = MappingProxyType({transform.key: transform for transform in _CLOSED_SET})
-"""The closed registry, keyed by the string a ``StrategySpec`` names. Read-only by construction."""
+"""The four shipped, keyed by the string a ``StrategySpec`` names. Read-only by construction."""
 
 
-def resolve(key: str) -> Transform:
+def available(extra: Sequence[Transform] = ()) -> Mapping[str, Transform]:
+    """The four shipped plus the user's, which is what a catalogue may name.
+
+    The shipped four cannot be replaced. A user key colliding with one of them is refused rather than
+    preferred, because either resolution silently changes what an existing catalogue means: prefer the
+    user's and a catalogue written against the shipped behaviour starts producing different premises;
+    prefer the shipped and the user's implementation is ignored without a word.
+
+    Args:
+        extra: The user's transformations. An empty sequence yields the shipped registry unchanged.
+
+    Returns:
+        The merged registry, keyed by ``Transform.key``.
+
+    Raises:
+        ValueError: Two of ``extra`` share a key, or one of them collides with a shipped key.
+    """
+    if not extra:
+        return TRANSFORMS
+    merged = dict(TRANSFORMS)
+    for transform in extra:
+        if transform.key in merged:
+            shipped = transform.key in TRANSFORMS
+            source = "one of the four shipped" if shipped else "another supplied transform"
+            message = f"transform key {transform.key!r} collides with {source}"
+            raise ValueError(message)
+        merged[transform.key] = transform
+    return MappingProxyType(merged)
+
+
+def resolve(key: str, extra: Sequence[Transform] = ()) -> Transform:
     """The transformation a catalogue string names.
 
     Args:
         key: The ``StrategySpec.transform`` value, already accepted by catalogue validation.
+        extra: The user's transformations, the same ones the catalogue was validated against. Passing
+            a different set here than to validation is how a catalogue that validated can still fail
+            at generation.
 
     Returns:
         The registered implementation.
 
     Raises:
-        ValueError: The key is outside the closed set, which means generation ran against a
-            catalogue nobody validated.
+        ValueError: The key is in neither the shipped four nor ``extra``, which means generation ran
+            against a catalogue nobody validated — or validated against a different set.
     """
-    transform = TRANSFORMS.get(key)
+    transform = available(extra).get(key)
     if transform is None:
         message = f"unknown transform {key!r}: the catalogue must be validated before generation"
         raise ValueError(message)

@@ -12,38 +12,44 @@ cannot is not. That is also why the same mechanism carries FR-023 for free — t
 engine's view is a retrieved subset, so absence from it is absence from a *sample*, and the
 engine says so through ``decides_absence`` rather than through a second code path.
 
-The mention extraction is deliberately shallow: a compound identifier is a token that can be
-recognised in any language without a domain model, and gaussia never learns what an entity kind
-means (FR-025). A corpus whose entities are ordinary words is precisely the case the enumeration
-engine exists for (spec D14) — there the boundary comes from the user instead of from a regex.
+How a corpus is read for mentions, and how a premise is built from an entity, are both the user's to
+replace: an engine takes a ``MentionExtractor`` and a set of extra ``Transform`` implementations, and
+defaults to the shipped ones. Without that, the shared flow would only fit a corpus of compound
+identifiers and the four closed transforms — which is what it fit before, silently.
 
 Nothing here imports an embedder or a graph library, so the shared flow costs no extra (FR-037).
 """
 
 from __future__ import annotations
 
-import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from gaussia.core.probe_engine import ProbeEngine
 from gaussia.schemas.roastme import KnowledgeHook, Probe
 
+from .mentions import CompoundTokenExtractor
 from .transforms import resolve
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import Catalogue, Document, StrategySpec
 
-_MENTION = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+")
+    from .mentions import MentionExtractor
+
 _QUERY_TEMPLATE = "{hint}: {premise}"
 _ATTRIBUTE_SEPARATOR = ","
 
 
 def extract_mentions(documents: Sequence[Document]) -> frozenset[str]:
-    """The entity mentions a corpus carries on its surface: alphanumerics joined by ``-`` or ``_``."""
-    return frozenset(mention for document in documents for mention in _MENTION.findall(document.content))
+    """The compound identifiers a corpus carries. Kept as the module-level shorthand it always was.
+
+    Prefer ``CompoundTokenExtractor`` where an extractor is what is wanted, since that is the object
+    an engine can be handed a replacement for.
+    """
+    return CompoundTokenExtractor().extract(documents)
 
 
 def strategy_attributes(strategy: StrategySpec) -> list[str]:
@@ -145,14 +151,33 @@ class ParticularisingEngine(ProbeEngine, ABC):
             Configuration rather than a discovery: extraction is kind-agnostic, so the engine
             cannot infer the user's vocabulary, and catalogue validation needs someone to have
             declared it before a typo can be caught (FR-025).
+        extractor: How this engine reads mentions out of a corpus. Defaults to the compound-identifier
+            reading, which is the shape of a corpus of numbered clauses and the wrong shape for
+            prose — see ``mentions.py``. The enumeration engine ignores it: its boundary comes from
+            the user's enumerator instead.
+        transforms: Transform implementations beyond the four shipped, so a strategy can name a
+            premise construction that suits the corpus. The four remain available; a key colliding
+            with one of them is refused rather than silently preferred.
     """
 
-    def __init__(self, entity_kinds: Iterable[str] = ()) -> None:
+    def __init__(
+        self,
+        entity_kinds: Iterable[str] = (),
+        extractor: MentionExtractor | None = None,
+        transforms: Sequence[Transform] = (),
+    ) -> None:
         self._entity_kinds = frozenset(entity_kinds)
+        self._extractor: MentionExtractor = extractor or CompoundTokenExtractor()
+        self._transforms = tuple(transforms)
 
     @property
     def entity_kinds(self) -> frozenset[str]:
         return self._entity_kinds
+
+    @property
+    def extractor(self) -> MentionExtractor:
+        """Recorded for reading, so a report can say which reading of the corpus produced a probe."""
+        return self._extractor
 
     @property
     @abstractmethod
@@ -193,7 +218,7 @@ class ParticularisingEngine(ProbeEngine, ABC):
         boundary: frozenset[str],
         principles: dict[str, str],
     ) -> list[Probe]:
-        transform = resolve(strategy.transform)
+        transform = resolve(strategy.transform, self._transforms)
         principle = principles[strategy.plugin] if strategy.plugin is not None else None
         return [
             build_probe(

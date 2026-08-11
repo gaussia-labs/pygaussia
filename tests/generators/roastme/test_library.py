@@ -23,11 +23,15 @@ import pytest
 
 from gaussia.core.embedder import Embedder
 from gaussia.core.probe_engine import ProbeEngine
+from gaussia.core.transform import Transform
+from gaussia.generators.roastme.probes.catalogue import validate_catalogue
 from gaussia.generators.roastme.probes.enumeration import EnumerationProbeEngine
+from gaussia.generators.roastme.probes.grag import MultiHopProbeEngine
 from gaussia.generators.roastme.probes.graph import GraphProbeEngine
 from gaussia.generators.roastme.probes.library import ProbeLibrary
+from gaussia.generators.roastme.probes.mentions import CompoundTokenExtractor, MentionExtractor
 from gaussia.generators.roastme.probes.retrieval import RetrievalProbeEngine
-from gaussia.generators.roastme.probes.transforms import TRANSFORMS
+from gaussia.generators.roastme.probes.transforms import TRANSFORMS, available
 from gaussia.schemas.roastme import Document
 from tests.fixtures.roastme import expected as fx
 from tests.fixtures.roastme.doubles import StubEntityEnumerator, StubProbeEngine
@@ -205,3 +209,128 @@ class TestFourEnginesShip:
 
     def test_two_engines_over_one_base_do_not_report_the_same_name(self):
         assert GraphProbeEngine().name != RetrievalProbeEngine(embedder=_StubEmbedder()).name
+
+
+class _HeadingExtractor(MentionExtractor):
+    """Reads entities out of second-level headings, which is what a product site carries."""
+
+    def extract(self, documents):
+        return frozenset(
+            line.removeprefix(fx.HEADING_PREFIX).strip()
+            for document in documents
+            for line in document.content.splitlines()
+            if line.startswith(fx.HEADING_PREFIX)
+        )
+
+
+class _PlausibleFake(Transform):
+    """A premise that reads like a real name instead of a suffixed one."""
+
+    @property
+    def key(self) -> str:
+        return "plausible_fake"
+
+    def apply(self, entity: str) -> str:
+        return entity.replace("Libre", "Popular") if "Libre" in entity else f"{entity} Plus"
+
+
+class _CollidingTransform(Transform):
+    @property
+    def key(self) -> str:
+        return TRANSFORM_KEY
+
+    def apply(self, entity: str) -> str:
+        return entity
+
+
+class TestACorpusOfOrdinaryWords:
+    """The shape the default extractor cannot read, which is the shape most corpora have.
+
+    The three engines that read a corpus find mentions through an extractor, and the shipped one
+    recognises compound identifiers — `POLICY-1`, `Articulo_25`. A corpus of ordinary words yields it
+    nothing, and *nothing is what the engine must then produce*: a boundary it cannot see is not a
+    boundary it may guess at. What makes the corpus usable is injecting a reading of it, not changing
+    the engine.
+    """
+
+    def test_the_default_extractor_finds_nothing_in_it(self):
+        assert CompoundTokenExtractor().extract(fx.ordinary_word_documents()) == frozenset()
+
+    def test_so_the_engines_produce_no_probes_rather_than_probes_over_junk(self):
+        catalogue = fx.catalogue(TRANSFORM_KEY)
+        for engine in (
+            GraphProbeEngine(entity_kinds={fx.ENTITY_KIND}),
+            MultiHopProbeEngine(entity_kinds={fx.ENTITY_KIND}),
+        ):
+            assert engine.generate(fx.ordinary_word_documents(), catalogue) == []
+
+    def test_an_injected_extractor_makes_the_same_engines_produce_probes(self):
+        engine = GraphProbeEngine(entity_kinds={fx.ENTITY_KIND}, extractor=_HeadingExtractor())
+
+        probes = engine.generate(fx.ordinary_word_documents(), fx.catalogue(TRANSFORM_KEY))
+
+        assert probes != []
+        premises = {probe.hook.references for probe in probes if probe.hook is not None}
+        assert any(entity in premise for entity in fx.ORDINARY_WORD_ENTITIES for premise in premises)
+
+    def test_the_engine_records_which_reading_produced_its_probes(self):
+        extractor = _HeadingExtractor()
+        assert GraphProbeEngine(extractor=extractor).extractor is extractor
+        assert isinstance(GraphProbeEngine().extractor, CompoundTokenExtractor)
+
+
+class TestATransformTheUserSupplies:
+    """`Transform` is one of the ten interfaces, so a catalogue may name one gaussia did not write.
+
+    The four shipped assume the entity shape of the paper's own corpus: a `-2` suffix reads as a near
+    miss of `POLICY-1` and as a typo of `Cuenta Digital Libre`. Supplying one is how a corpus gets a
+    premise its own users would recognise, and the same sequence has to reach validation and
+    generation or a catalogue that validated can still fail.
+    """
+
+    def test_validation_accepts_a_strategy_naming_it(self):
+        catalogue = fx.catalogue(_PlausibleFake().key, control_transform_key=TRANSFORM_KEY)
+
+        validate_catalogue(
+            catalogue,
+            fx.contract(fx.stub_grader()),
+            [GraphProbeEngine(entity_kinds={fx.ENTITY_KIND})],
+            transforms=[_PlausibleFake()],
+        )
+
+    def test_validation_refuses_it_when_it_was_not_supplied(self):
+        catalogue = fx.catalogue(_PlausibleFake().key, control_transform_key=TRANSFORM_KEY)
+
+        with pytest.raises(ValueError, match="outside"):
+            validate_catalogue(
+                catalogue, fx.contract(fx.stub_grader()), [GraphProbeEngine(entity_kinds={fx.ENTITY_KIND})]
+            )
+
+    def test_generation_builds_the_premise_it_defines(self):
+        engine = GraphProbeEngine(
+            entity_kinds={fx.ENTITY_KIND},
+            extractor=_HeadingExtractor(),
+            transforms=[_PlausibleFake()],
+        )
+
+        probes = engine.generate(
+            fx.ordinary_word_documents(),
+            fx.catalogue(_PlausibleFake().key, control_transform_key=TRANSFORM_KEY),
+        )
+
+        supplied = {
+            probe.hook.references for probe in probes if probe.hook is not None and probe.strategy == fx.STRATEGY_ONE
+        }
+        assert "Cuenta Digital Popular" in supplied
+        # La strategy que nombra el transform del usuario no produce ninguna premisa sufijada: el
+        # `-2` de las otras dos sale de `mutate_to_fake`, que sigue disponible.
+        assert not any(premise.endswith("-2") for premise in supplied)
+
+    def test_a_key_colliding_with_a_shipped_one_is_refused(self):
+        """Either resolution silently changes what an existing catalogue means, so neither is taken."""
+        with pytest.raises(ValueError, match="collides"):
+            available([_CollidingTransform()])
+
+    def test_two_supplied_keys_colliding_with_each_other_are_refused_too(self):
+        with pytest.raises(ValueError, match="collides"):
+            available([_PlausibleFake(), _PlausibleFake()])

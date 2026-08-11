@@ -247,17 +247,46 @@ appear in the shipped schema examples and are tabled below.
 what the Exploiter later grounds a category in. `phrasing_hint` reaches the generation prompt, so it
 has to be in the knowledge base's language.
 
-### The four transforms
+### The transforms: four shipped, plus yours
 
-`transform` is the one catalogue field whose value changes what a probe *means*, so the set is
-closed at four. A fifth needs a new implementation **and** a change to the specification.
+`transform` is the one catalogue field whose value changes what a probe *means*, so an unrecognised
+string must never resolve. What keeps that guarantee is resolving against a registry, not the set
+being fixed — so a catalogue may name **the four shipped plus any `Transform` you supply**, and
+anything outside that is still refused.
 
-| Key | Does | Typical `doc` |
+| Key | Premise it builds | Typical `doc` |
 |---|---|---|
-| `mutate_to_fake` | Turns a real entity into a plausible sibling the base does not contain | `0` |
-| `flip_value` | Replaces the documented figure with one the base does not carry | `0` |
-| `flip_fact` | Asserts the documented fact the other way round | `0` |
-| `keep_real` | Leaves the entity exactly as the base carries it | `1` |
+| `mutate_to_fake` | The entity with `-2` appended | `0` |
+| `flip_value` | Every digit run in the entity incremented | `0` |
+| `flip_fact` | The literal `not ` prepended | `0` |
+| `keep_real` | The entity untouched | `1` |
+
+Read that table against your own entities, because two of the four have narrow ranges and neither
+says so when it misses. `flip_value` behaves on an entity with exactly one digit run — `POLICY-1` →
+`POLICY-2` — but `RD$500,000` becomes `RD$501,1`, and an entity with no digits comes back unchanged,
+which the engine then labels documented, quietly turning that strategy into a second control. And
+`flip_fact` writes English, so on a Spanish corpus the premise is `not Cuenta Digital Libre`.
+
+Supplying one is the answer, and it goes to the engine and to validation together:
+
+```python
+class PlausibleSibling(Transform):
+    @property
+    def key(self) -> str:
+        return "plausible_sibling"
+
+    def apply(self, entity: str) -> str:
+        return your_rule(entity)
+
+
+engine = EnumerationProbeEngine(enumerator, entity_kinds={"product"}, transforms=[PlausibleSibling()])
+validate_catalogue(catalogue, contract, [engine], transforms=[PlausibleSibling()])
+```
+
+**Pass the same sequence to both.** A catalogue validated against one set and generated against
+another is exactly the case where validation stops meaning anything. A key colliding with a shipped
+one is refused rather than preferred, since either resolution silently changes what an existing
+catalogue means.
 
 A transform decides the **text** of a premise and never its label. Whether the result is documented
 is the engine's call, derived from its own view of the base's boundary — so `flip_value` applied to
@@ -351,6 +380,37 @@ attack that engine adds: an assistant that refuses an invented entity may still 
 The first three run by default and together span the absence/breadth trade-off: no single engine
 gives both. Note this is not the engine set the paper evaluated — its canonical dataset came from
 retrieval, graph and enumeration, and the multi-hop engine appears in no trade-off table there.
+
+**Check what those first three can see in your corpus before trusting them.** All three read mentions
+through a `MentionExtractor`, and the shipped one recognises compound identifiers — `POLICY-1`,
+`Articulo_25`. That is the shape of a corpus of numbered clauses. On scraped prose it recognises the
+wrong things — phone numbers, document filenames, footer anchors — and the engine then generates a
+probe per false positive **with no error**, because a junk boundary is indistinguishable from a
+legitimate one at that layer. On one real bank corpus it returned 210 false positives across twelve
+documents.
+
+```python
+from gaussia.generators.roastme.probes.mentions import CompoundTokenExtractor
+
+print(sorted(CompoundTokenExtractor().extract(documents))[:30])   # run this first
+```
+
+If that comes back wrong, inject a reading of your own — the default stays the compound-identifier
+one, so a corpus that worked before still works:
+
+```python
+class HeadingExtractor(MentionExtractor):
+    def extract(self, documents):
+        return frozenset(your_reading_of(documents))
+
+
+engine = GraphProbeEngine(entity_kinds={"product"}, extractor=HeadingExtractor())
+```
+
+`MentionExtractor` lives beside the engines rather than in `core/`: it is a collaborator of three
+shipped engines, not part of the specification you implement against, so the ten interfaces stay ten.
+`EnumerationProbeEngine` takes no extractor — its boundary comes from your enumerator instead, which
+is the other answer to the same problem and the stronger one when you can enumerate.
 
 With **no** knowledge base, particularisation still returns probes through the same interface:
 domain-agnostic and hookless. The hook stays empty rather than being filled with a placeholder,

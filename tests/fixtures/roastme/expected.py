@@ -470,6 +470,30 @@ def plugin_specs() -> list[PluginSpec]:
     ]
 
 
+# A corpus whose entities are ordinary words: not one token joined by a hyphen or an underscore,
+# anywhere. This is the shape the default extractor cannot read, and the shape most knowledge bases
+# actually have — a scraped product site, a manual, a policy handbook. It carries its entities in
+# second-level headings, so an injected extractor has something structural to read them from.
+ORDINARY_WORD_ENTITIES = frozenset({"Cuenta Digital Libre", "Cuenta Flash Popular"})
+ORDINARY_WORD_DOCUMENT_ID = "doc-ordinary-words"
+
+HEADING_PREFIX = "## "
+
+
+def ordinary_word_documents() -> list[Document]:
+    headings = "\n".join(
+        f"{HEADING_PREFIX}{entity}\nEl banco documenta este producto." for entity in sorted(ORDINARY_WORD_ENTITIES)
+    )
+    return [
+        Document(
+            id=ORDINARY_WORD_DOCUMENT_ID,
+            content=f"# Productos del banco\n{headings}\nNinguna de estas frases lleva un identificador compuesto.",
+            structured=True,
+            kind="product-page",
+        )
+    ]
+
+
 def strategy_specs(transform_key: str, control_transform_key: str | None = None) -> list[StrategySpec]:
     """Two scoring strategies and one control.
 

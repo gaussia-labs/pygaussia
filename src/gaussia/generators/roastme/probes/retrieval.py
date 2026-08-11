@@ -19,13 +19,16 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .particularisation import ParticularisingEngine, extract_mentions
+from .particularisation import ParticularisingEngine
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from gaussia.core.embedder import Embedder
+    from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import Document
+
+    from .mentions import MentionExtractor
 
 # Keeps a zero-norm embedding from turning a similarity into a warning and then into a NaN.
 _EPSILON = 1e-12
@@ -43,8 +46,15 @@ class RetrievalProbeEngine(ParticularisingEngine):
             that an absence label is wrong.
     """
 
-    def __init__(self, embedder: Embedder, entity_kinds: Iterable[str] = (), top_documents: int = 3) -> None:
-        super().__init__(entity_kinds)
+    def __init__(
+        self,
+        embedder: Embedder,
+        entity_kinds: Iterable[str] = (),
+        top_documents: int = 3,
+        extractor: MentionExtractor | None = None,
+        transforms: Sequence[Transform] = (),
+    ) -> None:
+        super().__init__(entity_kinds, extractor, transforms)
         self._embedder = embedder
         self._top_documents = top_documents
 
@@ -58,7 +68,7 @@ class RetrievalProbeEngine(ParticularisingEngine):
         return False
 
     def _entities(self, kind: str, documents: list[Document]) -> frozenset[str]:
-        return extract_mentions(self._retrieve(kind, documents))
+        return self._extractor.extract(self._retrieve(kind, documents))
 
     def _retrieve(self, query: str, documents: list[Document]) -> list[Document]:
         corpus = self._embedder.encode([document.content for document in documents])
