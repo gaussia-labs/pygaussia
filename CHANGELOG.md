@@ -1,6 +1,376 @@
 # CHANGELOG
 
 
+## v1.1.0-b.3 (2026-08-11)
+
+### Bug Fixes
+
+- **roastme**: Corrections found reviewing the arithmetic against the paper
+  ([`a2556c1`](https://github.com/gaussia-labs/pygaussia/commit/a2556c11b3fcebfa517113510d93648437e6587d))
+
+A pass that recomputed every fixture from the paper's equations rather than from the code. All 49
+  agree. What it did find was three claims that did not.
+
+The data model said the weakness map carries "the binomial standard error". That is the estimator
+  for a proportion of Bernoulli trials, and the quantity is a mean of violation scores — continuous
+  three ways over: the shipped grader returns a logistic probability, the sampling fallback returns
+  a vote fraction, and a weighted sum over several principles is fractional even from binary grades.
+  The two forms coincide only on binary data, which is why the weakness map's own fixtures read
+  either way and why the wrong name spread. The paper settles it in its own words: "the empirical
+  mean of v ... its standard error ... the penalty rewards categories that fail consistently". A
+  penalty that cannot see dispersion cannot do what the paper says the penalty is for. The code was
+  already right and two tests already held the line, so only the sentence changed; the test that
+  pins the coincidence on binary values now says that is what it is.
+
+The same line described the rate as "violations over trials". It is the mean of the per-principle
+  grades. On [0.4, 0.6] the mean is 0.5 where a count is 1/2, 2/2 or 0/2 depending on where the line
+  goes, and a proportion's standard error at that rate and n is five times the correct value. Three
+  fixtures now pin the general form, all at one rate and one n so that sqrt(rate(1-rate)/n) is
+  constant across them and only the mean's form tracks the dispersion.
+
+The realism estimator claimed to be the paper's construction. The quantity is the paper's; the
+  estimator is not. The paper takes the expectation over the whole pool and offers a cheaper
+  centroid variant, where this takes each query's distance to its nearest pool member. The docstring
+  argues that reading and it is defensible, but a maximum is never below a mean, so this gate is
+  never stricter than the paper's and over a diverse pool the gap is enough to flip it. FR-039
+  exists to attribute constructions correctly, so the module now says which half is the paper's and
+  what the consequence of the other half is.
+
+Two search knobs hardened while there. The query generator's re-ask carried no memory of what it had
+  already collected, so the likeliest reply to "write two more" was the two just written; the
+  duplicates were then discarded and the attempt spent making no progress, which could burn the
+  whole budget and fail a run that would have succeeded. And max_attributes now refuses a value
+  below one rather than degrading to seeding without conjoining, which is a different search rather
+  than a narrower one. Its docstring also claimed the cap is what keeps a run finite; it bounds
+  refinement only, and the cost model is now stated in full.
+
+- **roastme**: Defects found reviewing the code
+  ([`84947c3`](https://github.com/gaussia-labs/pygaussia/commit/84947c35a0d22702405741b7ca64bfce9d26b236))
+
+Reviewers that had not written the subsystem went over it against the requirements and the
+  constitution. What they found, and the coverage that pins each one.
+
+A contract whose weights sum to 1 + 5e-10 — accepted on purpose, so a contract assembled from
+  decimals is not rejected for float noise — produced a violation score above 1.0 and crashed the
+  run at the one moment the assistant violated every principle. The tolerance exists so contracts
+  are accepted, not so scores may leave [0,1], so the score is clamped where it is produced and the
+  two means that consume it inherit the bound.
+
+At tau = 0.0 the failure report surfaced queries the kappa gate had zeroed, which were never sent:
+  no response, no grades, no rationale. That contradicted the file's own docstring and FR-036, which
+  asks for auditable records. Having been asked is now a second condition rather than something the
+  score implies.
+
+FR-005 asks every grade to record the grader, and no field held it. Neither method nor model
+  identifies one — a grader has two methods, and a rule-based grader has no model — so grader is
+  required rather than defaulted: nothing legitimately produces a grade anonymously.
+
+The stripped-identifier test asserted that a field nothing ever writes is unwritten, so it passed by
+  construction and would have survived the stripping breaking entirely. It now scans the serialised
+  entry. The retained hooks keep their kind and transform key, since a hook stripped of them is no
+  longer provenance an evaluator can act on; what invariant 3 forbids is the Exploiter steering on
+  that vocabulary, so it is enforced at the consumer instead.
+
+Delete gated_violation rather than wire it into the pipeline. The pipeline gates before the target
+  call, precisely so it does not spend one on an answer that cannot count, so a gated query never
+  has a violation to pass in and sharing the function would have meant inventing one. The shared
+  constant is shared instead.
+
+Fix a sigmoid that raised OverflowError on a separation no exponent can carry, reachable when a
+  provider reports a sentinel logprob. Raise on a principle graded twice rather than silently
+  keeping the last, which made v depend on the order two disagreeing grades arrived in. Correct
+  three fixture literals that disagreed with their own stated derivations, and the docstring that
+  explained the disagreement with a reason that was not true.
+
+Branch coverage of scoring.py to 100% and of the default exploiter path from nothing: the guards are
+  the point of these modules, so a guard with no test is a guard that has never run.
+
+- **roastme**: Type the policy update's config structurally, not against trl
+  ([`500542f`](https://github.com/gaussia-labs/pygaussia/commit/500542f603d26f323b9dcd73e57f886cc1ace50d))
+
+trl 1.9.2 moved PPO to `trl.experimental.ppo`, so `from trl import PPOConfig` stopped resolving and
+  mypy failed on develop. No single import path is correct across the declared `trl>=0.8.0`: on 0.x
+  it is `trl.PPOConfig`, on 1.x the experimental one — which trl itself warns "may change or be
+  removed without notice".
+
+The module never called trl. The clipped surrogate is computed here and the import existed only to
+  name an annotation, so the annotation is now a Protocol over the two fields actually read,
+  `cliprange` and `learning_rate`. trl's PPOConfig still satisfies it — checked with mypy against
+  the installed 1.9.2 — and stays what the docstring says to pass. The `trl.*` mypy override goes
+  with it, unused and reported as such.
+
+Verified under `uv sync --all-extras`, which is what CI does and a default install does not: mypy
+  clean on 144 files, ruff clean, 911 tests pass. The failure was invisible locally because trl is
+  absent without the extra and `ignore_missing_imports` covers it.
+
+### Build System
+
+- **roastme**: Add the roastme extra
+  ([`005086d`](https://github.com/gaussia-labs/pygaussia/commit/005086d536fad1ac9cd363ce25ae0851f04c5f27))
+
+sentence-transformers, torch and networkx, excluded from both the metrics and the all extras so the
+  base install stays light and importing gaussia.core keeps working with none of them present.
+
+Relocking also carries a version correction inherited from develop: uv.lock still recorded gaussia
+  1.0.0b3 while pyproject.toml declares 1.1.0-b.2. This commit is kept on its own so that correction
+  is visible rather than buried in a feature diff.
+
+- **roastme**: Add the roastme-rl extra
+  ([`5f956eb`](https://github.com/gaussia-labs/pygaussia/commit/5f956eb30a7338d28184d4851b0d40a4c53d07c9))
+
+peft, accelerate and trl on top of gaussia[roastme], kept out of every aggregate: the
+  training-backed update step is the only module that imports them, and the policy-gradient loop
+  must stay runnable on CPU with none of them installed. Their mypy overrides go alongside, since
+  none ships py.typed.
+
+### Chores
+
+- **skills**: Add /docs and /aws-lambda ([#19](https://github.com/gaussia-labs/pygaussia/pull/19),
+  [`e45e42f`](https://github.com/gaussia-labs/pygaussia/commit/e45e42fa74370a91802cbbdbb0ae297f960d6e2a))
+
+Written against the patterns already in the tree rather than against one metric, so they apply to
+  any metric or module.
+
+/docs picks the directory from whether the subject emits a BaseMetric, picks the tier from the
+  section markers the existing pages share, and requires registering the page in docs.json and
+  docs-sync.json — which have different JSON shapes and different path forms. That is the step that
+  gets missed: metrics/role-adherence is registered in neither and does not publish, and
+  metrics/privacy in only one.
+
+/aws-lambda separates the six mechanical files from run.py and README.md, and gates on the extra
+  before anything is written: every existing example targets an extra that is empty or absent, so a
+  module pulling torch or sentence-transformers needs a decision about the 10 GB image ceiling
+  first.
+
+### Documentation
+
+- **roastme**: Guide, catalogue examples and notebook
+  ([`fee6148`](https://github.com/gaussia-labs/pygaussia/commit/fee614894444082a672784e5cefc0db32832dd1e))
+
+The page sits under advanced/ rather than metrics/: Roast Me generates a dataset for the metrics to
+  read, it is not one of them. Registered in both nav registries, since docs-sync.json is the one
+  that publishes.
+
+It states the four things the requirements make non-optional: no grader here is calibrated against
+  human labels; the query generator and on-profile filter are gaussia's construction, so
+  substituting them changes what the search measures; where kappa and delta come from when the user
+  supplies neither; and that the training-free search has no published result behind it. The worked
+  ExploiterConfig carries tau and eta, which is what makes the two required thresholds copyable
+  rather than guessable.
+
+Every code block on the page and every notebook cell was executed, not just written, so the numbers
+  quoted are real output.
+
+- **roastme**: Plan gate — implementation plan and data model
+  ([`d5a2115`](https://github.com/gaussia-labs/pygaussia/commit/d5a21156c9f2991e4089be43d61c8efdfb7268e9))
+
+Maps the approved spec onto the SDK: seven abstractions in core/, the Pydantic shapes in
+  schemas/roastme.py, RoastMeProfiler as the metric, and the Probe Library and Exploiter as
+  generators whose product the pipeline consumes. All 38 functional requirements have a file, all 11
+  success criteria have a test, and the four constitution gates are filled with reasons rather than
+  ticks.
+
+NEEDS DECISION — ALEX: which category searches ship. The interface is settled by the approved spec;
+  what is open is which implementations land now. Three options with their dependency, CI-coverage
+  and default-path consequences are laid out in the section right after the summary. The
+  recommendation puts the training stack behind its own extra, which contradicts spec D5 and would
+  need that decision amended. Everything below that section is written for the recommendation and
+  degrades cleanly under the others.
+
+Notable design points: the Profiler takes no target assistant at all, so grading without contacting
+  the assistant is structural rather than a mode; the weakness map's rate goes through the injected
+  StatisticalMode, so a descriptor resting on few probes returns a credible interval instead of a
+  zero that reads as settled; and the catalogue's transform string is resolved by a registry once,
+  at validation, so nothing branches on it afterwards.
+
+llm/judge.py is deliberately untouched.
+
+- **roastme**: Quickstart notebook, and the guide trimmed to reference
+  ([`0fd6797`](https://github.com/gaussia-labs/pygaussia/commit/0fd6797109dd4c8c452edc7b2a8b4bec390353ad))
+
+A quickstart beside the full walkthrough: the whole arc — contract, catalogue, probes, profile,
+  exploit, Roast Dataset — offline in a few seconds behind crude stand-ins, at half the size of the
+  long one. Its probes are derived from a two-strategy catalogue through the library's own
+  `principle_by_plugin` and `strategy_attributes`, so `plugin` holds a plugin id rather than a
+  principle and every field is shaped the way the engines shape it. Both helpers import with no
+  extra installed.
+
+The guide drops from 905 lines to 721. It had grown a full runnable walkthrough because there was no
+  quickstart when it was written; the 73-line block of stand-ins that existed only to make the page
+  executable is gone, and the snippets name the shipped components instead — LogprobGrader with its
+  GraderConfig, PromptedQueryGenerator, JudgeOnProfileFilter, SentenceTransformerEmbedder — so what
+  a reader copies is what they would deploy.
+
+Three corrections came out of re-running the guide's blocks: the policy-gradient snippet had lost
+  its AssistantProfile and Category imports along with the block that used to provide them; the
+  realism figures were a hashing stand-in's, and measured again with the default all-MiniLM-L6-v2
+  they are 0.135 against 0.502, so the second clears the recommended delta of 0.5 by two
+  thousandths; and the multi-hop chain in the prose omitted the mutation on its last hop.
+
+Both notebooks store the output of a real run, which is how the generators notebooks read. Ten of
+  the guide's eleven python blocks were executed to verify it; the eleventh constructs the Exploiter
+  with the real judge-backed collaborators and needs a provider.
+
+- **roastme**: Rework the plan and data model after review
+  ([`3dfab32`](https://github.com/gaussia-labs/pygaussia/commit/3dfab32a086f32c85b56f23d4ab95b5387d97d90))
+
+Drops the framework's statistical modes, reversing an earlier position: the category score needs a
+  standard error and the framework's dispersion utility returns a mean absolute deviation. Using one
+  utility for the weakness map and hand arithmetic for the score would put two statistical
+  treatments inside one measurement.
+
+Makes the output boundary buildable. The previous table named framework fields in prose, which hid
+  that two of its targets do not exist: there is no metadata slot on a turn, and the session context
+  is one required string per session rather than a per-probe hook. The conversion now goes through a
+  Batch subclass on the output side and states what every required field is filled with, including
+  the language that would otherwise label a Spanish corpus as English.
+
+Adds the configuration the design assumed and never defined — every threshold the method takes as a
+  parameter, required rather than defaulted, since a default would be the library deciding how hard
+  a category has to fail before it counts.
+
+Probe engines now declare which entity kinds they handle, so catalogue validation can reject a kind
+  nothing can produce instead of generating an empty probe set.
+
+Which of three pluggable pieces ship a working implementation is left open for the reviewer. An
+  earlier draft resolved it with a rule that contradicted itself: the query generator was to ship
+  because the Exploiter cannot run without one, while the filter was not, on the ground that the
+  Exploiter should refuse to run without one. The paper treats both the same way, naming them
+  without constructing them.
+
+The policy-gradient search shipping without automated coverage is now an unchecked box in a Testing
+  Gate rather than a footnote under a claim of no violations.
+
+- **roastme**: Tasks gate — TDD task breakdown
+  ([`bded411`](https://github.com/gaussia-labs/pygaussia/commit/bded411e042575243e0846f2d60d6d1c5bee72dd))
+
+Fifty-six tasks in nine phases, every path taken from the plan's file tables and every task tagged
+  with the requirement or success criterion it exists for. Tests are written and verified failing
+  before the code that satisfies them.
+
+The reinforcement-learning search lands last, in its own phase behind its own extra, so every
+  earlier checkpoint stays verifiable without a GPU. Documentation and the runnable example follow
+  the implementation rather than preceding it.
+
+This is here for continuity; the gate under review is the plan.
+
+### Features
+
+- **roastme**: Exploiter and threshold resolution
+  ([`c2cd608`](https://github.com/gaussia-labs/pygaussia/commit/c2cd608627a82631389066c0542139949b345823))
+
+Thresholds resolve once, at construction: a supplied value wins, else the configured component's
+  recommendation, else the Exploiter refuses to be built, naming both the component and the
+  parameter. Nothing downstream re-resolves or branches on which path produced the number, so the
+  search cannot silently run on a threshold nobody chose.
+
+The realism estimator follows the paper. The query generator and the on-profile filter are gaussia's
+  own construction, and each module docstring says so and says that substituting them changes what
+  the search measures — the paper offers no method for either, so silence would read as fidelity it
+  does not have.
+
+Give StrategySpec.description a minimum length. Its clauses become the probe's attributes and from
+  there the prose descriptor of the weakness map, which is the only thing about a strategy allowed
+  to cross to the Exploiter. An empty description passed validation and then broke the Profiler
+  mid-run — exactly the failure mode catalogue validation exists to prevent. The data model called
+  the field documentation; it is load-bearing, and now says so.
+
+- **roastme**: Interfaces and schemas
+  ([`a097afe`](https://github.com/gaussia-labs/pygaussia/commit/a097afec2653c32a4b999191843f749e354f0d2e))
+
+Ten abstractions in core/ — Grader, ProbeEngine, EntityEnumerator, HookVerifier, Transform,
+  TargetAssistant, QueryGenerator, OnProfileFilter, RealismEstimator and CategorySearch — plus every
+  model and validator the data model specifies.
+
+All ten are plain ABCs, matching Embedder, Guardian and Reranker rather than the Pydantic-hybrid
+  PIIDetector: the two recommended thresholds are resolved in one place downstream, so validating
+  them at construction would make two of the ten structurally different from the rest for no gain.
+
+The import direction is inverted exactly once. Every core/ module imports its models under
+  TYPE_CHECKING, but schemas/roastme.py imports Grader at runtime, because Pydantic must resolve
+  Principle.grader when it builds the model. No runtime cycle results, and the module docstring
+  records the reason.
+
+- **roastme**: Probe library
+  ([`72ca663`](https://github.com/gaussia-labs/pygaussia/commit/72ca6638484921a1d568d0025d67fb8f88fe0685))
+
+The four engines share one flow and differ in a single step, so the flow is a Template Method —
+  ParticularisingEngine — and each engine supplies only the entities it can see for a kind and
+  whether absence from that view decides the label. Writing the flow four times would make FR-021
+  four promises that drift. This adds particularisation.py, which the plan's file table does not
+  list; FR-020 names the stage, hence the filename.
+
+That same abstraction is what keeps FR-023 true after composition. An engine declares what it can
+  see; membership is the doc label. The graph engine sees every mention, so absence from it is
+  absence. The retrieval engine sees the top k, a sample, so absence from it is only absence from a
+  sample and every doc = 0 hook it emits is marked unreliable. Presence is reliable either way.
+
+Merging is keyed on probe id, and the shipped engines scope ids by engine name. Engine-independent
+  ids would collide across graph and retrieval over one corpus and collapse a confirmed absence
+  label into an unreliable one, so FR-023 would stop holding at exactly the point composition
+  happens. What merges is one probe surfaced twice; the survivor records every contributor.
+
+The transform registry is a MappingProxyType: FR-025 closes the set, so it cannot be reopened at
+  runtime. Order is load-bearing and documented — the three that invent a premise come first,
+  identity last, since identity is what a control strategy asks for.
+
+networkx joins the existing mypy ignore_missing_imports override. It ships no py.typed, and
+  types-networkx would need a relock.
+
+- **roastme**: Profiler and roast dataset
+  ([`96eb904`](https://github.com/gaussia-labs/pygaussia/commit/96eb904f9d0f5dd1db1e0ef6f1718086dac8d9f0))
+
+Scoring is pure functions over values, on stdlib arithmetic rather than numpy: the suite turns
+  warnings into errors, and numpy's degenerate-variance warning fires at n = 1, which the standard
+  error must reach and return zero for. One uncorrected formula serves both the weakness map and the
+  S(c) penalty, so it collapses to the binomial form on binary values.
+
+LogprobGrader is standalone rather than an extension of the shared judge, which reads the first
+  generated token and raises instead of falling back — wrong for a reasoning model, and
+  role_adherence depends on that behaviour. The fallback is driven by the two exceptions core
+  already defines, not by a flag.
+
+The profiler builds its weakness descriptors from the probes' own attributes and never sets a
+  strategy identifier, rather than setting one and stripping it: no field on the result would hold
+  the un-stripped value, so clearing it would be ceremony.
+
+Correct one assertion in the dataset test. It required Toxicity to echo the dataset's session id,
+  but Toxicity collapses every session into one aggregate labelled global_stream, so satisfying it
+  would demand the very change the test's own docstring forbids. It now asserts the assistant id,
+  which Toxicity does carry over from the dataset's metadata. The session id stays verified where it
+  is ours to set: on the conversion itself.
+
+- **roastme**: Reinforcement-learning search
+  ([`d87d4c4`](https://github.com/gaussia-labs/pygaussia/commit/d87d4c424bc2dda883855a4e94d119146e375144))
+
+The loop and the two abstractions it samples from and applies through live in policy_gradient.py and
+  import nothing heavy, so the loop is testable on CPU in the default suite. policy_update.py is the
+  only module that imports the training stack and the only one marked requires_gpu. The abstractions
+  stay there rather than in core/: they are collaborators of one shipped search, not part of the
+  specification a user implements against.
+
+Split the discarded-candidate test in two. It asserted through rewards.get(attrs, 0.0), which passes
+  whether the candidate is present with a zero or absent altogether — and those are not
+  interchangeable. A candidate gated on realism was judged, so it belongs in the batch with a zero;
+  one the target never answered was not judged, so rewarding it zero would teach the policy a
+  verdict the run never reached, and would let a failed exchange count as a pass, which FR-016
+  forbids. An update step centring rewards on a batch baseline gets a different gradient from each.
+
+### Testing
+
+- **roastme**: Red phase
+  ([`d932ced`](https://github.com/gaussia-labs/pygaussia/commit/d932ced25bcb20265369868725914d48f4cee2d4))
+
+Deterministic doubles, one per interface, plus the two-variant on-profile filter and realism
+  estimator the threshold-resolution paths need. Hand-computed fixtures carry the derivation beside
+  every literal, so assertions are arithmetic against the paper's equations rather than snapshots of
+  whatever the code emits.
+
+Every test that depends on an implementation module fails on that module being absent. Conformance,
+  hermeticity and the fixture self-checks pass already: they exercise the interfaces and the
+  doubles, both of which exist, and their passing is what confirms the interfaces landed.
+
+
 ## v1.1.0-b.2 (2026-07-15)
 
 ### Bug Fixes
