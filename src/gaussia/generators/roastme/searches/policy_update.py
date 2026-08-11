@@ -21,7 +21,7 @@ trust region.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from accelerate import Accelerator
@@ -33,7 +33,6 @@ if TYPE_CHECKING:
 
     from peft import PeftModel
     from transformers import PreTrainedTokenizerBase
-    from trl import PPOConfig
 
     from gaussia.schemas.roastme import Category
 
@@ -41,6 +40,23 @@ if TYPE_CHECKING:
 
 _LOGITS_OF_THE_NEXT_TOKEN = slice(None, -1)
 _TOKENS_AFTER_THE_FIRST = slice(1, None)
+
+
+class ClipHyperparameters(Protocol):
+    """The two hyperparameters the step reads, named structurally rather than by trl's class.
+
+    trl's ``PPOConfig`` satisfies this and is still what to pass — but it has moved between trl's
+    top level and ``trl.experimental.ppo`` across the versions ``gaussia[roastme-rl]`` permits, so
+    no single import path is correct for the declared range. This module never calls trl: the
+    clipped surrogate is computed here. Typing against the two fields actually read keeps the
+    annotation true whatever trl does with its own layout next.
+
+    A ``Protocol`` rather than an ABC because this describes the shape of somebody else's object,
+    not an interface a user implements against — the ten of those are in ``core/``.
+    """
+
+    cliprange: float
+    learning_rate: float
 
 
 class ClippedPolicyUpdate(PolicyUpdateStep):
@@ -57,8 +73,9 @@ class ClippedPolicyUpdate(PolicyUpdateStep):
         render: How the policy turned a category into the text it sampled. Injected because the
             log-probability recomputed here has to be of the same string the reported one was of,
             and only the policy knows how it wrote it.
-        config: trl's PPO hyperparameters, so the clip range and the step size are the reference
-            implementation's rather than numbers invented here.
+        config: The clip range and the step size. Pass trl's ``PPOConfig`` so both are the
+            reference implementation's rather than numbers invented here; anything carrying the two
+            fields will do.
     """
 
     def __init__(
@@ -66,7 +83,7 @@ class ClippedPolicyUpdate(PolicyUpdateStep):
         model: PeftModel,
         tokenizer: PreTrainedTokenizerBase,
         render: Callable[[Category], str],
-        config: PPOConfig,
+        config: ClipHyperparameters,
     ) -> None:
         self._tokenizer = tokenizer
         self._render = render

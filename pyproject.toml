@@ -314,7 +314,6 @@ module = [
     "networkx",
     "peft.*",
     "accelerate.*",
-    "trl.*",
 ]
 ignore_missing_imports = true
 
