@@ -22,6 +22,53 @@ StrategySpec(
 )
 ```
 
+## 0. First, check that an engine can see your entities at all
+
+Do this before writing a single strategy. Three of the four shipped engines — retrieval, graph,
+multi-hop — find entities with **one regex**, in `probes/particularisation.py`:
+
+```python
+_MENTION = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+")
+```
+
+An entity is a run of alphanumerics joined by a hyphen or underscore. `POLICY-1`, `FORM-7`,
+`entity_alpha` match. `Cuenta Digital Libre`, `Mastercard Infinia`, `insulin` do **not**.
+
+**The failure is silent.** An empty boundary makes the engine return `[]` with no error, and a corpus of
+web-scraped prose returns something worse than nothing: junk that looks like entities. Run this against
+your own corpus before you trust anything:
+
+```python
+import re
+mention = re.compile(r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+")
+found = sorted({m for d in documents for m in mention.findall(d.content)})
+print(len(found), found[:30])
+```
+
+If what comes back is phone numbers, PDF filenames, URL slugs or footer anchors, those three engines
+will generate `len(found) × len(strategies)` nonsense probes and the run will look successful. On one
+real bank corpus this was 210 junk entities across 12 documents.
+
+**The escape is `EnumerationProbeEngine` plus an `EntityEnumerator` you write.** It is the only engine
+that does not use the regex, the only one that can defend an absence label, and it needs no extra — no
+torch, no networkx. Its contract is **completeness**: return the whole set, because a sample turns every
+absence label into a guess. Slice the generated probe list afterwards if you need fewer.
+
+```python
+class MyEnumerator(EntityEnumerator):
+    def enumerate_entities(self, kind: str, documents: list[Document]) -> frozenset[str]:
+        if kind != "my-kind":
+            return frozenset()          # unknown kind: produce nothing rather than invent
+        return frozenset(...)           # the complete set, read from your corpus
+```
+
+Two things that decide whether this works:
+
+- `EnumerationProbeEngine.can_handle` returns `document.structured`, so **mark the enumerable documents
+  `structured=True`** or the engine receives `[]` and degenerates to hookless probes.
+- find a *structural* source for the set — consistent headings, a filename convention, a closed table.
+  Reading `## ` headings out of product pages gives a defensible complete list; scraping prose does not.
+
 ## 1. `description` is not documentation
 
 Its comma-separated clauses become the probe's **attributes**, and from there the prose descriptor of
@@ -49,12 +96,29 @@ mid-run instead of at validation.
 
 The set is closed. `validate_catalogue` rejects anything outside it.
 
-| `transform` | What the premise becomes |
-|---|---|
-| `mutate_to_fake` | a near-miss of a real entity, which does not exist |
-| `flip_value` | the real entity with one of its values changed |
-| `flip_fact` | the real entity with a documented fact asserted backwards |
-| `keep_real` | the entity untouched |
+| `transform` | Implementation | Premise for `Cuenta Digital Libre` |
+|---|---|---|
+| `mutate_to_fake` | appends `-2` | `Cuenta Digital Libre-2` |
+| `flip_value` | increments **every** digit run | unchanged — no digits |
+| `flip_fact` | prepends the literal `"not "` | `not Cuenta Digital Libre` |
+| `keep_real` | identity | `Cuenta Digital Libre` |
+
+Read that table against your own entities before choosing, because two of the four have narrow ranges of
+applicability and neither says so when it misses:
+
+- **`flip_value` only behaves on an entity with exactly one digit run.** `POLICY-1` → `POLICY-2`, as
+  intended. But `RD$500,000` → `RD$501,1`, because it increments `500` *and* `000` separately. And on an
+  entity with no digits it returns the entity **unchanged**, which the engine then labels documented —
+  so the strategy silently becomes a second control and charges nothing. If your values carry thousands
+  separators or currency symbols, this transform is not for them.
+- **`flip_fact` writes English.** `"not "` is hardcoded, so on a Spanish or Portuguese corpus the premise
+  is `"not Cuenta Digital Libre"` — a string no user would type, which makes the probe test whether the
+  assistant tolerates broken language rather than whether it accepts a false premise.
+
+The registry is read-only (`MappingProxyType`), so you cannot supply a replacement. If neither fits your
+entities, say so in the catalogue and leave the principle to be charged by the transforms that do fit —
+the Profiler grades **every** principle on **every** response, so a principle with no strategy of its own
+is still measured. Asking about an entity that does not exist is already a false premise.
 
 `doc` should agree with the transform: `keep_real` leans on something documented (`doc=1`), the other
 three on something that is not (`doc=0`). The Probe Library recomputes it against the corpus, so a
