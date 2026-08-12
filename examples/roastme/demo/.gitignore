@@ -1,0 +1,10 @@
+# La corrida real SÍ se commitea: `out/` es lo que este demo existe para mostrar, y es lo que permite
+# correr el arco completo sin credenciales.
+#
+# Lo que NO se commitea es lo que genera alguien re-corriendo el demo: un replay escribe bajo
+# `<sesión>-replay` justamente para no pisar la corrida real, y esos archivos son de quien los corrió.
+out/*-replay-*.json
+
+# `.env` ya lo ignora el .gitignore de la raíz del repo. Se repite acá para que la carpeta sea segura
+# incluso copiada a otro proyecto.
+.env
