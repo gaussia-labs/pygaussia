@@ -387,6 +387,27 @@ class TestJudgeLogprob:
         return bound
 
     @staticmethod
+    def _bind_sequence(model: MagicMock, responses: list[dict]) -> MagicMock:
+        """Bind one response per attempt, so a retry observes something different."""
+        built = []
+        for metadata in responses:
+            response = MagicMock()
+            response.response_metadata = metadata
+            built.append(response)
+        bound = MagicMock()
+        bound.invoke.side_effect = built
+        model.bind.return_value = bound
+        return bound
+
+    @staticmethod
+    def _positions(*positions: tuple[str, list[dict]]) -> dict:
+        return {
+            "logprobs": {
+                "content": [{"token": token, "top_logprobs": distribution} for token, distribution in positions]
+            }
+        }
+
+    @staticmethod
     def _bind_metadata(model: MagicMock, metadata: dict) -> MagicMock:
         response = MagicMock()
         response.response_metadata = metadata
@@ -501,6 +522,74 @@ class TestJudgeLogprob:
 
         with pytest.raises(LogprobsExtractionError):
             judge.check_logprob_binary("p", "q", {}, scan_tokens=4)
+
+    def test_check_logprob_binary_retries_a_non_compliant_answer(self):
+        """A judge sampling at temperature 1.0 occasionally answers off-format.
+
+        Observed live: asked a yes/no question, a judge began enumerating the
+        criteria instead of answering, so no yes/no token was emitted at all.
+        Re-asking is a fresh draw, and one bad draw should not end a run.
+        """
+        model = _make_fake_model("ChatOpenAI")
+        answer = [{"token": "Yes", "logprob": -0.1}, {"token": "No", "logprob": -2.3}]
+        bound = self._bind_sequence(
+            model,
+            [
+                self._positions(
+                    (":", [{"token": ":", "logprob": -0.1}]), (" extra", [{"token": " extra", "logprob": -0.2}])
+                ),
+                self._positions(("Yes", answer)),
+            ],
+        )
+        judge = Judge(model=model)
+
+        score, _ = judge.check_logprob_binary("p", "q", {})
+
+        assert score > 0.8
+        assert bound.invoke.call_count == 2
+
+    def test_check_logprob_binary_does_not_retry_when_no_logprobs_came_back(self):
+        """An answer carrying no logprobs is a capability limit, not a bad draw.
+
+        Retrying it would burn every attempt on every judgement of a whole run
+        before failing with the same error.
+        """
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        bound = self._bind_metadata(model, {"logprobs": None})
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {})
+
+        assert bound.invoke.call_count == 1
+
+    def test_check_logprob_binary_gives_up_after_the_retries(self):
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        off_format = self._positions((":", [{"token": ":", "logprob": -0.1}]))
+        bound = self._bind_sequence(model, [off_format, off_format, off_format])
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsExtractionError, match="3 attempt"):
+            judge.check_logprob_binary("p", "q", {})
+
+        assert bound.invoke.call_count == 3
+
+    def test_check_logprob_binary_retries_can_be_disabled(self):
+        """extraction_retries=0 preserves the previous behaviour exactly."""
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        bound = self._bind_sequence(model, [self._positions((":", [{"token": ":", "logprob": -0.1}]))])
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {}, extraction_retries=0)
+
+        assert bound.invoke.call_count == 1
 
     def test_check_logprob_binary_handles_null_logprobs(self):
         """A model that accepts the parameter and ignores it answers with
