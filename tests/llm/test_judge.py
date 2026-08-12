@@ -365,8 +365,31 @@ class TestJudgeLogprob:
 
     @staticmethod
     def _bind_response(model: MagicMock, top_logprobs_list: list[dict]) -> MagicMock:
+        sampled = max(top_logprobs_list, key=lambda entry: entry["logprob"])["token"]
+        return TestJudgeLogprob._bind_positions(model, [(sampled, top_logprobs_list)])
+
+    @staticmethod
+    def _bind_positions(model: MagicMock, positions: list[tuple[str, list[dict]]]) -> MagicMock:
+        """Bind a response carrying one entry per generated position.
+
+        Each entry holds the token actually sampled there plus the distribution
+        at that point, which is the shape providers return.
+        """
         response = MagicMock()
-        response.response_metadata = {"logprobs": {"content": [{"top_logprobs": top_logprobs_list}]}}
+        response.response_metadata = {
+            "logprobs": {
+                "content": [{"token": token, "top_logprobs": distribution} for token, distribution in positions]
+            }
+        }
+        bound = MagicMock()
+        bound.invoke.return_value = response
+        model.bind.return_value = bound
+        return bound
+
+    @staticmethod
+    def _bind_metadata(model: MagicMock, metadata: dict) -> MagicMock:
+        response = MagicMock()
+        response.response_metadata = metadata
         bound = MagicMock()
         bound.invoke.return_value = response
         model.bind.return_value = bound
@@ -421,6 +444,73 @@ class TestJudgeLogprob:
             ],
         )
         judge = Judge(model=model)
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {})
+
+    def test_check_logprob_binary_scans_past_a_preamble(self):
+        """The answer token is not always the first one generated.
+
+        Asked with a long prompt, a model that had been answering with a bare
+        token started prefixing a short preamble on some calls and not others.
+        """
+        model = _make_fake_model("ChatOpenAI")
+        answer = [{"token": "Yes", "logprob": -0.1}, {"token": "No", "logprob": -2.3}]
+        self._bind_positions(
+            model,
+            [
+                ("Answer", [{"token": "Answer", "logprob": -0.2}]),
+                (":", [{"token": ":", "logprob": -0.1}]),
+                (" ", [{"token": " ", "logprob": -0.1}]),
+                ("Yes", answer),
+            ],
+        )
+        judge = Judge(model=model)
+
+        score, raw = judge.check_logprob_binary("p", "q", {})
+
+        assert score > 0.8
+        assert raw["top_logprobs"] == answer
+
+    def test_check_logprob_binary_ignores_a_candidate_it_did_not_sample(self):
+        """A bare "Yes" sits in the top-N of almost any position of prose, so the
+        position is chosen by what was sampled, not by what was merely available."""
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_positions(
+            model,
+            [
+                ("Certainly", [{"token": "Certainly", "logprob": -0.1}, {"token": "Yes", "logprob": -4.0}]),
+                ("!", [{"token": "!", "logprob": -0.1}]),
+            ],
+        )
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {})
+
+    def test_check_logprob_binary_bounds_the_scan(self):
+        """A reasoning trace must fail loudly rather than be searched to the end."""
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        preamble = [(f"word{i}", [{"token": f"word{i}", "logprob": -0.1}]) for i in range(10)]
+        answer = [{"token": "Yes", "logprob": -0.1}, {"token": "No", "logprob": -2.0}]
+        self._bind_positions(model, [*preamble, ("Yes", answer)])
+        judge = Judge(model=model)
+
+        with pytest.raises(LogprobsExtractionError):
+            judge.check_logprob_binary("p", "q", {}, scan_tokens=4)
+
+    def test_check_logprob_binary_handles_null_logprobs(self):
+        """A model that accepts the parameter and ignores it answers with
+        `"logprobs": null`, so the key is present and None."""
+        from gaussia.core.exceptions import LogprobsExtractionError
+
+        model = _make_fake_model("ChatOpenAI")
+        self._bind_metadata(model, {"logprobs": None})
+        judge = Judge(model=model)
+
         with pytest.raises(LogprobsExtractionError):
             judge.check_logprob_binary("p", "q", {})
 
