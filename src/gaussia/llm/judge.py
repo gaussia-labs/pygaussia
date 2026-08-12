@@ -6,13 +6,12 @@ import math
 import re
 from typing import Any, TypeVar
 
-from langchain.agents import create_agent
-from langchain.agents.factory import ProviderStrategy
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from gaussia.core.exceptions import LogprobsExtractionError, LogprobsNotSupportedError
+from gaussia.llm.structured import ResponseFormatOutput, StructuredOutputStrategy
 from gaussia.utils.logging import VerboseLogger
 
 T = TypeVar("T", bound=BaseModel)
@@ -21,13 +20,14 @@ _DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes"
 _DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
 _DEFAULT_SCAN_TOKENS = 32
 _DEFAULT_EXTRACTION_RETRIES = 2
+_DEFAULT_STRUCTURED_RETRIES = 4
 
 
 class Judge:
     """LLM-based judge for evaluating AI responses.
 
     Supports two modes:
-    - Structured output: Uses create_agent with response_format for schema validation
+    - Structured output: binds the schema to the model through a StructuredOutputStrategy
     - Regex extraction: Parses JSON from model response using regex patterns
 
     Reasoning content is automatically extracted from LangChain's
@@ -35,9 +35,14 @@ class Judge:
 
     Args:
         model: LangChain BaseChatModel instance
-        use_structured_output: If True, use create_agent with response_format
+        use_structured_output: If True, bind the output schema to the model
+        strict: Whether the provider must enforce the schema exactly. Ignored when
+            structured_output is supplied — the strategy carries its own setting.
         bos_json_clause: Opening marker for JSON block (default: ```json)
         eos_json_clause: Closing marker for JSON block (default: ```)
+        structured_output: How the schema is bound. Defaults to ResponseFormatOutput,
+            which declares no tools and so works against servers that reject an empty
+            tools array.
     """
 
     def __init__(
@@ -48,6 +53,7 @@ class Judge:
         bos_json_clause: str = "```json",
         eos_json_clause: str = "```",
         verbose: bool = False,
+        structured_output: StructuredOutputStrategy | None = None,
     ):
         self.model = model
         self.use_structured_output = use_structured_output
@@ -55,6 +61,7 @@ class Judge:
         self.bos_json_clause = bos_json_clause
         self.eos_json_clause = eos_json_clause
         self.verbose = verbose
+        self.structured_output = structured_output or ResponseFormatOutput(strict=strict)
         self.chat_history: list[tuple[str, str]] = []
         self.logger = VerboseLogger(verbose=verbose)
 
@@ -69,7 +76,7 @@ class Judge:
 
         If use_structured_output=True and output_schema provided:
             - Renders the system prompt template with data variables
-            - Uses create_agent with response_format for structured output
+            - Binds the schema to the model through the structured output strategy
         Else:
             - Includes full JSON schema in prompt
             - Uses regex extraction from response
@@ -92,8 +99,12 @@ class Judge:
     def _render_system_prompt(self, system_prompt: str, data: dict) -> str:
         return system_prompt.format_map(data)
 
-    def _escape_prompt_template(self, prompt: str) -> str:
-        return prompt.replace("{", "{{").replace("}", "}}")
+    def _conversation(self, rendered_system: str, query: str) -> list[tuple[str, str]]:
+        # Messages are handed to the model already rendered, never as a template: a
+        # query or a JSON schema carrying a literal brace is content, and a prompt
+        # template would read it as a variable and raise before any request is sent.
+        self.chat_history.append(("human", query))
+        return [("system", rendered_system), *self.chat_history]
 
     def _get_json_schema_for_prompt(self, schema: type[BaseModel]) -> str:
         schema_json = schema.model_json_schema()
@@ -122,42 +133,26 @@ Do not include any additional text after the JSON.
         output_schema: type[T],
     ) -> tuple[str, T | None]:
         rendered_system = self._render_system_prompt(system_prompt, data)
-        agent = create_agent(
-            model=self.model,
-            response_format=ProviderStrategy(output_schema, strict=self.strict),
-            system_prompt=rendered_system,
-        )
+        messages = self._conversation(rendered_system, query)
+        bound = self.structured_output.bind(self.model, output_schema)
 
-        messages = [*self.chat_history, ("human", query)]
-        self.chat_history.append(("human", query))
-
-        max_retries = 5
-        result = None
-        for attempt in range(max_retries):
-            try:
-                result = agent.invoke({"messages": messages})
-                parsed = result.get("structured_response")
-
-                if parsed is None and attempt < max_retries - 1:
-                    self.logger.warning(f"Retry {attempt + 1}/{max_retries} - model returned invalid JSON")
-                    continue
-
-                break
-            except Exception as e:
-                if "400" in str(e) and attempt < max_retries - 1:
-                    self.logger.warning(f"Retry {attempt + 1}/{max_retries} after 400 error")
-                    continue
-                raise
-
+        attempts = _DEFAULT_STRUCTURED_RETRIES + 1
         reasoning = ""
-        if result:
-            for msg in reversed(result.get("messages", [])):
-                reasoning_content = getattr(msg, "additional_kwargs", {}).get("reasoning_content", "")
-                if reasoning_content:
-                    reasoning = reasoning_content
-                    break
+        for attempt in range(attempts):
+            # An answer that misses the schema is re-asked, since re-asking is a fresh
+            # draw. A provider that refuses the request is raised through: every attempt
+            # would send the identical request and be refused identically.
+            try:
+                answer = bound.invoke(messages)
+            except (OutputParserException, ValidationError) as error:
+                self.logger.warning(f"Retry {attempt + 1}/{attempts} - answer did not satisfy the schema: {error}")
+                continue
+            reasoning = _reasoning_of(answer.get("raw"))
+            if answer.get("parsed") is not None:
+                return reasoning, answer["parsed"]
+            self.logger.warning(f"Retry {attempt + 1}/{attempts} - model returned no schema-valid answer")
 
-        return reasoning, result.get("structured_response") if result else None
+        return reasoning, None
 
     def _check_regex(
         self,
@@ -168,21 +163,10 @@ Do not include any additional text after the JSON.
     ) -> tuple[str, dict | None]:
         rendered_system_prompt = self._render_system_prompt(system_prompt, data)
         if output_schema:
-            schema_instruction = self._get_json_schema_for_prompt(output_schema)
-            enhanced_prompt = rendered_system_prompt + schema_instruction
-        else:
-            enhanced_prompt = rendered_system_prompt
+            rendered_system_prompt += self._get_json_schema_for_prompt(output_schema)
 
-        escaped_prompt = self._escape_prompt_template(enhanced_prompt)
-
-        self.chat_history.append(("human", query))
-        prompt = ChatPromptTemplate.from_messages([("system", escaped_prompt), *self.chat_history])
-        chain = prompt | self.model
-        response = chain.invoke({})
-        content = str(response.content)
-        reasoning = response.additional_kwargs.get("reasoning_content", "")
-        json_data = self._extract_json(content)
-        return reasoning, json_data
+        response = self.model.invoke(self._conversation(rendered_system_prompt, query))
+        return _reasoning_of(response), self._extract_json(str(response.content))
 
     def _extract_json(self, text: str) -> dict | None:
         pattern = rf"{re.escape(self.bos_json_clause)}\s*(\{{.*?\}})\s*{re.escape(self.eos_json_clause)}"
@@ -322,3 +306,7 @@ Do not include any additional text after the JSON.
             return -math.inf
         max_lp = max(matches)
         return max_lp + math.log(sum(math.exp(lp - max_lp) for lp in matches))
+
+
+def _reasoning_of(message: Any) -> str:
+    return str(getattr(message, "additional_kwargs", {}).get("reasoning_content", "") or "")
