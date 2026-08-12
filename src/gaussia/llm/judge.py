@@ -19,6 +19,7 @@ T = TypeVar("T", bound=BaseModel)
 
 _DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes", " yes")
 _DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
+_DEFAULT_SCAN_TOKENS = 32
 
 
 class Judge:
@@ -213,26 +214,33 @@ Do not include any additional text after the JSON.
         negative_tokens: tuple[str, ...] = _DEFAULT_NEGATIVE_TOKENS,
         top_logprobs: int = 10,
         temperature: float | None = 1.0,
+        scan_tokens: int = _DEFAULT_SCAN_TOKENS,
     ) -> tuple[float, dict]:
-        """Score a binary YES/NO judgment via first-token logprobs.
+        """Score a binary YES/NO judgment from the token where the model commits.
 
         Returns P(positive) / (P(positive) + P(negative)) aggregated across
         surface-form variants with log-sum-exp.
 
         Args:
-            temperature: passed to model.bind() to control the first-token
+            temperature: passed to model.bind() to control the answer-token
                 distribution. Default 1.0 follows the paper — at lower values
                 the distribution sharpens and the score loses calibration
                 (only the YES/NO ranking survives). Pass None to inherit
                 whatever temperature the underlying model was configured with.
+            scan_tokens: how many generated positions to search for the answer.
+                Compliance with "answer with one token" degrades as a prompt
+                grows, so a long rubric can produce a short preamble on some
+                calls and not others; scanning recovers those. Kept small so a
+                reasoning trace fails rather than being searched for a stray
+                token. Pass 1 to score the first generated token only.
 
         Requires a sufficiently capable model — see paper for AUC by model size.
 
         Raises:
             LogprobsNotSupportedError: provider returned an error when logprobs
                 were requested.
-            LogprobsExtractionError: neither positive nor negative tokens appear
-                in the top_logprobs of the first generated token.
+            LogprobsExtractionError: no position within scan_tokens emitted a
+                positive or negative token, or the response carried no logprobs.
         """
         rendered_system = self._render_system_prompt(system_prompt, data)
         bind_kwargs: dict[str, Any] = {"logprobs": True, "top_logprobs": top_logprobs}
@@ -253,8 +261,11 @@ Do not include any additional text after the JSON.
             ) from e
 
         metadata: dict = getattr(response, "response_metadata", {}) or {}
-        content_entries: list = metadata.get("logprobs", {}).get("content", []) or []
-        top_lp: list[dict[str, Any]] = content_entries[0].get("top_logprobs", []) if content_entries else []
+        # A model that accepts the parameter and ignores it answers with
+        # "logprobs": null, so the key is present and None — a two-argument get
+        # would return None rather than its default and chaining would raise.
+        content_entries: list = (metadata.get("logprobs") or {}).get("content") or []
+        top_lp = self._answer_logprobs(content_entries, positive_tokens + negative_tokens, scan_tokens)
 
         log_p_pos = self._aggregate_logprobs(top_lp, positive_tokens)
         log_p_neg = self._aggregate_logprobs(top_lp, negative_tokens)
@@ -262,12 +273,26 @@ Do not include any additional text after the JSON.
         if log_p_pos == -math.inf and log_p_neg == -math.inf:
             raise LogprobsExtractionError(
                 f"Neither positive {positive_tokens} nor negative {negative_tokens} "
-                f"tokens appeared in top_{top_logprobs}. Observed tokens: "
-                f"{[entry.get('token') for entry in top_lp]}"
+                f"tokens were emitted within the first {scan_tokens} generated tokens. "
+                f"Emitted: {[entry.get('token') for entry in content_entries[:scan_tokens]]}"
             )
 
         score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
         return score, {"top_logprobs": top_lp}
+
+    @staticmethod
+    def _answer_logprobs(
+        content_entries: list[dict[str, Any]],
+        target_tokens: tuple[str, ...],
+        scan_tokens: int,
+    ) -> list[dict[str, Any]]:
+        # Selected on the token actually sampled, not on a target appearing in
+        # the distribution: a bare "Yes" sits in the top-N of almost any position
+        # of prose, so the looser test would score off a word of preamble.
+        for entry in content_entries[:scan_tokens]:
+            if entry.get("token") in target_tokens:
+                return list(entry.get("top_logprobs") or [])
+        return []
 
     @staticmethod
     def _aggregate_logprobs(top_logprobs: list[dict[str, Any]], target_tokens: tuple[str, ...]) -> float:
