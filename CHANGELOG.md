@@ -1,6 +1,40 @@
 # CHANGELOG
 
 
+## v1.1.0-b.5 (2026-08-12)
+
+### Bug Fixes
+
+- **judge**: Score the token where the model commits, not position 0
+  ([`6923af3`](https://github.com/gaussia-labs/pygaussia/commit/6923af396e124c35ef19017d4cb263409229a08f))
+
+check_logprob_binary read the distribution at generated position 0 only, which assumes the judge's
+  first token is its answer. Measured against an OpenAI-compatible router: with a short prompt,
+  models reliably answered with a bare token; with a long grading rubric of around 900 tokens, the
+  same model on the same prompt emitted the bare token on one call and a short preamble such as
+  "Answer", ":", " " before it on the next, with nothing changed in between. Every call that
+  produced a preamble raised LogprobsExtractionError, even though the answer token and a well-formed
+  distribution over the candidates sat two or three positions later.
+
+Compliance with "answer with one token" appears to degrade as a prompt grows, which makes position 0
+  least reliable for exactly the long rubric prompts an LLM judge tends to need.
+
+The scan now walks forward to the first position whose *sampled* token is a candidate. The quantity
+  measured is unchanged — still a single-position distribution over the candidate tokens — so
+  calibration is unaffected. Selection is on the sampled token rather than on a candidate appearing
+  anywhere in the distribution, because a bare "Yes" sits in the top-N of almost any position of
+  prose and the looser test would score off a word of preamble. The window is bounded, so a
+  reasoning model, whose visible output is its trace, still fails loudly instead of being searched
+  for a stray token. scan_tokens=1 restores the previous behaviour exactly.
+
+Also fixes a crash in the same statement: a model that accepts the logprobs parameter and ignores it
+  can answer with "logprobs": null, so the key is present and None. A two-argument get returns None
+  rather than its default there, and chaining off it raised AttributeError instead of the
+  LogprobsExtractionError the method intends.
+
+Refs #23
+
+
 ## v1.1.0-b.4 (2026-08-11)
 
 ### Bug Fixes
