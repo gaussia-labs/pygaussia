@@ -1,6 +1,36 @@
 # CHANGELOG
 
 
+## v1.1.0-b.6 (2026-08-12)
+
+### Bug Fixes
+
+- **judge**: Re-ask when the answer holds no yes/no token
+  ([`b07f546`](https://github.com/gaussia-labs/pygaussia/commit/b07f546d335dae8ec4fe6124348365f3dae1516c))
+
+A judge sampling at temperature 1.0 occasionally answers off-format. Observed live: asked a yes/no
+  question with an explicit one-token instruction, a judge
+
+began enumerating the criteria — ':', ' extra', ' explanation', ' apologies', ' politeness' — so no
+  yes/no token was emitted at all and check_logprob_binary raised. One such draw ends a whole run,
+  and the run in question was 54 judgements over 9 items.
+
+Re-asking is a fresh draw, so it addresses the cause directly rather than hiding it: nothing is
+  degraded, no fallback is taken, and a genuinely bad prompt still fails after the attempts are
+  spent. Two retries by default, which on the observed rate of roughly one non-compliant answer in
+  380 takes a 54-call run from about a 13% chance of dying to about one in a million. The happy path
+  spends no extra call. extraction_retries=0 restores the previous behaviour.
+
+The retry is conditional on the model having emitted tokens. An answer carrying no logprobs at all
+  is a capability limit, and re-asking it would burn every attempt on every judgement of a whole run
+  before failing with the same error. A test asserts the invocation count in both directions rather
+  than only the exception.
+
+The invoke and its metadata handling move into _request_logprobs so the retry loop stays short. The
+  failure message now reports how many attempts were spent, so one bad draw is not mistaken for a
+  broken prompt.
+
+
 ## v1.1.0-b.5 (2026-08-12)
 
 ### Bug Fixes
