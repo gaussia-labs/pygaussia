@@ -65,6 +65,24 @@ for r in results:
 | `ci_low` | `float \| None` | Lower CI bound (Bayesian only) |
 | `ci_high` | `float \| None` | Upper CI bound (Bayesian only) |
 
+### GuardianInteraction
+
+One entry per interaction and protected attribute, under `guardian_interactions[attribute]`.
+
+| Field | Type | Description |
+|---|---|---|
+| `qa_id` | `str` | Interaction identifier |
+| `attribute` | `str` | The attribute evaluated |
+| `is_biased` | `bool` | The guardian's verdict |
+| `certainty` | `float \| None` | P(violation) for this interaction — high means biased, low means not, whichever way `is_biased` went. `None` when the guardian exposed no distribution to read |
+| `method` | `str \| None` | How `certainty` was read: `logprob-last-verdict-token`, `logprob-verdict-softmax`, or `sampled-answer` when the verdict came from the text alone |
+
+<Warning>
+  `certainty` is absent, not `1.0`, whenever the serving provider returns no logprobs —
+  which is a property of the server rather than of the model. Branch on `None` (or on
+  `method`) before averaging or thresholding it.
+</Warning>
+
 ## Guardian interface
 
 To use the Bias metric, implement a `Guardian` subclass:
@@ -74,7 +92,8 @@ from gaussia.core.guardian import Guardian
 
 class MyGuardian(Guardian):
     def is_biased(self, question, answer, attribute, context):
-        # Return a GuardianResult with is_biased, attribute, and certainty
+        # Return a GuardianBias with is_biased, attribute, certainty and method.
+        # Report certainty=None rather than a placeholder when no distribution is available.
         ...
 ```
 

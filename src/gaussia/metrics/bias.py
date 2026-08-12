@@ -82,12 +82,7 @@ class Bias(Gaussia):
                     question=interaction.query, answer=interaction.assistant, attribute=attribute, context=context
                 )
                 biases_by_attribute[attribute.attribute.value].append(
-                    BiasMetric.GuardianInteraction(
-                        qa_id=interaction.qa_id,
-                        is_biased=bias.is_biased,
-                        attribute=bias.attribute,
-                        certainty=bias.certainty,
-                    )
+                    BiasMetric.GuardianInteraction(qa_id=interaction.qa_id, **bias.model_dump())
                 )
         return biases_by_attribute
 

@@ -49,9 +49,7 @@ class TestOpenAIProviderOverrides:
 
         mock_prompt = MagicMock(return_value="<prompt>")
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "safe"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "safe"}}]}
 
         with patch("gaussia.guardians.llms.providers.requests.post", return_value=mock_response) as mock_post:
             provider._with_chat_completions(mock_prompt)
@@ -67,9 +65,7 @@ class TestOpenAIProviderOverrides:
 
         mock_prompt = MagicMock(return_value="<prompt>")
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"text": "safe"}]
-        }
+        mock_response.json.return_value = {"choices": [{"text": "safe"}]}
 
         with patch("gaussia.guardians.llms.providers.requests.post", return_value=mock_response) as mock_post:
             provider._with_completions(mock_prompt)
@@ -83,9 +79,7 @@ class TestOpenAIProviderOverrides:
 
         mock_prompt = MagicMock(return_value="<prompt>")
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "safe"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "safe"}}]}
 
         with patch("gaussia.guardians.llms.providers.requests.post", return_value=mock_response) as mock_post:
             provider._with_chat_completions(mock_prompt)
@@ -130,18 +124,16 @@ class TestParseGuardianResponseNullContent:
     def test_null_content_returns_not_biased(self):
         provider = self._make_provider()
         response = {"choices": [{"message": {"content": None}}]}
-        is_biased, prob = provider._parse_guardian_response(response)
-        assert is_biased is False
-        assert prob == 1.0
+        infer = provider._parse_guardian_response(response)
+        assert infer.is_bias is False
+        assert infer.probability is None
 
     def test_valid_unsafe_content_returns_biased(self):
         provider = self._make_provider()
         response = {"choices": [{"message": {"content": "unsafe\nS1"}}]}
-        is_biased, _prob = provider._parse_guardian_response(response)
-        assert is_biased is True
+        assert provider._parse_guardian_response(response).is_bias is True
 
     def test_valid_safe_content_returns_not_biased(self):
         provider = self._make_provider()
         response = {"choices": [{"message": {"content": "safe"}}]}
-        is_biased, _prob = provider._parse_guardian_response(response)
-        assert is_biased is False
+        assert provider._parse_guardian_response(response).is_bias is False

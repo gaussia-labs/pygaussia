@@ -5,7 +5,13 @@ from typing import Any
 import requests
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from gaussia.schemas.bias import LLMGuardianProvider, LLMGuardianProviderInfer
+from gaussia.schemas.bias import (
+    LOGPROB_SOFTMAX_METHOD,
+    LOGPROB_VERDICT_METHOD,
+    SAMPLED_ANSWER_METHOD,
+    LLMGuardianProvider,
+    LLMGuardianProviderInfer,
+)
 
 
 class HuggingFaceGuardianProvider(LLMGuardianProvider):
@@ -93,7 +99,9 @@ class HuggingFaceGuardianProvider(LLMGuardianProvider):
             )
 
         is_bias, prob_of_bias = self._parse_output(output, input_len)
-        return LLMGuardianProviderInfer(probability=prob_of_bias, is_bias=is_bias)
+        # _get_probabilities normalises the safe and unsafe token mass against each other,
+        # so this is already P(violation) rather than P(the emitted token).
+        return LLMGuardianProviderInfer(probability=prob_of_bias, is_bias=is_bias, method=LOGPROB_SOFTMAX_METHOD)
 
 
 class OpenAIGuardianProvider(LLMGuardianProvider):
@@ -124,25 +132,49 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
             return f"{base_url}/{versioned_path}"
         return f"{base_url}/v1/{versioned_path}"
 
-    def _parse_guardian_response(self, response_json):
+    def _parse_guardian_response(self, response_json: dict) -> LLMGuardianProviderInfer:
         if "error" in response_json or "choices" not in response_json:
             raise RuntimeError(f"API error: {response_json.get('error', response_json)}")
         choice = response_json["choices"][0]
-        prob_token = 1.0
+        answer = self._answer_text(choice)
+        if answer is None:
+            # A model that spent its whole budget on a reasoning trace answers with no
+            # content: there is no verdict in it and no distribution behind it.
+            return LLMGuardianProviderInfer(is_bias=False, probability=None)
+
+        is_biased = self.unsafe_token in answer
+        probability, method = self._graded_verdict(choice, is_biased)
+        return LLMGuardianProviderInfer(is_bias=is_biased, probability=probability, method=method)
+
+    @staticmethod
+    def _answer_text(choice: dict) -> str | None:
         if "message" in choice:
-            message_content = choice["message"]["content"]
-            if message_content is None:
-                return False, 1.0
-            is_biased = self.unsafe_token in message_content
-        else:
-            is_biased = self.unsafe_token in choice["text"]
+            content = choice["message"]["content"]
+            return None if content is None else str(content)
+        return str(choice["text"])
 
-        if self.logprobs:
-            logprobs = choice["logprobs"]
-            prob_token = logprobs["token_logprobs"][0]
-            prob_token = math.exp(prob_token)
+    def _graded_verdict(self, choice: dict, is_biased: bool) -> tuple[float | None, str]:
+        logprob = self._verdict_logprob(choice)
+        if logprob is None:
+            return None, SAMPLED_ANSWER_METHOD
+        # exp(logprob) is P(the token the model emitted), which is P(violation) only when
+        # the verdict was a violation. Conditioning here means the number reads the same
+        # way whichever way the verdict went.
+        emitted = math.exp(logprob)
+        return (emitted if is_biased else 1.0 - emitted), LOGPROB_VERDICT_METHOD
 
-        return is_biased, prob_token
+    def _verdict_logprob(self, choice: dict) -> float | None:
+        # The last verdict-shaped token rather than position 0: a reasoning model spends
+        # its opening tokens on a preamble, and scoring those describes another token
+        # entirely. Whether any logprobs come back is a property of the serving provider
+        # and not of the requested flag, so their absence is reported, never invented.
+        for token, logprob in reversed(_token_logprobs(choice.get("logprobs"))):
+            if self._is_verdict(token):
+                return logprob
+        return None
+
+    def _is_verdict(self, token: str) -> bool:
+        return token.strip().lower() in (self.safe_token.lower(), self.unsafe_token.lower())
 
     def _with_chat_completions(self, prompt: partial) -> dict[str, Any]:
         messages = [{"role": "user", "content": partial(prompt, tokenize=False)()}]
@@ -188,5 +220,22 @@ class OpenAIGuardianProvider(LLMGuardianProvider):
             response = self._with_chat_completions(prompt)
         else:
             response = self._with_completions(prompt)
-        answer_token, prob_token = self._parse_guardian_response(response)
-        return LLMGuardianProviderInfer(is_bias=answer_token, probability=prob_token)
+        return self._parse_guardian_response(response)
+
+
+def _token_logprobs(logprobs: Any) -> list[tuple[str, float]]:
+    """Every (token, logprob) the answer carries, in generated order.
+
+    Both OpenAI-compatible shapes are read: chat/completions nests one entry per token
+    under "content", while the completions endpoint returns parallel "tokens" and
+    "token_logprobs" lists. A provider that accepts the parameter and ignores it answers
+    with "logprobs": null, which reads as no tokens rather than raising.
+    """
+    if not logprobs:
+        return []
+    entries = logprobs.get("content")
+    if entries is not None:
+        return [(str(entry.get("token", "")), float(entry["logprob"])) for entry in entries if "logprob" in entry]
+    tokens = logprobs.get("tokens") or []
+    values = logprobs.get("token_logprobs") or []
+    return [(str(token), float(value)) for token, value in zip(tokens, values, strict=False) if value is not None]
