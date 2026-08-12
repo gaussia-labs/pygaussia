@@ -4,7 +4,14 @@ from functools import partial
 from unittest.mock import MagicMock, patch
 
 from gaussia.guardians import IBMGranite
-from gaussia.schemas.bias import GuardianBias, GuardianLLMConfig, LLMGuardianProviderInfer, ProtectedAttribute
+from gaussia.schemas.bias import (
+    LOGPROB_VERDICT_METHOD,
+    SAMPLED_ANSWER_METHOD,
+    GuardianBias,
+    GuardianLLMConfig,
+    LLMGuardianProviderInfer,
+    ProtectedAttribute,
+)
 
 
 def _make_config(mock_provider_class: MagicMock) -> GuardianLLMConfig:
@@ -107,6 +114,28 @@ class TestIBMGraniteIsBiased:
 
         assert result.is_biased is True
         assert result.certainty == 0.95
+
+    def test_absent_probability_is_reported_as_absent(self):
+        """A provider with no distribution to read must not surface as full certainty."""
+        guardian, mock_provider = self._make_guardian()
+        mock_provider.infer.return_value = LLMGuardianProviderInfer(
+            is_bias=True, probability=None, method=SAMPLED_ANSWER_METHOD
+        )
+
+        result = guardian.is_biased("question", "answer", _make_attribute())
+
+        assert result.certainty is None
+        assert result.method == SAMPLED_ANSWER_METHOD
+
+    def test_reading_method_reaches_the_result(self):
+        guardian, mock_provider = self._make_guardian()
+        mock_provider.infer.return_value = LLMGuardianProviderInfer(
+            is_bias=True, probability=0.9, method=LOGPROB_VERDICT_METHOD
+        )
+
+        result = guardian.is_biased("question", "answer", _make_attribute())
+
+        assert result.method == LOGPROB_VERDICT_METHOD
 
     def test_not_biased_reflects_provider_infer_result(self):
         guardian, mock_provider = self._make_guardian()

@@ -4,7 +4,13 @@ import pytest
 
 from gaussia.core import Guardian
 from gaussia.metrics.bias import Bias
-from gaussia.schemas.bias import BiasMetric, GuardianBias, ProtectedAttribute
+from gaussia.schemas.bias import (
+    LOGPROB_VERDICT_METHOD,
+    SAMPLED_ANSWER_METHOD,
+    BiasMetric,
+    GuardianBias,
+    ProtectedAttribute,
+)
 from gaussia.statistical import BayesianMode, FrequentistMode
 from tests.fixtures.mock_data import create_sample_batch
 from tests.fixtures.mock_retriever import MockRetriever
@@ -21,7 +27,12 @@ class MockGuardian(Guardian):
     def is_biased(self, question, answer, attribute, context=None):
         """Return mock bias detection result."""
         self.call_count += 1
-        return GuardianBias(is_biased=self.always_biased, attribute=attribute.attribute.value, certainty=self.certainty)
+        return GuardianBias(
+            is_biased=self.always_biased,
+            attribute=attribute.attribute.value,
+            certainty=self.certainty,
+            method=LOGPROB_VERDICT_METHOD if self.certainty is not None else SAMPLED_ANSWER_METHOD,
+        )
 
 
 class MockGuardianAlternating(Guardian):
@@ -86,6 +97,32 @@ class TestBiasMetric:
         for attr in bias.protected_attributes:
             assert attr.attribute.value in result
             assert len(result[attr.attribute.value]) == 2
+
+    def test_guardian_interactions_carry_the_graded_verdict(self):
+        """Whatever the guardian graded reaches the interaction, provenance included."""
+        bias = Bias(retriever=MockRetriever, guardian=MockGuardian, certainty=0.42)
+
+        result = bias._get_guardian_biased_attributes(
+            batch=[create_sample_batch(qa_id="qa_001")],
+            attributes=bias.protected_attributes,
+            context="test context",
+        )
+
+        interaction = result[ProtectedAttribute.Attribute.gender.value][0]
+        assert interaction.certainty == 0.42
+        assert interaction.method == LOGPROB_VERDICT_METHOD
+
+    def test_guardian_interactions_keep_an_absent_certainty_absent(self):
+        bias = Bias(retriever=MockRetriever, guardian=MockGuardian, certainty=None)
+
+        result = bias._get_guardian_biased_attributes(
+            batch=[create_sample_batch(qa_id="qa_001")],
+            attributes=bias.protected_attributes,
+            context="test context",
+        )
+
+        interaction = result[ProtectedAttribute.Attribute.gender.value][0]
+        assert interaction.certainty is None
 
     def test_calculate_attribute_rates_frequentist(self):
         """Test _calculate_attribute_rates with frequentist mode."""

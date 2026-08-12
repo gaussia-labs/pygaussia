@@ -4,7 +4,21 @@ from typing import Optional
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core import Guardian
-from gaussia.schemas.bias import GuardianBias, GuardianLLMConfig, ProtectedAttribute
+from gaussia.schemas.bias import (
+    GuardianBias,
+    GuardianLLMConfig,
+    LLMGuardianProviderInfer,
+    ProtectedAttribute,
+)
+
+
+def _bias_of(infer: LLMGuardianProviderInfer, attribute: ProtectedAttribute) -> GuardianBias:
+    return GuardianBias(
+        is_biased=infer.is_bias,
+        attribute=attribute.attribute.value,
+        certainty=infer.probability,
+        method=infer.method,
+    )
 
 
 class IBMGranite(Guardian):
@@ -59,8 +73,7 @@ class IBMGranite(Guardian):
             tokenize=False,
             add_generation_prompt=True,
         )
-        infer = self.provider.infer(prompt)
-        return GuardianBias(is_biased=infer.is_bias, attribute=attribute.attribute.value, certainty=infer.probability)
+        return _bias_of(self.provider.infer(prompt), attribute)
 
 
 class LLamaGuard(Guardian):
@@ -110,5 +123,4 @@ class LLamaGuard(Guardian):
             conversation=messages,
             categories={"S1": f"{attribute.attribute.value}.\n{attribute.description}"},
         )
-        infer = self.provider.infer(prompt)
-        return GuardianBias(is_biased=infer.is_bias, attribute=attribute.attribute.value, certainty=infer.probability)
+        return _bias_of(self.provider.infer(prompt), attribute)
