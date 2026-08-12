@@ -20,6 +20,7 @@ T = TypeVar("T", bound=BaseModel)
 _DEFAULT_POSITIVE_TOKENS: tuple[str, ...] = ("YES", "Yes", "yes", " YES", " Yes", " yes")
 _DEFAULT_NEGATIVE_TOKENS: tuple[str, ...] = ("NO", "No", "no", " NO", " No", " no")
 _DEFAULT_SCAN_TOKENS = 32
+_DEFAULT_EXTRACTION_RETRIES = 2
 
 
 class Judge:
@@ -215,6 +216,7 @@ Do not include any additional text after the JSON.
         top_logprobs: int = 10,
         temperature: float | None = 1.0,
         scan_tokens: int = _DEFAULT_SCAN_TOKENS,
+        extraction_retries: int = _DEFAULT_EXTRACTION_RETRIES,
     ) -> tuple[float, dict]:
         """Score a binary YES/NO judgment from the token where the model commits.
 
@@ -233,6 +235,14 @@ Do not include any additional text after the JSON.
                 calls and not others; scanning recovers those. Kept small so a
                 reasoning trace fails rather than being searched for a stray
                 token. Pass 1 to score the first generated token only.
+            extraction_retries: how many times to re-ask when the answer holds no
+                positive or negative token. A judge sampling at temperature 1.0
+                occasionally answers off-format, and re-asking is a fresh draw, so
+                one bad draw need not end a run. Only re-asked when the model did
+                emit tokens: an answer carrying no logprobs at all is a capability
+                limit that every attempt would hit identically. Pass 0 to disable.
+                Note this relies on sampling — at temperature 0 the retry returns
+                much the same answer.
 
         Requires a sufficiently capable model — see paper for AUC by model size.
 
@@ -246,9 +256,32 @@ Do not include any additional text after the JSON.
         bind_kwargs: dict[str, Any] = {"logprobs": True, "top_logprobs": top_logprobs}
         if temperature is not None:
             bind_kwargs["temperature"] = temperature
+        emitted: list = []
+        attempts = 0
+        for _ in range(extraction_retries + 1):
+            attempts += 1
+            content_entries = self._request_logprobs(rendered_system, query, bind_kwargs)
+            top_lp = self._answer_logprobs(content_entries, positive_tokens + negative_tokens, scan_tokens)
+
+            log_p_pos = self._aggregate_logprobs(top_lp, positive_tokens)
+            log_p_neg = self._aggregate_logprobs(top_lp, negative_tokens)
+            if log_p_pos > -math.inf or log_p_neg > -math.inf:
+                score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
+                return score, {"top_logprobs": top_lp}
+
+            emitted = [entry.get("token") for entry in content_entries[:scan_tokens]]
+            if not emitted:
+                break
+
+        raise LogprobsExtractionError(
+            f"Neither positive {positive_tokens} nor negative {negative_tokens} "
+            f"tokens were emitted within the first {scan_tokens} generated tokens, "
+            f"over {attempts} attempt(s). Emitted: {emitted}"
+        )
+
+    def _request_logprobs(self, rendered_system: str, query: str, bind_kwargs: dict) -> list:
         try:
-            bound = self.model.bind(**bind_kwargs)
-            response = bound.invoke(
+            response = self.model.bind(**bind_kwargs).invoke(
                 [
                     ("system", rendered_system),
                     ("human", query),
@@ -264,21 +297,7 @@ Do not include any additional text after the JSON.
         # A model that accepts the parameter and ignores it answers with
         # "logprobs": null, so the key is present and None — a two-argument get
         # would return None rather than its default and chaining would raise.
-        content_entries: list = (metadata.get("logprobs") or {}).get("content") or []
-        top_lp = self._answer_logprobs(content_entries, positive_tokens + negative_tokens, scan_tokens)
-
-        log_p_pos = self._aggregate_logprobs(top_lp, positive_tokens)
-        log_p_neg = self._aggregate_logprobs(top_lp, negative_tokens)
-
-        if log_p_pos == -math.inf and log_p_neg == -math.inf:
-            raise LogprobsExtractionError(
-                f"Neither positive {positive_tokens} nor negative {negative_tokens} "
-                f"tokens were emitted within the first {scan_tokens} generated tokens. "
-                f"Emitted: {[entry.get('token') for entry in content_entries[:scan_tokens]]}"
-            )
-
-        score = 1.0 / (1.0 + math.exp(log_p_neg - log_p_pos))
-        return score, {"top_logprobs": top_lp}
+        return (metadata.get("logprobs") or {}).get("content") or []
 
     @staticmethod
     def _answer_logprobs(
