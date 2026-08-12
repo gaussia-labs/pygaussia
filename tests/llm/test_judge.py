@@ -1,14 +1,16 @@
 """Tests for Judge module."""
 
 import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
-from pydantic import BaseModel, Field
+from langchain_core.messages import AIMessage
+from pydantic import BaseModel, Field, ValidationError
 
 from gaussia.llm.judge import Judge
 from gaussia.llm.schemas import ContextJudgeOutput
+from gaussia.llm.structured import StructuredOutputStrategy
 
 
 class MockResponseSchema(BaseModel):
@@ -16,6 +18,46 @@ class MockResponseSchema(BaseModel):
 
     score: float = Field(ge=0, le=1)
     message: str
+
+
+class _StubStructuredOutput(StructuredOutputStrategy):
+    """Answers with a scripted sequence, so a retry can be observed without a provider.
+
+    An entry that is an exception is raised, ``None`` stands for an answer that carried
+    no parsed result, and any other value is returned as the parsed answer.
+    """
+
+    def __init__(self, answers: list, reasoning: str = ""):
+        self._answers = list(answers)
+        self._reasoning = reasoning
+
+    def bind(self, model, schema):
+        runnable = MagicMock()
+        runnable.invoke.side_effect = lambda _messages: self._next()
+        return runnable
+
+    def _next(self) -> dict:
+        answer = self._answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        kwargs = {"reasoning_content": self._reasoning} if self._reasoning else {}
+        return {"raw": AIMessage(content="", additional_kwargs=kwargs), "parsed": answer, "parsing_error": None}
+
+
+def _answering(parsed, reasoning: str = "") -> _StubStructuredOutput:
+    return _StubStructuredOutput([parsed], reasoning=reasoning)
+
+
+def _answering_in_turn(answers: list) -> _StubStructuredOutput:
+    return _StubStructuredOutput(answers)
+
+
+def _schema_error() -> ValidationError:
+    try:
+        ContextJudgeOutput(score="not a number", insight="x")
+    except ValidationError as error:
+        return error
+    raise AssertionError("expected the schema to reject the value")
 
 
 class TestJudge:
@@ -46,19 +88,13 @@ class TestJudge:
         assert judge.bos_json_clause == "<json>"
         assert judge.eos_json_clause == "</json>"
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_regex_mode_valid_json(self, mock_template, mock_model):
+    def test_check_regex_mode_valid_json(self, mock_model):
         """Test check method in regex mode with valid JSON."""
         mock_response = MagicMock()
         mock_response.content = 'Here is the result:\n```json\n{"score": 0.85, "valid": true}\n```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         thought, json_data = judge.check("System prompt", "Query", {"key": "value"})
@@ -66,19 +102,13 @@ class TestJudge:
         assert thought == ""
         assert json_data == {"score": 0.85, "valid": True}
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_regex_mode_no_json_found(self, mock_template, mock_model):
+    def test_check_regex_mode_no_json_found(self, mock_model):
         """Test check method in regex mode when no JSON found."""
         mock_response = MagicMock()
         mock_response.content = "Response without JSON"
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         thought, json_data = judge.check("System", "Query", {})
@@ -86,19 +116,13 @@ class TestJudge:
         assert thought == ""
         assert json_data is None
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_regex_mode_invalid_json(self, mock_template, mock_model):
+    def test_check_regex_mode_invalid_json(self, mock_model):
         """Test check method in regex mode with invalid JSON."""
         mock_response = MagicMock()
         mock_response.content = "```json\n{invalid json}\n```"
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         thought, json_data = judge.check("System", "Query", {})
@@ -106,38 +130,26 @@ class TestJudge:
         assert thought == ""
         assert json_data is None
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_regex_mode_custom_json_clauses(self, mock_template, mock_model):
+    def test_check_regex_mode_custom_json_clauses(self, mock_model):
         """Test check method with custom JSON clauses."""
         mock_response = MagicMock()
         mock_response.content = 'Result: <json>{"value": 42}</json>'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model, bos_json_clause="<json>", eos_json_clause="</json>")
         _thought, json_data = judge.check("System", "Query", {})
 
         assert json_data == {"value": 42}
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_regex_mode_with_langchain_reasoning(self, mock_template, mock_model):
+    def test_check_regex_mode_with_langchain_reasoning(self, mock_model):
         """Test check method extracts reasoning from LangChain's additional_kwargs."""
         mock_response = MagicMock()
         mock_response.content = '```json\n{"result": "done"}\n```'
         mock_response.additional_kwargs = {"reasoning_content": "Let me analyze this"}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         thought, json_data = judge.check("System", "Query", {})
@@ -145,80 +157,84 @@ class TestJudge:
         assert thought == "Let me analyze this"
         assert json_data == {"result": "done"}
 
-    @patch("gaussia.llm.judge.create_agent")
-    def test_check_structured_mode(self, mock_create_agent, mock_model):
+    def test_check_structured_mode(self, mock_model):
         """Test check method in structured output mode."""
         expected_result = ContextJudgeOutput(score=0.9, insight="Good context")
+        judge = Judge(model=mock_model, use_structured_output=True, structured_output=_answering(expected_result))
 
-        mock_msg = MagicMock()
-        mock_msg.additional_kwargs = {}
-
-        mock_agent = MagicMock()
-        mock_agent.invoke.return_value = {
-            "structured_response": expected_result,
-            "messages": [mock_msg],
-        }
-        mock_create_agent.return_value = mock_agent
-
-        judge = Judge(model=mock_model, use_structured_output=True)
         thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
 
         assert thought == ""
         assert result == expected_result
 
-    @patch("gaussia.llm.judge.create_agent")
-    def test_check_structured_mode_with_reasoning(self, mock_create_agent, mock_model):
+    def test_check_structured_mode_with_reasoning(self, mock_model):
         """Test check method extracts reasoning from additional_kwargs in structured mode."""
         expected_result = ContextJudgeOutput(score=0.9, insight="Good context")
+        strategy = _answering(expected_result, reasoning="First I analyze. Then I evaluate.")
+        judge = Judge(model=mock_model, use_structured_output=True, structured_output=strategy)
 
-        mock_msg = MagicMock()
-        mock_msg.additional_kwargs = {"reasoning_content": "First I analyze. Then I evaluate."}
-
-        mock_agent = MagicMock()
-        mock_agent.invoke.return_value = {
-            "structured_response": expected_result,
-            "messages": [mock_msg],
-        }
-        mock_create_agent.return_value = mock_agent
-
-        judge = Judge(model=mock_model, use_structured_output=True)
         thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
 
         assert thought == "First I analyze. Then I evaluate."
         assert result == expected_result
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_structured_mode_fallback_to_regex(self, mock_template, mock_model):
+    def test_check_structured_mode_binds_no_tools(self, mock_model):
+        """The default strategy constrains generation instead of declaring an empty tool list."""
+        judge = Judge(model=mock_model, use_structured_output=True)
+        judge.structured_output.bind(mock_model, ContextJudgeOutput)
+
+        mock_model.bind_tools.assert_not_called()
+        _args, kwargs = mock_model.with_structured_output.call_args
+        assert kwargs["method"] == "json_schema"
+        assert kwargs["include_raw"] is True
+
+    def test_check_structured_mode_retries_an_off_schema_answer(self, mock_model):
+        """An answer that misses the schema is re-asked rather than returned as None."""
+        expected_result = ContextJudgeOutput(score=0.4, insight="second attempt")
+        strategy = _answering_in_turn([_schema_error(), expected_result])
+        judge = Judge(model=mock_model, use_structured_output=True, structured_output=strategy)
+
+        _thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
+
+        assert result == expected_result
+
+    def test_check_structured_mode_raises_a_provider_refusal(self, mock_model):
+        """A refused request is not re-sent: every attempt would be refused identically."""
+        strategy = _answering_in_turn([RuntimeError("Error code: 400 - tools must not be empty")])
+        judge = Judge(model=mock_model, use_structured_output=True, structured_output=strategy)
+
+        with pytest.raises(RuntimeError, match="400"):
+            judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
+
+    def test_check_structured_mode_gives_up_after_the_retries(self, mock_model):
+        """Exhausted retries report no result, which the caller surfaces as a failed judgment."""
+        strategy = _answering_in_turn([None] * 5)
+        judge = Judge(model=mock_model, use_structured_output=True, structured_output=strategy)
+
+        _thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
+
+        assert result is None
+
+    def test_check_structured_mode_fallback_to_regex(self, mock_model):
         """Test check falls back to regex when no schema provided in structured mode."""
         mock_response = MagicMock()
         mock_response.content = '```json\n{"score": 0.5}\n```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model, use_structured_output=True)
         _thought, result = judge.check("System", "Query", {}, output_schema=None)
 
         assert result == {"score": 0.5}
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_chat_history_accumulates(self, mock_template, mock_model):
+    def test_chat_history_accumulates(self, mock_model):
         """Test that chat history accumulates across calls."""
         mock_response = MagicMock()
         mock_response.content = '```json\n{"result": 1}\n```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         assert len(judge.chat_history) == 0
@@ -231,38 +247,26 @@ class TestJudge:
         assert len(judge.chat_history) == 2
         assert judge.chat_history[1] == ("human", "Query 2")
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_json_with_whitespace(self, mock_template, mock_model):
+    def test_check_json_with_whitespace(self, mock_model):
         """Test check handles JSON with extra whitespace."""
         mock_response = MagicMock()
         mock_response.content = '```json   \n  {"key": "value"}  \n  ```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         _thought, json_data = judge.check("System", "Query", {})
 
         assert json_data == {"key": "value"}
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_nested_json(self, mock_template, mock_model):
+    def test_check_nested_json(self, mock_model):
         """Test check handles nested JSON."""
         mock_response = MagicMock()
         mock_response.content = '```json\n{"outer": {"inner": [1, 2, 3]}}\n```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model)
         _thought, json_data = judge.check("System", "Query", {})
@@ -278,19 +282,13 @@ class TestJudge:
         assert "insight" in schema_str
         assert "```json" in schema_str
 
-    @patch("gaussia.llm.judge.ChatPromptTemplate")
-    def test_check_with_schema_in_regex_mode(self, mock_template, mock_model):
+    def test_check_with_schema_in_regex_mode(self, mock_model):
         """Test check appends schema to prompt in regex mode."""
         mock_response = MagicMock()
         mock_response.content = '```json\n{"score": 0.7, "insight": "test"}\n```'
         mock_response.additional_kwargs = {}
 
-        mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
-
-        mock_prompt = MagicMock()
-        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
-        mock_template.from_messages.return_value = mock_prompt
+        mock_model.invoke.return_value = mock_response
 
         judge = Judge(model=mock_model, use_structured_output=False)
         _thought, result = judge.check("System", "Query", {}, output_schema=ContextJudgeOutput)
@@ -310,6 +308,33 @@ class TestJudge:
         )
 
         assert result == {"score": 0.7, "insight": "test"}
+
+    def test_check_accepts_a_query_containing_braces(self):
+        """A brace in the data under evaluation is content, not a prompt variable."""
+        model = FakeListChatModel(responses=['```json\n{"score": 0.2, "insight": "test"}\n```'])
+        judge = Judge(model=model, use_structured_output=False)
+
+        _thought, result = judge.check(
+            "Context: {context}",
+            'Reply with {"time": "9am"} — when does it open?',
+            {"context": "retrieved context"},
+            output_schema=ContextJudgeOutput,
+        )
+
+        assert result == {"score": 0.2, "insight": "test"}
+
+    def test_check_sends_the_rendered_system_prompt_and_the_query(self, mock_model):
+        """The model receives rendered messages, in conversation order."""
+        mock_response = MagicMock()
+        mock_response.content = '```json\n{"score": 1.0}\n```'
+        mock_response.additional_kwargs = {}
+        mock_model.invoke.return_value = mock_response
+
+        judge = Judge(model=mock_model)
+        judge.check("Context: {context}", "Query", {"context": "retrieved context"})
+
+        (messages,), _kwargs = mock_model.invoke.call_args
+        assert messages == [("system", "Context: retrieved context"), ("human", "Query")]
 
     def test_extract_json_basic(self, mock_model):
         """Test _extract_json with basic JSON."""
