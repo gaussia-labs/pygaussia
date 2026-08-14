@@ -16,7 +16,7 @@ from .schemas import (
 )
 from .statistical import BayesianMode, FrequentistMode, StatisticalMode
 
-__version__ = "1.1.0-b.7"
+__version__ = "1.1.0-b.8"
 
 __all__ = [
     "__version__",

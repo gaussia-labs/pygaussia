@@ -1,6 +1,140 @@
 # CHANGELOG
 
 
+## v1.1.0-b.8 (2026-08-14)
+
+### Bug Fixes
+
+- **roastme**: Stop a run reporting numbers it never measured
+  ([`729fe82`](https://github.com/gaussia-labs/pygaussia/commit/729fe8227c598a4c8542859046266d1d297ee625))
+
+Six defects, all of the same shape: the subsystem stated something it had not established. Found
+  across a field run against a live assistant, an independent review of the fixes that run produced,
+  and the amendment's own work list.
+
+**A run could change estimator halfway through.** The judge remembered a confirmed logprob failure
+  and sampled everything after it, so a rate came out as a mean over two measurements — a continuous
+  probability read off the verdict token's distribution, and a vote over `k` samples that can land
+  only on multiples of `1/k`. Measured: one 429 on the first call, a healthy router immediately
+  after, twelve grades, all twelve sampled. The choice is now made once, on the first grade, and
+  never revisited: logprobs arriving settles on logprobs whatever that response says; a failed
+  request answered by a plain call settles on sampling, which is the provider limitation FR-008 and
+  spec D13 degrade for; both failing settles nothing, leaves the exchange ungraded, and lets the
+  next grade decide — which is what makes a retrying grader wrapped around this one work instead of
+  watching a run move onto the other instrument.
+
+**`require_logprobs` completed the run instead of stopping it.** A broad `except` added to keep one
+  unparseable verdict from ending a run (FR-016) swallowed the flag that was supposed to refuse.
+  Measured: `overall_rate=0.0`, `n_ungraded=5`, `grading_methods={}`, `categories=0`, and a
+  well-formed report — the shape FR-046 exists to prevent, through a door it cannot see. The flag is
+  now honoured where the limitation is established rather than suspected, and remembered there, so
+  the remaining grades raise without spending a call.
+
+**A gated query was scored as a zero.** `S(c) = mean - lambda*se`. A query the `kappa` gate stopped
+  is never sent, yet it entered its category as `0.0`: it lowered the mean and created the
+  dispersion the penalty reads, so the score fell twice over for one event. On the measured run a
+  category went from `S=0.109` to `0.202` recomputed over the queries actually asked — fourth place
+  to second, and the ranking is the Exploiter's deliverable. A gated query is now regenerated
+  (`GATE_ATTEMPTS`, the budget the generator already spends on short replies) and discarded if no
+  replacement clears the gate, entering neither numerator nor denominator — the treatment a failed
+  exchange already gets, which a gated query resembles far more than it resembles a violation of
+  zero. A category filling less than half of `queries_per_category` leaves the ranking entirely;
+  scoring it zero would reintroduce the same defect one level up. The floor is measured against what
+  was asked for, never against what was generated, so a retry cannot loosen the criterion exactly
+  when the category is worst. This supersedes FR-030, which required the `0.0`.
+
+**The verifier confirmed labels it had never checked.** `verify` could answer only `True` or
+  `False`, so with an empty boundary it confirmed every absence claim and refuted every presence
+  claim — `references not in boundary` is true of every absence label over an empty set, and
+  `references in boundary` is false of every presence label. A kind the verifier was not given
+  answered `True` for the same want of anywhere else to go. Both now answer `None`, which
+  `KnowledgeHook.verified` already means by "nobody checked", so the library needs no new branch.
+  `HookVerifier.verify` widens to `bool | None`; a caller reading the result is unaffected, an
+  implementation returning `bool` still satisfies it.
+
+**FR-025 was applied only where documents exist.** `domain_agnostic_probes` iterated every strategy
+  with no `_handles` check, so one engine covered different strategies depending on whether a corpus
+  happened to be present: an engine declaring only `product` against a catalogue of `product` and
+  `figure` yielded `['s-product']` with documents and `['s-figure', 's-product']` without. An
+  engine's declaration is a claim about its competence and does not depend on a corpus being there
+  to read.
+
+**A report could not say the engine set produced no published number.** Retrieval, graph and
+  multi-hop run by default; the paper's trade-off tables cover retrieval, graph and enumeration. The
+  default composition is therefore one nothing published covers, and it cannot be corrected by
+  changing the default — enumeration needs an `EntityEnumerator`, which is domain knowledge gaussia
+  ships none of by decision D14, so the evaluated set is unreachable out of the box by construction.
+  `ProbeLibrary.declaration` makes the gap visible instead: which engines ran, which of them the
+  tables characterise, and the paper version the second list was read from
+  (`gaussia-labs/papers#20`). It sits on the library because that is the only object that knows the
+  composed set — an engine that ran and produced nothing is invisible in the probe set, which is
+  exactly the case FR-025 makes interesting — and it stays on the Profiler side, since the weakness
+  profile is the only artifact that crosses to the Exploiter (FR-013) and an engine name is
+  precisely the kind of identifier that may not.
+
+Two smaller declarations that were reconstructable and never stated: `CategoryEvaluation.passed`
+  decides `score >= tau` once where `tau` is known, instead of leaving every consumer to reimplement
+  the comparison until one writes `>`; and both shipped components now assign
+  `recommended_threshold` in `__init__`, so reading a class returns the inherited `None` for both
+  rather than `0.6` for one and `None` for the other — where `None` is not "unknown" but the
+  declaration that the user must supply the value, so the answer was inverted rather than missing.
+
+`PromptedQueryGenerator`, `JudgeOnProfileFilter` and `EmbeddingRealismEstimator` join the facade.
+  They are three of the seven arguments `Exploiter` requires, so FR-037's complaint — a user could
+  reach the front door and still not construct a run — had moved rather than been answered. None
+  touches a probe engine, so the boundary the rule protects is unchanged.
+
+**One call-site change, declared because nothing else declares it.** `evaluation.py` now passes four
+  positional arguments to `Grader.grade`. The ABC has always declared `meta` with a default and the
+  Profiler has always passed it, so a grader written with three parameters already failed there —
+  but it worked through the Exploiter until now, and it raises.
+
+What this does not fix, stated because no local evidence can: a transient failure can still settle
+  the estimator wrongly on the first grade, since a rate-limit window wide enough to fail the
+  logprob request is wide enough to fail whatever would confirm it. `require_logprobs` is the answer
+  for a run whose number will be compared against another. And no grader here is calibrated against
+  human labels, so a violation rate remains evidence to go and look, never a measured error rate.
+
+1008 tests, ruff clean, mypy clean on 146 files.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+### Continuous Integration
+
+- **release**: Release from the branch tip, and queue per branch
+  ([`f6c835b`](https://github.com/gaussia-labs/pygaussia/commit/f6c835b52a9f6c507a9a00feabd06b39f6903125))
+
+Two pushes within the job's runtime raced: the release job checked out the SHA that triggered it,
+  built the version bump on top, and had its push rejected as non-fast-forward because the remote
+  had already moved on.
+
+Checking out the branch tip means the job releases whatever is current when it leaves the queue, so
+  a superseded run covers both commits in one version and the run behind it finds nothing to
+  release. Scoping the concurrency group to the ref also stops master and develop from blocking each
+  other.
+
+- **release**: Test what the package claims, and back-merge master
+  ([`26c9351`](https://github.com/gaussia-labs/pygaussia/commit/26c93517abf639d6ea2296d09bb6ee1d48443b34))
+
+The suite ran on 3.13 only while requires-python and the classifiers claim 3.11 and up, so two of
+  the three supported versions were an untested claim; they now run as a matrix. Pull requests run
+  it too: a push is path-filtered because it may cut a release, but a change to the tests or the
+  lock can break the build as surely as one to src, and a pull request decides whether to merge at
+  all rather than releasing.
+
+`uv lock --check` asserts the lock is current. It was not -- the project's own version sat at
+  1.1.0b2 against 1.1.0-b.7 -- because semantic-release bumps pyproject and does not know about
+  uv.lock. Refreshing the lock in build_command and carrying it in assets keeps the release commit
+  consistent, without which the new check would fail after every release.
+
+back-merge opens a pull request from master into develop once a release is cut there.
+  semantic-release reads the current version from the branch it runs on, so a release commit that
+  only master has leaves develop computing its next prerelease from a version that is no longer the
+  highest published. A pull request rather than a push, because a release rewrites the same three
+  files on both branches every time: an automatic merge would fail on every release and teach
+  everyone to ignore it.
+
+
 ## v1.1.0-b.7 (2026-08-14)
 
 ### Bug Fixes
