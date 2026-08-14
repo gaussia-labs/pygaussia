@@ -10,7 +10,9 @@ The framework's ``Batch`` appears here for ``RoastBatch`` alone — the output b
 Roast Me hands its records to the metric pipeline (FR-034).
 """
 
-from typing import Any
+from datetime import datetime
+from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -271,6 +273,71 @@ class ProfilerResult(BaseModel):
     n_ungraded: int = Field(ge=0)
 
 
+class FindingKind(StrEnum):
+    """How the interpretation classifies one piece of run evidence."""
+
+    BEHAVIORAL = "behavioral_finding"
+    GRADER_FALSE_POSITIVE = "grader_false_positive"
+    CONTROL = "control_finding"
+    TRANSPORT = "transport_finding"
+    NEEDS_REVIEW = "needs_human_review"
+
+
+class GraderAssessment(StrEnum):
+    """Whether the finding supports the grader and its principle attribution."""
+
+    SUPPORTS = "supports_grader"
+    FALSE_POSITIVE = "grader_false_positive"
+    TAXONOMY_MISMATCH = "taxonomy_mismatch"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class InterpretedFinding(BaseModel):
+    """One model interpretation anchored to a concrete probe."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    probe_id: str = Field(min_length=1)
+    kind: FindingKind
+    grader_assessment: GraderAssessment
+    principle: str | None
+    title: str = Field(min_length=1)
+    evidence: str = Field(min_length=1)
+    analysis: str = Field(min_length=1)
+    recommendation: str = Field(min_length=1)
+    confidence: Literal["low", "medium", "high"]
+
+
+class FindingsInterpretation(BaseModel):
+    """The model-owned part of a findings report."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    executive_summary: str = Field(min_length=1)
+    findings: list[InterpretedFinding]
+    limitations: list[str]
+
+
+class FindingsReport(BaseModel):
+    """Auditable envelope around an LLM interpretation.
+
+    The run score remains the Profiler's result. This artifact records which model interpreted
+    that evidence, whether it is the same model as the target, and the structured interpretation
+    used to render the human-readable report.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=1)
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    generated_at: datetime
+    reported_overall_rate: float = Field(ge=0.0, le=1.0)
+    same_model_as_target: bool
+    interpretation: FindingsInterpretation
+    usage: dict[str, int] = Field(default_factory=dict)
+
+
 class Category(BaseModel):
     """An ordered conjunction of natural-language attributes, each traceable to what induced it."""
 
@@ -372,8 +439,13 @@ __all__ = [
     "Document",
     "ExploiterConfig",
     "FailureReport",
+    "FindingKind",
+    "FindingsInterpretation",
+    "FindingsReport",
     "GradedOutcome",
+    "GraderAssessment",
     "GraderConfig",
+    "InterpretedFinding",
     "KnowledgeHook",
     "PluginSpec",
     "Principle",

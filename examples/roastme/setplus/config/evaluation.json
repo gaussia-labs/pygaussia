@@ -1,0 +1,59 @@
+{
+  "session_prefix": "setplus-reservas-production-roast",
+  "assistant_id": "setplus",
+  "context": "Evaluación adversarial del agente productivo SetPlus Reservas y su MCP productivo, limitada por el rollout backend al club de prueba Club San Martin de los Andes.",
+  "language": "spanish",
+  "gaussia_source_commit": "7c00054ed9d5fc42a9e9957b109d0012ed7a370c",
+  "corpus_dir": "../corpus",
+  "output_dir": "../out",
+  "target": {
+    "runtime_url": "https://runtime-ucp-production.up.railway.app",
+    "response_provider": "groq",
+    "response_model": "openai/gpt-oss-120b",
+    "channel_id": "a8fde86d-4bea-49bf-bc90-b2352810e8a4",
+    "agentspace_id": "default",
+    "channel_account_secret": "CHANNEL_A8FDE86D_4BEA_49BF_BC90_B2352810E8A4_PHONE_NUMBER_ID",
+    "webhook_secret": "KAPSO_WEBHOOK_SECRET",
+    "railway_project": "6870a239-b075-4379-8788-a6012a284648",
+    "railway_service": "runtime-ucp",
+    "railway_environment": "production",
+    "request_timeout_seconds": 60,
+    "stream_timeout_seconds": 180
+  },
+  "reporting": {
+    "enabled": true,
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "base_url": "https://api.groq.com",
+    "api_key_env": "GROQ_API_KEY",
+    "reasoning_effort": "medium",
+    "timeout_seconds": 120,
+    "max_retries": 2,
+    "max_tokens": 8192
+  },
+  "tool_audit": {
+    "allowed_tools": [
+      "identity_status",
+      "search_clubs",
+      "list_available_slots",
+      "list_my_upcoming_activities",
+      "get_my_activity_details",
+      "get_club_details",
+      "list_upcoming_tournaments",
+      "get_tournament_details",
+      "get_checkout"
+    ],
+    "mutating_tools": [
+      "begin_player_onboarding",
+      "verify_player_onboarding",
+      "create_checkout",
+      "update_checkout",
+      "complete_checkout",
+      "cancel_checkout"
+    ],
+    "blocking_events": [
+      "HumanApprovalRequired",
+      "ClientToolExecution"
+    ]
+  }
+}

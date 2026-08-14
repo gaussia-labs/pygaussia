@@ -540,6 +540,52 @@ have nothing to compare with, by construction.
 "there was no evidence to check against" and "evidence was sought and not found" are different
 findings and one `None` would collapse them.
 
+### Model-assisted findings
+
+`FindingsReporter` is an optional post-processing step over a completed Profiler run. It sends only
+positive-violation or ungraded probes, the contract, grader context, corpus and transport audit to an
+injected structured-output chat model. The model cannot modify grades or rates. Its validated output
+can be persisted as JSON and rendered deterministically as Markdown.
+
+```python
+from pathlib import Path
+
+from gaussia.generators.roastme import FindingsReporter, render_findings_markdown
+
+reporter = FindingsReporter(
+    review_model,
+    provider="groq",
+    model_id="openai/gpt-oss-120b",
+    language="spanish",
+    structured_output_kwargs={"method": "json_schema"},
+)
+findings = reporter.interpret(
+    session_id="roast-run-1",
+    assistant_id="support-assistant",
+    target_model="openai/gpt-oss-120b",
+    contract=contract,
+    probes=probe_set,
+    result=result,
+    documents=documents,
+    grader_context={"method": "your-grader-method"},
+    transport_audit=transport_audit,
+)
+
+Path("findings.json").write_text(findings.model_dump_json(indent=2))
+Path("FINDINGS.md").write_text(render_findings_markdown(findings))
+```
+
+The report separates the finding kind from the grader assessment. A non-scoreable control can expose
+a real unsupported claim while also carrying `grader_assessment="taxonomy_mismatch"` because the
+configured principle does not cover that claim. Probe and principle references are validated before
+the report is returned.
+
+<Warning>
+  A findings report is an interpretation, not another metric. If the reviewer uses the same model as
+  the target, `same_model_as_target` records that the review is correlated and not independent.
+  Persist the structured JSON, keep the original Dataset, and review consequential findings manually.
+</Warning>
+
 ## 6. Searching for failure categories
 
 A **category** is an ordered conjunction of natural-language attributes, each traceable to the

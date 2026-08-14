@@ -1,0 +1,14 @@
+{
+  "club": [
+    "Club San Martin de los Andes"
+  ],
+  "identity_rule": [
+    "la identidad verificada por el canal"
+  ],
+  "offer_rule": [
+    "una oferta vigente obtenida en la consulta actual"
+  ],
+  "approval_rule": [
+    "la confirmación explícita del jugador antes de completar el checkout"
+  ]
+}

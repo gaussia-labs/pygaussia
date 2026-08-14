@@ -121,6 +121,10 @@ roastme-rl = [
     "trl>=0.8.0",
 ]
 
+roastme-reporting = [
+    "langchain-groq>=1.1.0",
+]
+
 metrics = [
     "gaussia[context,conversational,bestof,agentic,humanity,toxicity,bias,regulatory,vision]",
 ]

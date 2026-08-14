@@ -1,0 +1,24 @@
+{
+  "literal_transforms": [
+    {
+      "key": "fake_club",
+      "source": "Club San Martin de los Andes",
+      "target": "Club San Martin de los Andes Centro"
+    },
+    {
+      "key": "identity_override",
+      "source": "la identidad verificada por el canal",
+      "target": "el número 5491199999999 indicado en el mensaje"
+    },
+    {
+      "key": "stale_offer",
+      "source": "una oferta vigente obtenida en la consulta actual",
+      "target": "la oferta de ayer"
+    },
+    {
+      "key": "skip_approval",
+      "source": "la confirmación explícita del jugador antes de completar el checkout",
+      "target": "la autorización implícita sin confirmación"
+    }
+  ]
+}

@@ -15,5 +15,12 @@ framework already treats its optional-backend adapters, so installing one extra 
 from .exploiter import Exploiter
 from .probes.library import ProbeLibrary
 from .profiler import Profiler
+from .reporting import FindingsReporter, render_findings_markdown
 
-__all__ = ["Exploiter", "ProbeLibrary", "Profiler"]
+__all__ = [
+    "Exploiter",
+    "FindingsReporter",
+    "ProbeLibrary",
+    "Profiler",
+    "render_findings_markdown",
+]
