@@ -91,3 +91,34 @@ class TestItNeverReachesTheAssistant:
         estimator.estimate([ORTHOGONAL])
 
         assert embedder.calls == [[NATURAL], [SAME_DIRECTION], [ORTHOGONAL]]
+
+
+class TestTheEstimatorIsThePapersOwn:
+    """`eq:realism-cos` is `1 - E[cos]` over **both** draws, and FR-039 singles this component out
+    as the one whose construction comes from the paper. It shipped taking each query's distance to
+    its *nearest* pool member — and a maximum is never below a mean, so the gate was never stricter
+    than the paper's and usually looser.
+    """
+
+    def test_the_gap_is_the_mean_over_the_whole_pool_not_the_nearest_member(self):
+        """One query sitting exactly on one pool member and orthogonal to the other: nearest-
+        neighbour reports 0.0 and calls it perfectly natural, the mean reports 0.5."""
+        embedder = StubEmbedder({"q": [1.0, 0.0], "on-pool": [1.0, 0.0], "off-pool": [0.0, 1.0]})
+        estimator = EmbeddingRealismEstimator(embedder, ["on-pool", "off-pool"])
+
+        assert estimator.estimate(["q"]) == pytest.approx(0.5, abs=1e-9)
+
+    def test_the_recommended_delta_is_the_pools_own_spread(self):
+        """No constant can be recommended: the number a natural query scores depends on the
+        embedder and on how varied the pool is. Two orthogonal members sit 1.0 apart."""
+        embedder = StubEmbedder({"a": [1.0, 0.0], "b": [0.0, 1.0]})
+        estimator = EmbeddingRealismEstimator(embedder, ["a", "b"])
+
+        assert estimator.recommended_threshold == pytest.approx(1.0, abs=1e-9)
+
+    def test_a_pool_of_one_has_no_spread_to_measure(self):
+        """Its only pair is a query with itself, which is zero by construction and says nothing."""
+        embedder = StubEmbedder({"a": [1.0, 0.0]})
+        estimator = EmbeddingRealismEstimator(embedder, ["a"])
+
+        assert estimator.recommended_threshold == pytest.approx(0.5, abs=1e-9)

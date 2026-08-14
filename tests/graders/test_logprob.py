@@ -16,6 +16,7 @@ cannot pass by coincidence.
 
 import pytest
 
+from gaussia.core.exceptions import LogprobsExtractionError, LogprobsNotSupportedError
 from gaussia.graders.logprob import LogprobGrader
 from gaussia.schemas.roastme import GraderConfig, Principle
 from tests.fixtures.roastme.judge_model import StubJudgeModel, raw_token_entry, token_entry
@@ -47,13 +48,14 @@ FALLBACK_SCORE = 0.75
 SENTINEL_LOGPROB = -9999.0
 
 
-def _config(fallback_samples: int = 4) -> GraderConfig:
+def _config(fallback_samples: int = 4, require_logprobs: bool = False) -> GraderConfig:
     return GraderConfig(
         positive_tokens=POSITIVE_TOKENS,
         negative_tokens=NEGATIVE_TOKENS,
         reasoning_budget=64,
         fallback_samples=fallback_samples,
         top_logprobs=5,
+        require_logprobs=require_logprobs,
     )
 
 
@@ -123,22 +125,24 @@ class TestVerdictDiscarded:
             final_content="I am not certain either way",
             sample_contents=FALLBACK_SAMPLES,
         )
-        grade = _grade(model)
 
-        assert grade.score != pytest.approx(LAST_TOKEN_SCORE, abs=1e-6)
-        assert "fallback" in grade.method
+        with pytest.raises(LogprobsExtractionError, match="does not independently parse"):
+            _grade(model)
 
-    def test_the_discarded_verdict_is_replaced_by_sampling_over_k(self):
+    def test_the_discarded_verdict_is_not_replaced_by_sampling(self):
+        """One run, one estimator. Sampling this exchange would put a vote over ``k`` samples into
+        the same rate as continuous probabilities, which is a mean over two measurements — so the
+        exchange goes ungraded instead (FR-016) and the estimator stays what it was."""
         model = StubJudgeModel(
             token_entries=TOKEN_SEQUENCE,
             final_content="I am not certain either way",
             sample_contents=FALLBACK_SAMPLES,
         )
-        config = _config(fallback_samples=len(FALLBACK_SAMPLES))
-        grade = _grade(model, config)
 
-        assert model.sample_invocations == config.fallback_samples
-        assert grade.score == pytest.approx(FALLBACK_SCORE, abs=TOLERANCE)
+        with pytest.raises(LogprobsExtractionError):
+            _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert model.sample_invocations == 0
 
 
 class TestSamplingFallback:
@@ -157,17 +161,20 @@ class TestSamplingFallback:
         assert "fallback" in grade.method
         assert model.logprob_invocations == 0
 
-    def test_no_verdict_token_in_the_sequence_also_falls_back(self):
-        """FR-008 covers both cases: logprobs unusable, or usable with no verdict token in them."""
+    def test_no_verdict_token_in_the_sequence_is_ungraded_rather_than_sampled(self):
+        """FR-008 degrades for a provider that exposes no logprobs. These arrived and simply carried
+        no verdict, which says nothing about the provider — so this response is the thing that
+        cannot be graded, and sampling it would mix estimators inside one rate."""
         model = StubJudgeModel(
             token_entries=[token_entry("maybe", {"maybe": 0.8, "perhaps": 0.2})],
             final_content="maybe",
             sample_contents=FALLBACK_SAMPLES,
         )
-        grade = _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
 
-        assert grade.score == pytest.approx(FALLBACK_SCORE, abs=TOLERANCE)
-        assert "fallback" in grade.method
+        with pytest.raises(LogprobsExtractionError, match="no token of"):
+            _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert model.sample_invocations == 0
 
     def test_the_fallback_grade_is_still_in_range_and_auditable(self):
         model = StubJudgeModel(
@@ -227,3 +234,166 @@ class TestASeparationNoExponentCanCarry:
         grade = _grade(model)
 
         assert grade.score == 1.0
+
+
+class TestWhyTheLogprobPathWasAbandoned:
+    """Degrading to sampling is designed behaviour for a provider with no logprobs (FR-008, D13).
+
+    It is not designed behaviour for a call that failed. ``_ask_for_logprobs`` cannot tell the two
+    apart — the only signal is an exception belonging to whichever client the user handed in — so
+    the cause is carried into the evidence instead of being guessed at or dropped. Without it a run
+    that degraded on six rate limits is indistinguishable from one against a provider that never
+    supported the feature, and both report the same `method`.
+    """
+
+    def test_a_provider_without_logprobs_says_so_in_the_evidence(self):
+        model = StubJudgeModel(
+            token_entries=TOKEN_SEQUENCE,
+            final_content="YES",
+            sample_contents=FALLBACK_SAMPLES,
+            logprobs_supported=False,
+        )
+        grade = _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert "stub provider exposes no logprobs" in grade.evidence["abandoned"]
+
+    def test_a_call_that_failed_is_not_reported_as_a_provider_without_logprobs(self):
+        """The grade still exists and still says `sampling-fallback`; what changes is that the rate
+        limit is now readable instead of having been rewritten into a claim about the provider."""
+
+        class _RateLimited(StubJudgeModel):
+            def logprob_response(self):
+                raise RuntimeError("429 rate limit exceeded")
+
+        model = _RateLimited(
+            token_entries=TOKEN_SEQUENCE,
+            final_content="YES",
+            sample_contents=FALLBACK_SAMPLES,
+        )
+        grade = _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert "fallback" in grade.method
+        assert "429 rate limit exceeded" in grade.evidence["abandoned"]
+        assert "RuntimeError" in grade.evidence["abandoned"]
+
+
+class _Unreachable(StubJudgeModel):
+    """A model that is down: neither path answers."""
+
+    def logprob_response(self):
+        raise RuntimeError("429 rate limit exceeded")
+
+    def sample(self):
+        raise RuntimeError("429 rate limit exceeded")
+
+
+class _RefusesLogprobsOnly(StubJudgeModel):
+    """A model that answers, and rejects the logprobs parameter — the case degrading is for."""
+
+    def logprob_response(self):
+        raise RuntimeError("400 unknown parameter: logprobs")
+
+
+class TestWhichFailureDegradingIsFor:
+    """Degrading is FR-008's answer to a provider with no logprobs. It is not an answer to a call
+    that failed, and the exception cannot tell them apart on its own — so one plain call decides.
+    """
+
+    def _model(self, kind, samples=FALLBACK_SAMPLES):
+        return kind(token_entries=TOKEN_SEQUENCE, final_content="YES", sample_contents=samples)
+
+    def test_a_model_that_answers_without_logprobs_is_a_provider_limitation(self):
+        model = self._model(_RefusesLogprobsOnly)
+
+        grade = _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert "fallback" in grade.method
+        assert "unknown parameter: logprobs" in grade.evidence["abandoned"]
+
+    def test_a_model_that_answers_neither_way_is_not_degraded_into_a_score(self):
+        """A violation voted from a provider that is down is not a measurement of the assistant."""
+        model = self._model(_Unreachable)
+
+        with pytest.raises(LogprobsNotSupportedError, match="unreachable"):
+            _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+    def test_the_deciding_call_is_the_first_sample_rather_than_an_extra_one(self):
+        """It runs at the sampling temperature, so it counts as a vote instead of being spent."""
+        model = self._model(_RefusesLogprobsOnly)
+
+        _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES)))
+
+        assert model.sample_invocations == len(FALLBACK_SAMPLES)
+
+    def test_a_confirmed_limitation_is_remembered_for_the_rest_of_the_run(self):
+        """The 240 grades of a real run should not each pay for an attempt known to fail."""
+        model = self._model(_RefusesLogprobsOnly, samples=FALLBACK_SAMPLES * 2)
+        grader = LogprobGrader(model=model, config=_config(fallback_samples=len(FALLBACK_SAMPLES)))
+        principle = _principle(grader)
+
+        grader.grade("q1", "r1", principle)
+        before = len(model.bind_calls)
+        grader.grade("q2", "r2", principle)
+
+        assert not any(call.get("logprobs") for call in model.bind_calls[before:])
+
+    def test_a_missing_verdict_token_settles_on_logprobs_rather_than_against_them(self):
+        """Logprobs arrived and carried no verdict: a fact about this response, not the provider.
+        The call worked, which is the strongest evidence available that the feature is supported —
+        so the run is on logprobs and keeps asking for them, and only this exchange is lost."""
+        model = StubJudgeModel(
+            token_entries=[token_entry("maybe", {"maybe": 0.8, "perhaps": 0.2})],
+            final_content="maybe",
+            sample_contents=FALLBACK_SAMPLES * 2,
+        )
+        grader = LogprobGrader(model=model, config=_config(fallback_samples=len(FALLBACK_SAMPLES)))
+        principle = _principle(grader)
+
+        with pytest.raises(LogprobsExtractionError):
+            grader.grade("q1", "r1", principle)
+        before = len(model.bind_calls)
+        with pytest.raises(LogprobsExtractionError):
+            grader.grade("q2", "r2", principle)
+
+        assert any(call.get("logprobs") for call in model.bind_calls[before:])
+        assert model.sample_invocations == 0
+
+    def test_require_logprobs_refuses_instead_of_changing_estimator(self):
+        """Two runs compared against each other cannot have been measured two different ways."""
+        model = self._model(_RefusesLogprobsOnly)
+
+        with pytest.raises(LogprobsNotSupportedError, match="require_logprobs is set"):
+            _grade(model, _config(fallback_samples=len(FALLBACK_SAMPLES), require_logprobs=True))
+
+    def test_require_logprobs_stops_paying_for_a_confirmed_impossible_request(self):
+        """Refusing is not the same as retrying forever: once the provider has answered a plain call
+        and refused logprobs, the fact is established, so the remaining grades raise without
+        spending anything."""
+        model = self._model(_RefusesLogprobsOnly, samples=FALLBACK_SAMPLES * 2)
+        config = _config(fallback_samples=len(FALLBACK_SAMPLES), require_logprobs=True)
+        grader = LogprobGrader(model=model, config=config)
+        principle = _principle(grader)
+
+        with pytest.raises(LogprobsNotSupportedError):
+            grader.grade("q1", "r1", principle)
+        before = len(model.bind_calls)
+        with pytest.raises(LogprobsNotSupportedError):
+            grader.grade("q2", "r2", principle)
+
+        assert model.bind_calls[before:] == []
+
+    def test_a_transport_failure_settles_nothing(self):
+        """The model was simply unreachable, so no estimator is chosen and the next grade decides
+        again. This is what makes a retrying grader wrapped around this one work: it sees the
+        exception instead of a run quietly switched onto the other instrument."""
+        model = self._model(_Unreachable)
+        grader = LogprobGrader(model=model, config=_config(fallback_samples=len(FALLBACK_SAMPLES)))
+        principle = _principle(grader)
+
+        with pytest.raises(LogprobsNotSupportedError, match="unreachable"):
+            grader.grade("q1", "r1", principle)
+        before = len(model.bind_calls)
+        with pytest.raises(LogprobsNotSupportedError, match="unreachable"):
+            grader.grade("q2", "r2", principle)
+
+        assert any(call.get("logprobs") for call in model.bind_calls[before:])

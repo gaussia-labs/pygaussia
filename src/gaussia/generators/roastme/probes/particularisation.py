@@ -22,6 +22,7 @@ Nothing here imports an embedder or a graph library, so the shared flow costs no
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +33,7 @@ from .mentions import CompoundTokenExtractor
 from .transforms import resolve
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import Catalogue, Document, StrategySpec
@@ -40,7 +41,38 @@ if TYPE_CHECKING:
     from .mentions import MentionExtractor
 
 _QUERY_TEMPLATE = "{hint}: {premise}"
+_PREMISE_SLOT = "{premise}"
 _ATTRIBUTE_SEPARATOR = ","
+_SPACE_BEFORE_MARK = re.compile(r"\s+([?!.,;:])")
+"""Removing the slot leaves the space that preceded it stranded in front of the punctuation."""
+
+
+def compose_query(hint: str, premise: str | None = None) -> str:
+    """The text sent to the assistant, from a strategy's hint and the premise it leans on.
+
+    A hint carrying ``{premise}`` places the entity itself, and anything else is appended after a colon.
+    The colon is the older behaviour and stays the default, because a catalogue is data the user has
+    already written; what it cannot do is read as a sentence. ``"¿Qué condiciones tiene este producto"``
+    over ``"Cuenta Ahorro Futuro Digital"`` came out as
+
+        ¿Qué condiciones tiene este producto: Cuenta Ahorro Futuro Digital
+
+    — an interrogative never closed, punctuated where nobody punctuates. A real assistant read some of
+    those as a sentence cut short and asked for clarification, and the run scored the clarification as a
+    failure. The probe has to read like something a customer would type, or what is being measured is
+    the assistant's tolerance for malformed input.
+
+    Args:
+        hint: ``StrategySpec.phrasing_hint``, with or without the slot.
+        premise: What the probe leans on, or ``None`` where there is no knowledge base and so no premise
+            (FR-024). A slot with nothing to put in it is removed rather than filled with an empty
+            string, which would leave a dangling space before the punctuation.
+    """
+    if _PREMISE_SLOT not in hint:
+        return hint if premise is None else _QUERY_TEMPLATE.format(hint=hint, premise=premise)
+    if premise is not None:
+        return hint.replace(_PREMISE_SLOT, premise)
+    return _SPACE_BEFORE_MARK.sub(r"\1", " ".join(hint.replace(_PREMISE_SLOT, " ").split()))
 
 
 def extract_mentions(documents: Sequence[Document]) -> frozenset[str]:
@@ -106,7 +138,7 @@ def build_probe(
     )
     return Probe(
         id=f"{engine}-{strategy.id}-{index}",
-        query=_QUERY_TEMPLATE.format(hint=strategy.phrasing_hint, premise=premise),
+        query=compose_query(strategy.phrasing_hint, premise),
         hook=hook,
         plugin=strategy.plugin,
         strategy=strategy.id,
@@ -116,18 +148,29 @@ def build_probe(
     )
 
 
-def domain_agnostic_probes(catalogue: Catalogue, engine: str) -> list[Probe]:
+def domain_agnostic_probes(
+    catalogue: Catalogue,
+    engine: str,
+    handles: Callable[[str], bool] = lambda _kind: True,
+) -> list[Probe]:
     """FR-024: with no knowledge base, probes still come back — leaning on nothing.
 
     The hook stays empty rather than being filled with a placeholder: a fabricated hook would put
     an invented entity into the retained hooks ``H``, which is exactly what the Exploiter grounds
     its categories on. The probe is still recognisably a control or not, because ``plugin`` alone
     carries that (FR-026).
+
+    ``handles`` applies FR-025 on this path too. It used to be checked only where documents exist,
+    so the same engine covered different strategies depending on whether a knowledge base was
+    present: one declaring ``product`` against a catalogue of ``product`` and ``figure`` produced
+    probes for both without documents and for one with them. An engine's declaration is a claim
+    about what it is competent for, and nothing about that claim depends on a corpus being there
+    to read. The default keeps a caller that names no predicate at the old reach.
     """
     return [
         Probe(
             id=f"{engine}-{strategy.id}",
-            query=strategy.phrasing_hint,
+            query=compose_query(strategy.phrasing_hint),
             hook=None,
             plugin=strategy.plugin,
             strategy=strategy.id,
@@ -135,6 +178,7 @@ def domain_agnostic_probes(catalogue: Catalogue, engine: str) -> list[Probe]:
             engine=engine,
         )
         for strategy in catalogue.strategies
+        if handles(strategy.entity_kind)
     ]
 
 
@@ -203,14 +247,35 @@ class ParticularisingEngine(ProbeEngine, ABC):
 
     def generate(self, documents: list[Document], catalogue: Catalogue) -> list[Probe]:
         if not documents:
-            return domain_agnostic_probes(catalogue, self.name)
-        boundaries = {kind: self._entities(kind, documents) for kind in _entity_kinds_of(catalogue)}
+            return domain_agnostic_probes(catalogue, self.name, self._handles)
+        kinds = [kind for kind in _entity_kinds_of(catalogue) if self._handles(kind)]
+        boundaries = {kind: self._entities(kind, documents) for kind in kinds}
         principles = principle_by_plugin(catalogue)
         return [
             probe
             for strategy in catalogue.strategies
+            if self._handles(strategy.entity_kind)
             for probe in self._probes_for(strategy, boundaries[strategy.entity_kind], principles)
         ]
+
+    def _handles(self, kind: str) -> bool:
+        """Whether this engine was trusted with an entity kind.
+
+        ``entity_kinds`` was read in exactly one place — catalogue validation, which checks that some
+        configured engine claims each kind — and never once at generation. So an engine produced
+        probes for kinds it had declared it did not handle, and with two engines composed each one
+        covered the other's.
+
+        That is not only redundant work. Of the four shipped engines only the enumeration one passes
+        ``kind`` through to anything: the graph and multi-hop engines ignore the argument and return
+        every node and every chain they hold. On a catalogue with two entity kinds they therefore
+        hand **the same boundary to both**, so a strategy over values builds its premises out of
+        product names and the probe looks no different for it.
+
+        An engine that declared nothing keeps the old reach. Empty is not "handles none" — it is the
+        default, and a user who never named a kind has not asked for anything to be filtered.
+        """
+        return not self._entity_kinds or kind in self._entity_kinds
 
     def _probes_for(
         self,

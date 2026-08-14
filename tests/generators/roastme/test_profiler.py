@@ -267,3 +267,57 @@ class TestNoKnowledgeBaseAccess:
         for member in (Profiler.__init__, Profiler.profile):
             annotations = [str(parameter.annotation) for parameter in inspect.signature(member).parameters.values()]
             assert not any(Document.__name__ in annotation for annotation in annotations)
+
+
+class TestAJudgeThatFailsDoesNotEndTheRun:
+    """FR-016 covered the assistant and not the judge, and the asymmetry cost a whole run.
+
+    Nothing in the subsystem caught anything, so one unparseable verdict propagated out of
+    `Profiler.profile` and took every assistant call already paid for with it. That is the half
+    that cannot be reproduced: a lost response is not recovered, it is replaced, and a run built on
+    a replaced response is a different run.
+    """
+
+    def _run_with_a_judge_failing_on(self, query: str):
+        class _Unruled(StubGrader):
+            def grade(self, q, response, principle, meta=None):
+                if q == query:
+                    raise RuntimeError("429 rate limit exceeded")
+                return super().grade(q, response, principle, meta)
+
+        grader = _Unruled(fx.stub_grader().scores)
+        return Profiler(contract=fx.contract(grader), target=fx.recorded_target()).profile(fx.probes())
+
+    def test_the_run_survives_and_every_other_probe_keeps_its_grade(self):
+        clean, _ = _run()
+
+        result = self._run_with_a_judge_failing_on(fx.QUERY_ONE)
+
+        assert result.n_ungraded == clean.n_ungraded + 1
+        assert _outcome(result, "pb-1").violation is None
+        assert _outcome(result, "pb-2").violation is not None
+
+    def test_the_ungraded_exchange_says_it_was_the_judge(self):
+        """`violation is None` says a number is missing, not whether the assistant never answered
+        or the judge never ruled. Those two call for opposite responses."""
+        result = self._run_with_a_judge_failing_on(fx.QUERY_ONE)
+
+        reason = _outcome(result, "pb-1").ungraded_reason
+        assert "the judge failed" in reason
+        assert "429 rate limit exceeded" in reason
+        assert _outcome(result, "pb-2").ungraded_reason is None
+
+    def test_a_failed_target_says_it_was_the_target(self):
+        """The reason used to be dropped: nothing in `src/` read `TargetResponse.failure_reason`."""
+        result, _ = _run()
+
+        assert _outcome(result, "pb-failed").ungraded_reason is not None
+
+
+class TestTheMethodsBehindTheRate:
+    def test_the_result_says_what_estimated_its_rate(self):
+        """`overall_rate` averaged over whichever estimators answered, and nothing said which."""
+        result, _ = _run()
+
+        assert sum(result.grading_methods.values()) == sum(len(outcome.grades) for outcome in result.outcomes)
+        assert all(count > 0 for count in result.grading_methods.values())

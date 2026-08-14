@@ -76,10 +76,13 @@ class JudgeOnProfileFilter(OnProfileFilter):
             a key for it.
     """
 
-    recommended_threshold: float | None = RECOMMENDED_KAPPA
-
     def __init__(self, model: BaseChatModel) -> None:
         self._model = model
+        # Assigned here rather than on the class so every shipped component is read the same way:
+        # on the instance. A constant could sit on the class, but then one component would answer
+        # from the class and another only from an instance, and a caller reading the class would get
+        # a number from one and `None` from the other — where `None` is itself a declaration.
+        self.recommended_threshold: float | None = RECOMMENDED_KAPPA
 
     def score(self, query: str, profile: AssistantProfile) -> float:
         """Score ``query`` against ``profile`` on this filter's ``[0, 1]`` scale."""

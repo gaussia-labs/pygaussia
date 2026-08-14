@@ -96,18 +96,18 @@ prose rather than your internal identifiers.
 
 ## The ten interfaces
 
-You implement against these. Six ship a reference implementation, declared as such — a convenience,
+You implement against these. Seven ship a reference implementation, declared as such — a convenience,
 never the definition of the component.
 
 | Interface | Obligation | Reference implementation |
 |---|---|---|
 | `ProbeEngine` | Declare the documents and entity kinds it handles; turn documents plus catalogue into tagged probes | Four: `RetrievalProbeEngine`, `GraphProbeEngine`, `MultiHopProbeEngine`, `EnumerationProbeEngine` |
 | `EntityEnumerator` | List **every** entity of a kind that exists in the base | None — irreducibly domain knowledge |
-| `HookVerifier` | Confirm a hook's `doc` label against the corpus, independently of the engine | None |
+| `HookVerifier` | Confirm a hook's `doc` label against the corpus, independently of the engine | `NearMissVerifier` — catches an absence label the boundary cannot defend |
 | `Transform` | Turn a real entity into the premise a probe leans on | The four the catalogue may name |
 | `Grader` | Estimate one principle's violation in `[0, 1]`, with its evidence | `LogprobGrader` |
 | `TargetAssistant` | Send a query, return the response or mark the exchange failed | None — a transport adapter belongs with its transport |
-| `QueryGenerator` | Realise a category's attributes as concrete queries | `PromptedQueryGenerator` — **gaussia's own construction** |
+| `QueryGenerator` | Realise a category's attributes as concrete queries; declare the grading context a query carries, if any | `PromptedQueryGenerator` — **gaussia's own construction** |
 | `OnProfileFilter` | Score how on-profile and indirect one query is; declare the `κ` it recommends | `JudgeOnProfileFilter` — **gaussia's own construction** |
 | `RealismEstimator` | Score a category's distance from the natural-query prior; declare the `δ` it recommends | `EmbeddingRealismEstimator` — the paper's construction |
 | `CategorySearch` | Propose categories from a profile and score them | `AttributeIterationSearch` (default) and `PolicyGradientSearch` |
@@ -799,3 +799,25 @@ Stated here because a reader will otherwise infer stronger claims than the evide
   visible instead of silently averaged in.
 - **A refusal to answer is a legitimate response**, not a transport failure. Whether it violates a
   principle is the rubric's call, and the rubric is yours.
+- **The weakness map is keyed on the strategy alone.** The paper's `Z` is (template, topic, hook
+  type); the specification chose the strategy identifier for `z`, and this is what was built. The
+  cost is real: four probes of one strategy, over a topic the assistant always breaks and one it
+  never breaks, report `0.5` — so at `η = 0.6` no category is proposed for a behaviour that fails
+  every time. **The Exploiter misses weaknesses rather than misreporting them**, which is the more
+  expensive direction to be wrong in.
+- **A category that passed `τ` is not marked as such.** `FailureReport.categories` carries every
+  category evaluated. `C*` is reconstructed by comparing each `score` against the `tau` recorded in
+  `components`.
+- **The default engine set is not the one the paper evaluated.** Retrieval, graph and multi-hop run
+  by default; the paper's canonical dataset came from retrieval, graph and enumeration, and the
+  multi-hop engine appears in none of its trade-off tables. **The out-of-the-box configuration
+  produced no published number.**
+- **The mention extractor reads compound identifiers, and a corpus of ordinary words defeats it.**
+  Over Spanish product pages `CompoundTokenExtractor` returns 208 mentions that are not entities —
+  phone numbers, PDF filenames, footer anchors — and nothing fails: each becomes a probe. Print what
+  it extracts before trusting a run, or supply an enumerator and use `EnumerationProbeEngine`.
+- **A query the `κ` gate stops still counts in its category's score.** It contributes exactly `0.0`
+  (FR-030), which lowers the mean and raises the variance, so `S(c)` falls twice over. That is the
+  requirement rather than a defect, and it moves the ranking: on one measured run a category rose
+  from `S=0.109` to `0.202` computed over the queries actually asked — from fourth place to second.
+  `on_profile` is what makes it auditable.

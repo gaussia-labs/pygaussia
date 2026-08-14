@@ -17,8 +17,8 @@ import math
 import pytest
 
 from gaussia.generators.roastme.searches.scoring import (
-    GATED_CONTRIBUTION,
     category_score,
+    enough_on_profile,
     is_on_profile,
     refine,
     standard_error,
@@ -258,25 +258,61 @@ class TestCategoryScore:
 
 
 class TestOnProfileGate:
-    def test_a_query_below_kappa_contributes_exactly_zero(self):
-        """The two pieces `evaluation.py` composes, over the hand-computed gate fixture (FR-030).
+    def test_a_query_below_kappa_leaves_the_category_rather_than_scoring_zero(self):
+        """FR-030 as amended: the gate removes the query, it never scores it.
 
-        The rule has one home: the gate is `is_on_profile` and the contribution is
-        `GATED_CONTRIBUTION`, and the live composition of the two is pinned end-to-end in
-        `test_policy_gradient.py`.
+        The rule has one home: the gate is `is_on_profile` and what it stops is dropped, so the
+        vector `S(c)` is computed over is the queries actually asked. The live composition —
+        regeneration first, discard only after the attempts — is pinned in `test_evaluation.py`.
         """
-        gated = [
-            violation if is_on_profile(on_profile, fx.GATE_KAPPA) else GATED_CONTRIBUTION
+        surviving = [
+            violation
             for violation, on_profile in zip(fx.GATE_RAW_VIOLATIONS, fx.GATE_ON_PROFILE_SCORES, strict=True)
+            if is_on_profile(on_profile, fx.GATE_KAPPA)
         ]
 
-        assert gated == fx.GATED_VIOLATIONS
-        assert gated[1] == 0.0
-        assert GATED_CONTRIBUTION == 0.0
+        assert surviving == fx.SURVIVING_VIOLATIONS
+        assert category_score(surviving, 1.0) == pytest.approx(fx.SURVIVING_SCORE_LAMBDA_1, abs=TOLERANCE)
 
-    def test_the_gate_changes_the_category_score(self):
+    def test_the_zero_it_replaced_charged_the_category_twice(self):
+        """Why the amendment was necessary, in the arithmetic: mean *and* variance moved.
+
+        Both queries broke the assistant outright. Under the old rule the category scored `0.146`
+        rather than the `1.0` its asked queries earned — and not because the mean halved, but
+        because the zero also created the dispersion `lambda` penalises.
+        """
         assert category_score(fx.GATE_RAW_VIOLATIONS, 1.0) == pytest.approx(fx.UNGATED_SCORE_LAMBDA_1, abs=TOLERANCE)
         assert category_score(fx.GATED_VIOLATIONS, 1.0) == pytest.approx(fx.GATED_SCORE_LAMBDA_1, abs=TOLERANCE)
+        assert fx.GATED_SCORE_LAMBDA_1 < fx.SURVIVING_SCORE_LAMBDA_1
+
+
+class TestSurvivingFloor:
+    def test_half_of_what_was_asked_for_is_inside_the_floor(self):
+        """Equality passes, on the convention `is_on_profile` already sets for `kappa`."""
+        assert enough_on_profile(fx.FLOOR_SURVIVING_AT_THE_FLOOR, fx.FLOOR_ASKED) is True
+        assert enough_on_profile(fx.FLOOR_SURVIVING_BELOW_THE_FLOOR, fx.FLOOR_ASKED) is False
+
+    def test_an_odd_sample_rounds_towards_keeping_the_category(self):
+        """`2 * surviving >= asked`, so at `asked = 5` three survive and two do not."""
+        assert enough_on_profile(3, 5) is True
+        assert enough_on_profile(2, 5) is False
+
+    def test_the_floor_is_measured_against_what_was_asked_for_not_what_was_generated(self):
+        """The criterion may not loosen itself exactly when the category is worst.
+
+        Regeneration proposes more queries than `queries_per_category`. Measuring the floor
+        against the number generated would let each retry raise the denominator the survivors are
+        judged against — so a category that needed three rounds would face a floor a category that
+        needed none never sees.
+        """
+        asked, generated = 10, 30
+        surviving = 5
+
+        assert enough_on_profile(surviving, asked) is True
+        assert enough_on_profile(surviving, generated) is False
+
+    def test_no_survivor_never_passes(self):
+        assert enough_on_profile(0, 2) is False
 
     def test_a_query_at_kappa_is_on_profile(self):
         """FR-030 gates a query *below* kappa, so equality is inside the gate."""

@@ -19,10 +19,10 @@ import pytest
 from gaussia.core.extractor import BaseGroupExtractor
 from gaussia.core.loader import ToxicityLoader
 from gaussia.core.retriever import Retriever
-from gaussia.generators.roastme.dataset import to_dataset, to_record
+from gaussia.generators.roastme.dataset import grading_methods, to_dataset, to_record
 from gaussia.generators.roastme.profiler import Profiler
 from gaussia.schemas.common import Dataset
-from gaussia.schemas.roastme import RoastBatch
+from gaussia.schemas.roastme import GradedOutcome, PrincipleGrade, RoastBatch
 from gaussia.schemas.toxicity import GroupDetection, ToxicityDataset, ToxicityMetric
 from tests.fixtures.roastme import expected as fx
 
@@ -237,3 +237,47 @@ class TestAnExistingMetricConsumesIt:
         # assistant id is the identifier it does carry over from the dataset's own metadata, which is
         # what shows the emitted dataset was read as-is.
         assert metrics[0].assistant_id == ASSISTANT_ID
+
+
+class TestTheMethodsBehindARun:
+    """`PrincipleGrade.method` said how one verdict was reached and nothing aggregated it, so a run
+    where every grade degraded to sampling looked identical to one where none did."""
+
+    def _grade(self, method: str) -> PrincipleGrade:
+        return PrincipleGrade(principle=fx.PRINCIPLE_A, score=0.0, grader="StubGrader", method=method, model="m")
+
+    def test_each_method_is_counted(self):
+        grades = [self._grade("logprob-last-verdict-token")] * 3 + [self._grade("sampling-fallback")]
+
+        assert grading_methods(grades) == {"logprob-last-verdict-token": 3, "sampling-fallback": 1}
+
+    def test_a_run_that_never_degraded_says_so_rather_than_staying_silent(self):
+        assert grading_methods([self._grade("logprob-last-verdict-token")]) == {"logprob-last-verdict-token": 1}
+
+    def test_no_grades_at_all_counts_nothing(self):
+        assert grading_methods([]) == {}
+
+
+class TestARecordSaysWhereItCameFrom:
+    """A record used to carry a query and a score and nothing that said what produced either, so
+    reading a violation meant matching its text back against the probe set by hand."""
+
+    def test_a_profiler_record_names_its_probe_and_how_it_was_built(self):
+        probe = fx.probes()[0]
+        outcome = GradedOutcome(probe_id=probe.id, response="r", grades=[], violation=None)
+
+        provenance = to_record(probe, outcome).provenance
+
+        assert provenance.probe_id == probe.id
+        assert provenance.strategy == probe.strategy
+        assert provenance.category is None
+
+    def test_the_hook_travels_so_absence_reliable_and_verified_finally_have_a_reader(self):
+        """Both were written on every probe and neither survived to where a rate is read (FR-023)."""
+        probe = fx.probes()[0]
+        outcome = GradedOutcome(probe_id=probe.id, response="r", grades=[], violation=None)
+
+        hook = to_record(probe, outcome).provenance.hook
+
+        assert hook is not None
+        assert hook.absence_reliable == probe.hook.absence_reliable

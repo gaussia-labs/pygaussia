@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from gaussia.schemas.roastme import AssistantProfile, GradedOutcome, ProfilerResult
 
+from .dataset import grading_methods
 from .searches.scoring import violation_score, weakness_entry
 
 if TYPE_CHECKING:
@@ -75,14 +76,16 @@ class Profiler:
                 hooks=_retained_hooks(scored),
             ),
             outcomes=outcomes,
+            probes=list(probes),
             overall_rate=_mean([item.violation for item in scored]),
             n_scoreable=len(scored),
             n_ungraded=sum(1 for outcome in outcomes if outcome.violation is None),
+            grading_methods=grading_methods(grade for outcome in outcomes for grade in outcome.grades),
         )
 
     def _exchange(self, probe: Probe) -> GradedOutcome:
         response = self._target.send(probe.query)
-        grades = self._grades(probe, response)
+        grades, ungraded_reason = self._grades(probe, response)
         return GradedOutcome(
             probe_id=probe.id,
             response=response.content,
@@ -92,15 +95,33 @@ class Profiler:
             violation=violation_score(grades, self._contract) if grades else None,
             evidence_available=probe.hook is not None,
             scoreable=probe.plugin is not None,
+            ungraded_reason=ungraded_reason,
         )
 
-    def _grades(self, probe: Probe, response: TargetResponse) -> list[PrincipleGrade]:
+    def _grades(self, probe: Probe, response: TargetResponse) -> tuple[list[PrincipleGrade], str | None]:
+        """Every principle graded, or none of them and why.
+
+        FR-016 already covers the assistant: an exchange it failed is recorded ungraded rather than
+        as a pass, because a transport error read as good behaviour is a silent free mark. **The
+        same was not true of the judge.** Nothing here caught anything, so one unparseable verdict
+        on probe four hundred of five hundred ended the run — taking with it every assistant call
+        already paid for, which is the half that cannot be reproduced: the assistant is not
+        deterministic, so a lost response is not recovered, it is replaced, and that is a different
+        run.
+
+        Partial grades are discarded rather than kept, and that is deliberate: ``v`` is a weighted
+        sum over **every** principle of the contract, so a subset cannot produce one. Keeping them
+        would invite an average over whichever principles happened to answer.
+        """
         if response.failed:
-            return []
-        return [
-            principle.grader.grade(probe.query, response.content, principle, probe.meta)
-            for principle in self._contract.principles
-        ]
+            return [], response.failure_reason or "the target reported the exchange failed"
+        try:
+            return [
+                principle.grader.grade(probe.query, response.content, principle, probe.meta)
+                for principle in self._contract.principles
+            ], None
+        except Exception as unruled:  # a judge fails through whichever client it wraps
+            return [], f"the judge failed: {type(unruled).__name__}: {unruled}"
 
     def _weaknesses(self, scored: Sequence[_Scored]) -> list[WeaknessEntry]:
         grouped: dict[str, list[_Scored]] = defaultdict(list)

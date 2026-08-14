@@ -184,12 +184,37 @@ class TestTheSampleSizeFloor:
 
 class TestTheShippedComponentsRecommend:
     def test_the_shipped_filter_declares_a_kappa(self):
-        """SC-012: a user who keeps the shipped component never sees the parameter."""
+        """SC-012: a user who keeps the shipped component never sees the parameter.
+
+        On an instance, like the estimator below. This one's recommendation *is* a constant and so
+        could have been declared on the class; it deliberately is not, because then one shipped
+        component would answer from its class and the other would not — and the difference stays
+        invisible until a caller reads the wrong one and gets `None`, which on this interface is
+        itself a declaration rather than an absence.
+        """
         from gaussia.generators.roastme.searches.on_profile import JudgeOnProfileFilter
 
-        assert JudgeOnProfileFilter.recommended_threshold is not None
+        assert JudgeOnProfileFilter(model=object()).recommended_threshold is not None
 
-    def test_the_shipped_estimator_declares_a_delta(self):
+    def test_neither_shipped_component_answers_from_its_class(self):
+        """The inherited default, which means "the user must supply this", must not be mistakable
+        for the component's own recommendation."""
+        from gaussia.generators.roastme.searches.on_profile import JudgeOnProfileFilter
         from gaussia.generators.roastme.searches.realism import EmbeddingRealismEstimator
 
-        assert EmbeddingRealismEstimator.recommended_threshold is not None
+        assert JudgeOnProfileFilter.recommended_threshold is None
+        assert EmbeddingRealismEstimator.recommended_threshold is None
+
+    def test_the_shipped_estimator_declares_a_delta(self):
+        """On an instance, because the recommendation is derived from the pool it was given.
+
+        `delta` is compared against a mean cosine distance, and what that comes out at depends on
+        the embedder and on how varied the pool is — so no constant can be recommended for it, and
+        the estimator measures the pool's own spread instead.
+        """
+        from gaussia.generators.roastme.searches.realism import EmbeddingRealismEstimator
+        from tests.generators.roastme.test_realism import NATURAL, VECTORS, StubEmbedder
+
+        estimator = EmbeddingRealismEstimator(StubEmbedder(VECTORS), [NATURAL])
+
+        assert estimator.recommended_threshold is not None

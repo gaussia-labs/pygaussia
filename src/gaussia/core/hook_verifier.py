@@ -18,7 +18,7 @@ class HookVerifier(ABC):
     """
 
     @abstractmethod
-    def verify(self, hook: KnowledgeHook, documents: list[Document]) -> bool:
+    def verify(self, hook: KnowledgeHook, documents: list[Document]) -> bool | None:
         """Confirm the hook's ``doc`` label against the knowledge base.
 
         Args:
@@ -27,7 +27,16 @@ class HookVerifier(ABC):
             documents: The corpus to check against.
 
         Returns:
-            ``True`` when the label holds. The caller records this on
-            ``KnowledgeHook.verified``, where ``None`` continues to mean unverified —
-            never ``False``, which would turn "nobody checked" into "the label is wrong".
+            ``True`` when the label holds, ``False`` when it does not, and ``None`` when
+            this verifier could not establish a boundary to check it against.
+
+            The third answer is the one a ``bool`` could not give, and its absence was
+            silent in the direction the method's claims rest on: with no boundary, every
+            absence label read as confirmed and every presence label as refuted, because
+            "not in an empty set" is true and "in an empty set" is false. Neither was a
+            finding about the corpus.
+
+            The caller records this on ``KnowledgeHook.verified``, where ``None`` already
+            means unverified — never ``False``, which would turn "nobody could check" into
+            "the label is wrong".
         """

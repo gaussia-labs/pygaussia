@@ -198,18 +198,27 @@ class TestCategoryScoreLiterals:
         assert _standard_error(fx.CONSISTENT_VIOLATIONS) < _standard_error(fx.SPIKY_VIOLATIONS)
         assert _score(fx.CONSISTENT_VIOLATIONS, 1.0) > _score(fx.SPIKY_VIOLATIONS, 1.0)
 
-    def test_the_gated_vector_is_the_raw_one_with_the_off_profile_query_zeroed(self):
-        gated = [
-            violation if on_profile >= fx.GATE_KAPPA else 0.0
+    def test_the_surviving_vector_is_the_raw_one_with_the_off_profile_query_removed(self):
+        surviving = [
+            violation
             for violation, on_profile in zip(fx.GATE_RAW_VIOLATIONS, fx.GATE_ON_PROFILE_SCORES, strict=True)
+            if on_profile >= fx.GATE_KAPPA
         ]
-        assert gated == fx.GATED_VIOLATIONS
+        assert surviving == fx.SURVIVING_VIOLATIONS
+        assert _score(surviving, 1.0) == pytest.approx(fx.SURVIVING_SCORE_LAMBDA_1, abs=TOLERANCE)
 
-    def test_the_gate_costs_more_than_it_looks(self):
+    def test_the_zero_cost_more_than_it_looked(self):
+        """Why the gated query had to stop being a zero, in the arithmetic rather than in prose.
+
+        Both queries broke the assistant outright, so the honest reading of what was asked is
+        `1.0`. Zeroing the gated one produced `0.146` — not half of `1.0`, because the zero also
+        created the dispersion `lambda` penalises. The category paid twice for one event.
+        """
         assert _standard_error(fx.GATED_VIOLATIONS) == pytest.approx(fx.GATED_SE, abs=TOLERANCE)
         assert _score(fx.GATED_VIOLATIONS, 1.0) == pytest.approx(fx.GATED_SCORE_LAMBDA_1, abs=TOLERANCE)
         assert _score(fx.GATE_RAW_VIOLATIONS, 1.0) == pytest.approx(fx.UNGATED_SCORE_LAMBDA_1, abs=TOLERANCE)
         assert fx.GATED_SCORE_LAMBDA_1 < fx.GATED_MEAN
+        assert fx.GATED_SCORE_LAMBDA_1 < fx.SURVIVING_SCORE_LAMBDA_1
 
     def test_at_one_evaluation_the_penalty_is_zero_for_every_lambda(self):
         assert _standard_error(fx.SINGLE_VIOLATIONS) == pytest.approx(fx.SINGLE_SE, abs=TOLERANCE)

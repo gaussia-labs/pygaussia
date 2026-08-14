@@ -27,14 +27,28 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+from gaussia.schemas.roastme import EngineDeclaration
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from gaussia.core.hook_verifier import HookVerifier
     from gaussia.core.probe_engine import ProbeEngine
     from gaussia.schemas.roastme import Catalogue, Document, Probe
 
 MERGED_ENGINES = "merged_engines"
 """Where a merged probe records every engine that produced it. Read, never branched on."""
+
+PAPER = "gaussia-labs/papers#20"
+"""The version of the paper ``IN_PAPER_TABLES`` was read from, merged to ``main``."""
+
+IN_PAPER_TABLES = ("retrieval", "graph", "enumeration")
+"""The engines the paper's absence/breadth trade-off tables characterise.
+
+Multi-hop is deliberately absent: the paper characterises it by example and puts no number on it,
+so a run composing it produced a figure the tables do not cover. A fact about the paper rather than
+about any run, which is why it is a constant here and pinned to ``PAPER``.
+"""
 
 
 class ProbeLibrary:
@@ -45,10 +59,34 @@ class ProbeLibrary:
             enumeration engine joins them only when the user has an enumerator to inject
             (spec D14). Passed in rather than discovered, so composing them never costs an
             extra nobody installed.
+        verifier: Confirms each hook's ``doc`` label against the corpus, independently of the
+            engine that produced it. Here rather than in an engine because that is what makes
+            two engines' absence accuracy comparable — an engine checking its own labels would
+            measure its confidence instead. ``None`` leaves every ``verified`` at ``None``,
+            which continues to mean nobody checked.
     """
 
-    def __init__(self, engines: Sequence[ProbeEngine]) -> None:
+    def __init__(self, engines: Sequence[ProbeEngine], verifier: HookVerifier | None = None) -> None:
         self._engines = list(engines)
+        self._verifier = verifier
+
+    @property
+    def declaration(self) -> EngineDeclaration:
+        """Which engines this library composes, and which of them the paper put a number on.
+
+        Here because this is the only object that knows the composed set: an engine that ran and
+        produced no probe is invisible in the probe set, and that is exactly the case FR-025 makes
+        interesting. It stays on this side of the Profiler/Exploiter boundary — the weakness
+        profile is the only artifact that crosses it (FR-013), and an engine name is precisely the
+        kind of identifier that may not.
+        """
+        ran = [engine.name for engine in self._engines]
+        return EngineDeclaration(
+            ran=ran,
+            in_paper_tables=[name for name in ran if name in IN_PAPER_TABLES],
+            outside_paper_tables=[name for name in ran if name not in IN_PAPER_TABLES],
+            paper=PAPER,
+        )
 
     def generate(self, documents: Sequence[Document], catalogue: Catalogue) -> list[Probe]:
         """The merged probe set.
@@ -73,9 +111,22 @@ class ProbeLibrary:
             contributors[probe.id].append(probe.engine or name)
 
         probes = [_with_provenance(probe, contributors[probe.id]) for probe in merged.values()]
-        if documents:
-            return probes
-        return [probe.model_copy(update={"hook": None}) for probe in probes]
+        if not documents:
+            return [probe.model_copy(update={"hook": None}) for probe in probes]
+        return [self._verified(probe, list(documents)) for probe in probes]
+
+    def _verified(self, probe: Probe, documents: list[Document]) -> Probe:
+        """The probe with its label's verdict recorded, and nothing else changed.
+
+        The probe survives whatever the verdict is. A failed label means this probe cannot support the
+        claim it was built to make, which is something the human reviewing the probe set has to see —
+        dropping it here would shrink the denominator without saying so, and a smaller denominator that
+        announces nothing is the failure mode this whole check exists to catch.
+        """
+        if self._verifier is None or probe.hook is None:
+            return probe
+        held = self._verifier.verify(probe.hook, documents)
+        return probe.model_copy(update={"hook": probe.hook.model_copy(update={"verified": held})})
 
     @staticmethod
     def _reachable(engine: ProbeEngine, documents: Sequence[Document]) -> list[Document]:

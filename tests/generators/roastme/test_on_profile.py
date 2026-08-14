@@ -115,8 +115,19 @@ class TestWhatReachesTheModel:
 
 class TestTheScale:
     def test_it_declares_the_kappa_it_recommends(self):
-        """FR-041: the scale is the filter's own, so the threshold travels with it."""
-        assert JudgeOnProfileFilter.recommended_threshold == RECOMMENDED_KAPPA
+        """FR-041: the scale is the filter's own, so the threshold travels with it.
+
+        Read on the instance, which is where every shipped component declares it. This one's
+        recommendation is a constant and could have sat on the class; it deliberately does not, so a
+        caller never has to know which components answer from a class and which only from an object.
+        """
+        assert JudgeOnProfileFilter(StubScoringModel()).recommended_threshold == RECOMMENDED_KAPPA
+
+    def test_the_class_itself_declares_nothing(self):
+        """On this interface ``None`` is not "unknown", it is the declaration that the user must
+        supply ``kappa`` — so it must not be reachable as an answer *about the component*. Reading
+        the class gives the inherited default and nothing else."""
+        assert JudgeOnProfileFilter.recommended_threshold is None
 
     @pytest.mark.parametrize(("answered", "expected"), [(1.2, 1.0), (-0.5, 0.0), (0.7, 0.7)])
     def test_an_answer_off_the_scale_is_clamped_rather_than_rejected(self, answered, expected):

@@ -216,8 +216,13 @@ class StubQueryGenerator(QueryGenerator):
     having left this collaborator unmodified (paper invariant 5).
     """
 
-    def __init__(self, queries: dict[tuple[str, ...], list[str]]):
+    def __init__(
+        self,
+        queries: dict[tuple[str, ...], list[str]],
+        meta: dict[str, dict[str, Any]] | None = None,
+    ):
         self.queries = queries
+        self.meta = meta or {}
         self.calls: list[tuple[tuple[str, ...], int]] = []
 
     def generate(self, category: Category, count: int) -> list[str]:
@@ -225,6 +230,14 @@ class StubQueryGenerator(QueryGenerator):
         self.calls.append((key, count))
         pool = self.queries[key]
         return list(pool[:count])
+
+    def meta_for(self, query: str) -> dict[str, Any] | None:
+        """Whatever the test prescribed for this query, and nothing where it prescribed none.
+
+        Empty by default so every existing fixture keeps the base behaviour, which is also what a
+        generator that plants no premise should do.
+        """
+        return self.meta.get(query)
 
 
 class RecommendingOnProfileFilter(OnProfileFilter):
@@ -255,13 +268,23 @@ class RecommendingRealismEstimator(RealismEstimator):
 
     recommended_threshold: float | None = 0.3
 
-    def __init__(self, gaps: dict[tuple[str, ...], float]):
+    def __init__(self, gaps: dict[tuple[str, ...], float], default: float | None = None):
         self.gaps = gaps
+        self.default = default
         self.calls: list[tuple[str, ...]] = []
 
     def estimate(self, queries: list[str]) -> float:
+        """The prescribed gap for this exact sample.
+
+        ``default`` is for tests whose subject is the ``kappa`` gate rather than ``delta``: the
+        sample they are handed depends on what the gate stopped, so prescribing it per key would
+        make the fixture restate the very thing under test. Left unset, an unprescribed sample
+        still raises, which is what keeps the ``delta`` fixtures honest.
+        """
         key = tuple(queries)
         self.calls.append(key)
+        if self.default is not None:
+            return self.gaps.get(key, self.default)
         return self.gaps[key]
 
 

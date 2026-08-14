@@ -68,6 +68,18 @@ class GraderConfig(BaseModel):
     reasoning_budget: int = Field(ge=1)
     fallback_samples: int = Field(ge=1)
     top_logprobs: int = Field(ge=1)
+    require_logprobs: bool = False
+    """Refuse to grade rather than fall back to sampling over ``fallback_samples``.
+
+    Off by default, because degrading is what FR-008 and spec D13 ask for: raising would make the
+    violation-rate denominator depend on whether the provider happened to expose logprobs.
+
+    On for a run whose number is going to be compared against another. The two paths are two
+    estimators — one reads a continuous probability out of the verdict token's distribution in a
+    single call, the other votes across ``k`` samples and can only land on multiples of ``1/k`` —
+    so a mean taken across both is a mean over two different measurements. Where that matters more
+    than having a number at all, this is how a user says so; there was previously no way to.
+    """
 
 
 class ExploiterConfig(BaseModel):
@@ -89,6 +101,32 @@ class ExploiterConfig(BaseModel):
     pool_size: int = Field(default=20, ge=1)
     kappa: float | None = None
     delta: float | None = Field(default=None, ge=0.0)
+
+
+class EngineDeclaration(BaseModel):
+    """Which probe engines ran, and which of them the paper's trade-off tables characterise.
+
+    Both halves are facts the framework holds and the user does not: which engines were composed
+    is the library's own execution, and what the paper measured is gaussia's own paper. Neither is
+    a judgement about a domain, so neither is the user's to supply — unlike ``tau``, the contract
+    or the catalogue, which gaussia ships none of on purpose.
+
+    It exists because the default composition produced no published number. Retrieval, graph and
+    multi-hop run by default; the paper's tables cover retrieval, graph and enumeration. The
+    default set is therefore one nothing published covers, and it cannot simply be corrected —
+    enumeration needs an ``EntityEnumerator``, which is domain knowledge gaussia ships none of by
+    decision D14, so the evaluated set is unreachable out of the box by construction. The fix is to
+    make the gap visible rather than to close it.
+
+    ``in_paper_tables`` is a fact about the paper and not about the run, so it does not drift with
+    a run. It can go stale if the paper changes, which is why ``paper`` records the version it was
+    read from. Recorded for reading, never branched on.
+    """
+
+    ran: list[str]
+    in_paper_tables: list[str]
+    outside_paper_tables: list[str]
+    paper: str
 
 
 class Document(BaseModel):
@@ -123,6 +161,14 @@ class StrategySpec(BaseModel):
     about a strategy allowed to cross to the Exploiter (FR-013). An empty one leaves nothing
     sayable, so it is rejected here rather than at the point of profiling — a catalogue that
     validates and then fails mid-run is the failure mode FR-025 exists to prevent.
+
+    ``doc`` is the **expected** grounding label and nothing reads it, which is the design rather
+    than an omission: invariant 4 has the real label derived by the generating engine from its own
+    view of the boundary, never from a declaration and never from the enumeration used for scoring.
+    So the two can disagree, and where they do it is the transformation that did not do what the
+    catalogue says it does — ``flip_value`` returns an entity carrying no digits unchanged, and the
+    engine then labels it documented, quietly turning that strategy into a second control. Worth
+    knowing when writing one; ``KnowledgeHook.doc`` is the label a run actually used.
     """
 
     id: str = Field(min_length=1)
@@ -235,6 +281,18 @@ class GradedOutcome(BaseModel):
     violation: float | None = Field(ge=0.0, le=1.0)
     evidence_available: bool = False
     scoreable: bool = True
+    ungraded_reason: str | None = None
+    """Why this exchange carries no violation, and ``None`` when it carries one.
+
+    ``violation is None`` says a number is missing; it does not say whether the assistant never
+    answered or the judge never ruled. Those call for opposite responses — one is the assistant's
+    transport, the other is the grading model's — and the run used to discard the distinction along
+    with ``TargetResponse.failure_reason``, which nothing read.
+
+    It matters most when the count is small and nobody looks twice. Two ungraded out of sixty reads
+    like noise either way; that both were the judge, on consecutive probes, is what says the run
+    should be repeated rather than reported.
+    """
 
 
 class WeaknessEntry(BaseModel):
@@ -266,9 +324,27 @@ class ProfilerResult(BaseModel):
 
     profile: AssistantProfile
     outcomes: list[GradedOutcome]
+    probes: list[Probe] = Field(default_factory=list)
+    """The probes the run sent, so the result stands on its own.
+
+    ``GradedOutcome`` names a ``probe_id`` and carries no query, and the probes used to live only in
+    whatever variable the caller happened to keep. So a serialised result could not be turned back
+    into a dataset — ``to_dataset`` needs both halves — and reading one meant holding the probe set
+    alongside it and trusting that the two came from the same run.
+    """
+
     overall_rate: float = Field(ge=0.0, le=1.0)
     n_scoreable: int = Field(ge=0)
     n_ungraded: int = Field(ge=0)
+    grading_methods: dict[str, int] = Field(default_factory=dict)
+    """How many grades each judging method produced, so ``overall_rate`` says what estimated it.
+
+    A grader may reach a verdict more than one way — the shipped one reads the verdict token's
+    distribution and votes across samples when it cannot — and those are two estimators, not two
+    implementations of one. A rate averaged over both is an average over two measurements, and per
+    grade the fact was already recorded and never aggregated, so a run that degraded throughout
+    looked exactly like a run that did not.
+    """
 
 
 class Category(BaseModel):
@@ -297,8 +373,22 @@ class CategoryEvaluation(BaseModel):
     responses: list[str]
     violations: list[float]
     on_profile: list[bool]
+    """Whether each recorded query was asked. Invariantly ``True`` since a query the ``kappa`` gate
+    stopped is regenerated or discarded rather than scored, so no unasked query reaches this list.
+    Kept as the guard readers already apply, because a search is substitutable and nothing but this
+    field says a query was sent."""
+
     realism_gap: float
     score: float
+    passed: bool
+    """Whether ``score`` reached the ``tau`` in force, decided once where ``tau`` is known.
+
+    Reconstructable from the score and the ``tau`` recorded alongside the components, and
+    previously never stated — so every consumer reimplemented the comparison, and one of them
+    eventually writes ``>`` where the method says ``>=``. The kind of defect that produces a
+    plausible number rather than an error.
+    """
+
     n: int = Field(ge=0)
     rationale: list[list[PrincipleGrade]]
     dropped_attributes: list[str]
@@ -318,6 +408,46 @@ class CategoryEvaluation(BaseModel):
         return self
 
 
+class RecordProvenance(BaseModel):
+    """Where a Roast Dataset record came from, so a number can be walked back to what produced it.
+
+    Every field is optional because the two halves of a run know different things. A record the
+    Profiler wrote came from a probe and names it; a record the Exploiter surfaced was a query a
+    model invented, with no probe behind it, and names the category that proposed it instead.
+
+    It travels as one object rather than as loose optional fields on the record so that "this came
+    from nowhere" stays sayable: an Exploiter record carries a ``category`` and no ``probe_id``, and
+    that shape is the fact rather than an accident of which columns happened to be null.
+    """
+
+    probe_id: str | None = None
+    """The probe this record's query came from. ``None`` for a query the search invented."""
+
+    strategy: str | None = None
+    """The interaction pattern that asked for the probe. The user's own identifier, so it reaches a
+    record but never the profile — FR-013 forbids it crossing to the Exploiter, not existing."""
+
+    engine: str | None = None
+    """Which engine produced the probe, so the absence/breadth trade-off stays measurable after the
+    run and not only inside the probe set (FR-022)."""
+
+    hook: KnowledgeHook | None = None
+    """The probe's provenance against the knowledge base, carried whole.
+
+    It is what finally gives ``absence_reliable`` and ``verified`` a reader. Both were written and
+    neither was ever looked at again: an unreliable absence label was indistinguishable from a
+    confirmed one by the time anybody saw a violation rate, which is the distinction FR-023 exists
+    to preserve.
+    """
+
+    category: list[str] | None = None
+    """The attributes of the category a surfaced query belonged to.
+
+    ``queries_over_threshold`` flattens every category into one list, so without this a surfaced
+    record has to be matched back to its category by the text of its query.
+    """
+
+
 class RoastDatasetRecord(BaseModel):
     """One record of the Roast Dataset: the last shape Roast Me owns before the output boundary.
 
@@ -333,6 +463,10 @@ class RoastDatasetRecord(BaseModel):
     rationale: list[PrincipleGrade]
     evidence: str | None
     evidence_available: bool = False
+    provenance: RecordProvenance = Field(default_factory=RecordProvenance)
+    """What produced this record. A record used to carry a query and a score and nothing that said
+    where either came from, so reading a violation meant matching its text back against the probe
+    set by hand."""
 
 
 class FailureReport(BaseModel):
@@ -349,6 +483,10 @@ class FailureReport(BaseModel):
     categories: list[CategoryEvaluation]
     queries_over_threshold: list[RoastDatasetRecord]
     components: dict[str, str]
+    grading_methods: dict[str, int] = Field(default_factory=dict)
+    """How many grades each judging method produced across the search. Same reason as on
+    ``ProfilerResult``: the two paths of the shipped grader are two estimators, and every ``S(c)``
+    here is a mean over whichever ones answered."""
 
 
 class RoastBatch(Batch):
@@ -370,6 +508,7 @@ __all__ = [
     "Category",
     "CategoryEvaluation",
     "Document",
+    "EngineDeclaration",
     "ExploiterConfig",
     "FailureReport",
     "GradedOutcome",

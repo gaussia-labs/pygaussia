@@ -16,6 +16,13 @@ Whether logprobs are usable at all is a property of the serving provider, not of
 it is probed at runtime and survived when absent: the grade still exists and says it came from
 sampling (FR-008, SC-009, spec D13). Raising instead would make the violation-rate denominator
 depend on provider behaviour.
+
+That probe happens **once per grader**, on the first grade, and the answer holds for the run.
+The two paths are two estimators rather than two implementations of one — a continuous
+probability read off the verdict token's distribution against a vote over ``k`` samples, which
+can land only on multiples of ``1/k`` — so grades from both in one rate would be a mean over two
+different measurements. After the choice is made, a failure is a failure: it propagates, the
+exchange is recorded ungraded (FR-016), and the estimator does not change.
 """
 
 from __future__ import annotations
@@ -66,6 +73,24 @@ class LogprobGrader(Grader):
             tuple(token.strip() for token in config.positive_tokens),
             tuple(token.strip() for token in config.negative_tokens),
         )
+        self._method: str | None = None
+        """The estimator this grader settled on, or ``None`` before it has.
+
+        **One run, one estimator.** The two paths are not two implementations of one measurement:
+        the logprob path reads a continuous probability out of the verdict token's distribution,
+        while sampling votes across ``k`` draws and can land only on multiples of ``1/k``. A rate
+        averaged over grades from both is a mean over two different measurements, so the choice is
+        made once and never revisited — a mid-run switch would produce exactly that mixture, with
+        the first grades on one estimator and the rest on the other.
+        """
+
+        self._abandoned: str | None = None
+        """Why the logprob path was given up on, once sampling is the settled estimator."""
+
+        self._denied: str | None = None
+        """Why every grade raises without a call: logprobs are unavailable and ``require_logprobs``
+        forbids the alternative. Remembered so the rest of the run does not pay for the same
+        confirmed-impossible request, while still refusing to produce a grade."""
 
     def grade(
         self,
@@ -74,11 +99,80 @@ class LogprobGrader(Grader):
         principle: Principle,
         meta: dict[str, Any] | None = None,
     ) -> PrincipleGrade:
+        if self._denied is not None:
+            message = f"require_logprobs is set and this provider has no usable logprobs: {self._denied}"
+            raise LogprobsNotSupportedError(message)
         messages = self._messages(query, response, principle, meta)
-        try:
+        if self._method == SAMPLING_FALLBACK_METHOD:
+            return self._from_sampling(messages, principle, str(self._abandoned))
+        if self._method == LOGPROB_METHOD:
+            # Settled. A failure here is about this call or this response, never a reason to change
+            # estimator, so it propagates and the exchange is recorded ungraded (FR-016).
             return self._from_logprobs(messages, principle)
-        except (LogprobsNotSupportedError, LogprobsExtractionError):
-            return self._from_sampling(messages, principle)
+        return self._settle(messages, principle)
+
+    def _settle(self, messages: list[tuple[str, str]], principle: Principle) -> PrincipleGrade:
+        """Choose the estimator for the whole run, on the first grade, and grade with it.
+
+        ``_ask_for_logprobs`` reaches its except through any failure at all: a provider that rejects
+        the parameter, a rate limit, a timeout, an expired key. Its conclusion — "this model exposes
+        no usable logprobs" — is right for the first and wrong for the rest, and the exception's type
+        and text belong to whichever client the user handed in, so there is nothing there to tell
+        them apart. So the cases are separated rather than guessed:
+
+        * **logprobs arrive** — settled, whatever this particular response then turns out to say;
+        * **logprobs arrive carrying no verdict** — also settled, and for the stronger reason: the
+          call itself worked, so the provider supports the feature. Only this response is unusable,
+          and it becomes an ungraded exchange rather than a sampled one;
+        * **the request fails but a plain call answers** — the model is reachable and only the
+          logprob request was refused, which is the provider property FR-008 and spec D13 degrade
+          for. Settled on sampling;
+        * **the plain call fails too** — nothing is established. The model is simply not reachable
+          right now, so no estimator is chosen, this exchange is ungraded, and the next grade
+          decides again. This is the case a retrying grader wrapped around this one exists for.
+
+        The plain call is not spent on the question either: it runs at the sampling temperature, so
+        when it answers it *is* the first of the ``fallback_samples`` votes.
+
+        **A transient failure can still settle this the wrong way**, and no amount of local evidence
+        fixes that — a rate-limit window wide enough to fail the logprob request is usually wide
+        enough to fail whatever confirms it. ``require_logprobs`` is the answer for a run whose
+        number will be compared against another: it removes the branch entirely, so a bad moment
+        costs an ungraded exchange a retry can recover instead of the estimator for the whole run.
+        """
+        try:
+            grade = self._from_logprobs(messages, principle)
+        except LogprobsExtractionError:
+            self._method = LOGPROB_METHOD
+            raise
+        except LogprobsNotSupportedError as abandoned:
+            return self._settle_on_sampling(messages, principle, abandoned)
+        self._method = LOGPROB_METHOD
+        return grade
+
+    def _settle_on_sampling(
+        self,
+        messages: list[tuple[str, str]],
+        principle: Principle,
+        abandoned: LogprobsNotSupportedError,
+    ) -> PrincipleGrade:
+        """Confirm the model is reachable, then make sampling the estimator for the run."""
+        bound = self._model.bind(temperature=_SAMPLING_TEMPERATURE)
+        try:
+            first = str(bound.invoke(messages).content)
+        except Exception as unreachable:
+            message = f"the judge model is unreachable, so the logprob path says nothing about it: {_why(abandoned)}"
+            raise LogprobsNotSupportedError(message) from unreachable
+        if self._config.require_logprobs:
+            # Established rather than suspected: the provider answers and refuses logprobs. So this
+            # is the case the flag is about, and it is remembered — the run keeps refusing to grade
+            # rather than quietly measuring with the other instrument.
+            self._denied = _why(abandoned)
+            message = f"require_logprobs is set and this provider has no usable logprobs: {self._denied}"
+            raise LogprobsNotSupportedError(message) from abandoned
+        self._method = SAMPLING_FALLBACK_METHOD
+        self._abandoned = _why(abandoned)
+        return self._from_sampling(messages, principle, self._abandoned, first=first)
 
     def _messages(
         self,
@@ -144,9 +238,28 @@ class LogprobGrader(Grader):
             raise LogprobsExtractionError(message)
         return _logistic(positive - negative)
 
-    def _from_sampling(self, messages: list[tuple[str, str]], principle: Principle) -> PrincipleGrade:
+    def _from_sampling(
+        self,
+        messages: list[tuple[str, str]],
+        principle: Principle,
+        abandoned: str,
+        first: str | None = None,
+    ) -> PrincipleGrade:
+        """Vote across samples, recording **why** the logprob path was given up on.
+
+        Only one thing reaches here now, and it reaches here for every grade of the run: a provider
+        established as exposing no usable logprobs, which is what FR-008 and spec D13 degrade for.
+        The cause still travels into the evidence, because "no logprobs" is a conclusion drawn from
+        an exception whose type and text belong to whichever client the user handed in, and a reader
+        checking whether that conclusion was sound needs the chain that produced it.
+
+        ``grading_methods`` on the result is where the run says which estimator it used. It counts
+        rather than flags because the number it has to survive is not "did it degrade" but "how many
+        grades came from each", and with one estimator per run that count is a single entry.
+        """
         bound = self._model.bind(temperature=_SAMPLING_TEMPERATURE)
-        answers = [str(bound.invoke(messages).content) for _ in range(self._config.fallback_samples)]
+        answers = [] if first is None else [first]
+        answers += [str(bound.invoke(messages).content) for _ in range(self._config.fallback_samples - len(answers))]
         votes = [self._answer_verdicts[word] for word in map(_final_word, answers) if word in self._answer_verdicts]
         if not votes:
             message = f"none of {len(answers)} samples parsed to one of the configured verdict surface forms"
@@ -157,8 +270,24 @@ class LogprobGrader(Grader):
             grader=type(self).__name__,
             method=SAMPLING_FALLBACK_METHOD,
             model=_model_identity(self._model),
-            evidence={"samples": answers, "votes": votes},
+            evidence={"samples": answers, "votes": votes, "abandoned": abandoned},
         )
+
+
+def _why(abandoned: Exception) -> str:
+    """The chain that ended the logprob path, innermost cause included.
+
+    The outer message says the model exposes no usable logprobs, which is the *conclusion*
+    ``_ask_for_logprobs`` draws from any failure at all. The cause underneath it is the part that
+    says whether that conclusion was right: a rejected parameter and a rate limit reach that except
+    the same way, and only one of them is a property of the provider.
+    """
+    chain = [f"{type(abandoned).__name__}: {abandoned}"]
+    cause = abandoned.__cause__
+    while cause is not None:
+        chain.append(f"{type(cause).__name__}: {cause}")
+        cause = cause.__cause__
+    return " <- ".join(chain)
 
 
 def _logistic(log_odds: float) -> float:

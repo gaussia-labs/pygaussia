@@ -124,7 +124,25 @@ class AttributeIterationSearch(CategorySearch):
 
 
 def _grounded(profile: AssistantProfile, eta: float) -> list[_Attribute]:
-    """The attributes the profile justifies: weaknesses at or above ``eta``, and retained hooks."""
+    """The attributes the profile justifies: weaknesses at or above ``eta``, and retained hooks.
+
+    Raises:
+        ValueError: Nothing is grounded. This search proposes every category out of these
+            attributes, so with none it evaluates nothing and calls the assistant **zero times** —
+            and what comes back is a ``FailureReport`` with empty ``categories``, empty
+            ``queries_over_threshold`` and a fully populated ``components``. Nothing in it says the
+            threshold was the problem, so it reads exactly like an assistant that held.
+
+            It is the cheapest wrong answer the subsystem can produce: no cost, no waiting, and it
+            confirms whatever the reader hoped. FR-035 rules that reading out, and here the rates
+            are already known, before a single query is generated — so it is decidable rather than
+            guessed. Raised rather than warned, because a warning has to be read to matter and this
+            is precisely the failure that gets skipped past on the way to the number.
+
+            The check lives here and not on the Exploiter because ``eta`` is this search's
+            parameter: ``PolicyGradientSearch`` never reads it, and a search of the user's own is
+            free to ground itself some other way.
+    """
     grounded = [
         _Attribute(
             entry.descriptor,
@@ -145,6 +163,14 @@ def _grounded(profile: AssistantProfile, eta: float) -> list[_Attribute]:
     unique: dict[str, _Attribute] = {}
     for attribute in grounded:
         unique.setdefault(attribute.text, attribute)
+    if not unique:
+        rates = [entry.rate for entry in profile.weaknesses]
+        highest = f"the highest it carries is {max(rates):.4f}" if rates else "it carries no weaknesses at all"
+        message = (
+            f"eta={eta} admits no weakness of this profile and it retains no hooks, so this search "
+            f"would propose no category and never call the assistant; {highest}"
+        )
+        raise ValueError(message)
     return list(unique.values())
 
 

@@ -23,6 +23,13 @@ class RealismEstimator(ABC):
     explicitly: an estimator that recommends nothing and is used with nothing supplied
     fails at construction, naming the component and the parameter. Resolution happens once,
     when the Exploiter is constructed, and a user-supplied value always wins.
+
+    **Read it on the instance.** For the shipped estimator it cannot be otherwise: its scale is a
+    mean cosine distance, and what counts as far depends on the prior pool, so the recommendation
+    does not exist until the pool has been encoded. The value here is what an implementation
+    recommending nothing inherits — and ``None`` is not "unknown", it is the declaration that the
+    user must supply ``delta``, which is why reading it off a class would answer the opposite of
+    what the component actually recommends.
     """
 
     @abstractmethod

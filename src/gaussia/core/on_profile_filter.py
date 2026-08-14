@@ -31,6 +31,12 @@ class OnProfileFilter(ABC):
     construction, naming the component and the parameter. No configured combination may
     fall back to a value calibrated for a different component's scale. Resolution happens
     once, when the Exploiter is constructed, and a user-supplied value always wins.
+
+    **Read it on the instance.** The value here is what an implementation recommending nothing
+    inherits; one that recommends something assigns it in ``__init__``. Both shipped components do,
+    including the one whose recommendation is a constant and could have sat on the class — because
+    then reading a class would answer for one component and stay ``None`` for the other, and
+    ``None`` is not "unknown here", it is the declaration that the user must supply the value.
     """
 
     @abstractmethod

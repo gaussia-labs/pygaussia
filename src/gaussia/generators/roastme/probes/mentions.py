@@ -69,8 +69,21 @@ class CompoundTokenExtractor(MentionExtractor):
 
     Recognises ``POLICY-1``, ``FORM-7``, ``Articulo_25``. Does **not** recognise ``Cuenta Digital
     Libre`` or ``insulin``, and on scraped prose it recognises the wrong things: ``809-544-5555``,
-    ``BP_TARIFAS_2026``, ``9-footer``. Check what it returns against your own corpus before trusting
-    a run built on it — an unexpected boundary is the failure this class cannot report for you.
+    ``BP_TARIFAS_2026``, ``9-footer``.
+
+    **Measured, so the warning is not abstract.** Over a corpus of Spanish banking product pages it
+    returns **208 mentions that are not entities** — phone numbers, PDF filenames, footer anchors.
+    None of them fails: each becomes the boundary for a strategy, each yields a probe, the assistant
+    is asked about a filename, and the run completes with a violation rate over questions nobody
+    would ask. The engine cannot tell a junk boundary from a legitimate one, so nothing raises.
+
+    Check what it returns against your own corpus before trusting a run built on it::
+
+        print(sorted(CompoundTokenExtractor().extract(documents))[:30])
+
+    ``EnumerationProbeEngine`` is the way out for a corpus of ordinary words: it takes the user's own
+    enumerator instead of reading mentions off the surface, and it is the only engine that can claim
+    absence with any ground under it.
     """
 
     def extract(self, documents: Sequence[Document]) -> frozenset[str]:

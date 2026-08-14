@@ -32,7 +32,7 @@ from gaussia.generators.roastme.probes.library import ProbeLibrary
 from gaussia.generators.roastme.probes.mentions import CompoundTokenExtractor, MentionExtractor
 from gaussia.generators.roastme.probes.retrieval import RetrievalProbeEngine
 from gaussia.generators.roastme.probes.transforms import TRANSFORMS, available
-from gaussia.schemas.roastme import Document
+from gaussia.schemas.roastme import Catalogue, Document, PluginSpec, StrategySpec
 from tests.fixtures.roastme import expected as fx
 from tests.fixtures.roastme.doubles import StubEntityEnumerator, StubProbeEngine
 
@@ -334,3 +334,125 @@ class TestATransformTheUserSupplies:
     def test_two_supplied_keys_colliding_with_each_other_are_refused_too(self):
         with pytest.raises(ValueError, match="collides"):
             available([_PlausibleFake(), _PlausibleFake()])
+
+
+class TestAnEngineOnlyCoversTheKindsItDeclared:
+    """`entity_kinds` was read by catalogue validation and by nothing at generation, so an engine
+    produced probes for kinds it had declared it did not handle.
+
+    Of the four shipped engines only the enumeration one passes `kind` through: graph and multi-hop
+    ignore the argument entirely. On a catalogue with two entity kinds they hand the same boundary
+    to both, so a strategy over one kind builds premises out of the other's entities.
+    """
+
+    def _catalogue(self):
+        return Catalogue(
+            plugins=[PluginSpec(id="p", name="p", description="d", principle=fx.PRINCIPLE_A)],
+            strategies=[
+                StrategySpec(
+                    id=f"s-{kind}",
+                    name=kind,
+                    description="a premise",
+                    plugin="p",
+                    entity_kind=kind,
+                    transform="keep_real",
+                    doc=1,
+                    phrasing_hint="hint",
+                )
+                for kind in ("product", "figure")
+            ],
+        )
+
+    def _engine(self, kinds):
+        return EnumerationProbeEngine(
+            StubEntityEnumerator({"product": frozenset({"one"}), "figure": frozenset({"two"})}),
+            kinds,
+        )
+
+    def test_a_declared_kind_is_the_only_one_it_produces(self):
+        documents = [Document(id="d", content="text", structured=True)]
+
+        probes = ProbeLibrary([self._engine(["product"])]).generate(documents, self._catalogue())
+
+        assert {probe.hook.kind for probe in probes} == {"product"}
+
+    def test_declaring_nothing_keeps_the_old_reach(self):
+        """Empty is the default, not a claim to handle none: a user who named no kind asked for no
+        filtering, and a catalogue that worked before still works."""
+        documents = [Document(id="d", content="text", structured=True)]
+
+        probes = ProbeLibrary([self._engine([])]).generate(documents, self._catalogue())
+
+        assert {probe.hook.kind for probe in probes} == {"product", "figure"}
+
+    def test_the_declaration_holds_with_no_knowledge_base_too(self):
+        """FR-025 was applied only where documents exist, so the same engine covered different
+        strategies depending on whether a corpus happened to be there — this one yielded
+        `['s-product']` with documents and `['s-figure', 's-product']` without.
+
+        A hookless probe carries no kind to assert on, so the strategy it came from is what says
+        the filter ran. An engine's declaration is a claim about what it is competent for, and
+        nothing about that claim depends on a corpus being present to read.
+        """
+        probes = ProbeLibrary([self._engine(["product"])]).generate([], self._catalogue())
+
+        assert all(probe.hook is None for probe in probes)
+        assert sorted(probe.strategy for probe in probes) == ["s-product"]
+
+    def test_declaring_nothing_keeps_the_old_reach_with_no_knowledge_base(self):
+        probes = ProbeLibrary([self._engine([])]).generate([], self._catalogue())
+
+        assert sorted(probe.strategy for probe in probes) == ["s-figure", "s-product"]
+
+
+class TestEngineDeclaration:
+    """Which engines ran, and which of them the paper put a number on.
+
+    Both halves are facts the framework holds and the user does not — the composed set is the
+    library's own execution, and what the paper measured is gaussia's own paper. Neither is a
+    judgement about a domain, so unlike `tau`, the contract or the catalogue, neither is the
+    user's to supply.
+
+    It exists because the default composition produced no published number: retrieval, graph and
+    multi-hop run by default, and the paper's trade-off tables cover retrieval, graph and
+    enumeration. The gap cannot be closed by changing the default — enumeration needs an
+    `EntityEnumerator`, which gaussia ships none of by decision D14 — so it is made visible.
+    """
+
+    def test_the_default_three_produce_a_set_the_paper_does_not_cover(self):
+        library = ProbeLibrary(
+            [RetrievalProbeEngine(embedder=_StubEmbedder()), GraphProbeEngine(), MultiHopProbeEngine()]
+        )
+
+        declaration = library.declaration
+
+        assert declaration.ran == ["retrieval", "graph", "multi-hop"]
+        assert declaration.in_paper_tables == ["retrieval", "graph"]
+        assert declaration.outside_paper_tables == ["multi-hop"]
+
+    def test_the_evaluated_set_is_reachable_only_with_an_enumerator(self):
+        """Which is what makes it unreachable out of the box rather than merely unset."""
+        enumerator = StubEntityEnumerator({"product": frozenset({"one"})})
+        library = ProbeLibrary(
+            [RetrievalProbeEngine(embedder=_StubEmbedder()), GraphProbeEngine(), EnumerationProbeEngine(enumerator)]
+        )
+
+        declaration = library.declaration
+
+        assert declaration.outside_paper_tables == []
+        assert declaration.in_paper_tables == declaration.ran
+
+    def test_an_engine_that_produced_no_probe_still_says_it_ran(self):
+        """The case the probe set cannot show, and the one FR-025 makes interesting: an engine
+        reaching no document is invisible in the output it did not produce."""
+        silent = StubProbeEngine(engine_name="retrieval", kinds=frozenset({fx.ENTITY_KIND}), probes=[])
+
+        library = ProbeLibrary([silent])
+
+        assert library.generate([], fx.catalogue(TRANSFORM_KEY)) == []
+        assert library.declaration.ran == ["retrieval"]
+
+    def test_the_paper_reference_travels_with_the_claim(self):
+        """`in_paper_tables` is a fact about the paper, not about the run, so it can go stale if
+        the paper changes — and that is exactly why the version it was read from is recorded."""
+        assert ProbeLibrary([GraphProbeEngine()]).declaration.paper == "gaussia-labs/papers#20"

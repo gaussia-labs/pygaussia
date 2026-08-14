@@ -179,3 +179,29 @@ class TestWhatReachesTheModel:
 
         for entry in PROVENANCE:
             assert entry not in prompt
+
+
+class TestTheDomainAndTheLanguage:
+    """A profile carries no identifiers (FR-013), so the prose of the attributes was the only thing
+    telling the model what the assistant was for. Against a Dominican bank the shipped prompt wrote
+    *"What is the price of the new Airpods Xpro?"*: the assistant answered correctly, `v` was zero,
+    and the report said nothing was found without ever having laid a trap.
+    """
+
+    def _prompt(self, **kwargs) -> str:
+        model = StubQueryModel([["one", "two"]])
+        PromptedQueryGenerator(model=model, **kwargs).generate(_category(), 2)
+        return model.prompts()[0]
+
+    def test_the_domain_reaches_the_prompt(self):
+        assert "a Dominican retail bank" in self._prompt(domain="a Dominican retail bank")
+
+    def test_the_language_reaches_the_prompt(self):
+        assert "Spanish" in self._prompt(language="Spanish")
+
+    def test_neither_appears_when_neither_was_given(self):
+        """Both are optional, so a caller that passes nothing gets exactly the prompt it got before."""
+        prompt = self._prompt()
+
+        assert "assistant you are writing to" not in prompt
+        assert "always" not in prompt

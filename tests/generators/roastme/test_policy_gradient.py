@@ -49,7 +49,10 @@ UNREALISTIC_LOGPROB = -1.5
 ON_PROFILE_SCORES = {"pg-q1": 0.9, "pg-q2": 0.1, "pg-q3": 0.9, "pg-q4": 0.9}
 REALISM_GAPS = {tuple(SURVIVING_QUERIES): 0.2, tuple(UNREALISTIC_QUERIES): 0.5}
 
-EXPECTED_REWARD = fx.GATED_SCORE_LAMBDA_1
+# The reward the surviving candidate earns: the score over the query actually asked. It used to be
+# `fx.GATED_SCORE_LAMBDA_1`, so the policy was being taught away from a category on the strength of
+# a query the gate stopped before anyone sent it.
+EXPECTED_REWARD = fx.SURVIVING_SCORE_LAMBDA_1
 
 
 class StubPolicy(CategoryPolicy):
@@ -131,19 +134,37 @@ def _run(failures: dict[str, str] | None = None, on_profile_scores: dict[str, fl
 
 
 class TestSampling:
-    def test_exactly_the_configured_number_of_queries_is_requested_per_candidate(self):
-        """Returning fewer would shrink the denominator of `S(c)` without saying so."""
+    def test_the_first_request_per_candidate_asks_for_the_configured_number(self):
+        """Returning fewer would shrink the denominator of `S(c)` without saying so.
+
+        Only the first request per candidate asks for the full sample; a follow-up asks for the
+        shortfall the `kappa` gate opened, so asking for the whole sample again would overshoot.
+        """
         _, _, _, query_generator, _ = _run()
+        first_per_candidate = {}
+        for attributes, count in query_generator.calls:
+            first_per_candidate.setdefault(attributes, count)
 
         assert query_generator.calls != []
-        assert all(count == QUERIES_PER_CATEGORY for _, count in query_generator.calls)
+        assert all(count == QUERIES_PER_CATEGORY for count in first_per_candidate.values())
 
-    def test_one_request_per_candidate_per_iteration(self):
+    def test_a_follow_up_request_asks_only_for_the_shortfall(self):
+        """Regeneration replaces the gated query and nothing else: asking for the full sample
+        again would discard survivors already paid for."""
+        _, _, _, query_generator, _ = _run()
+        follow_ups = [count for _, count in query_generator.calls if count < QUERIES_PER_CATEGORY]
+
+        assert follow_ups != []
+        assert all(0 < count < QUERIES_PER_CATEGORY for count in follow_ups)
+
+    def test_one_candidate_is_sampled_per_candidate_per_iteration(self):
+        """The policy is asked once per iteration however many times the gate reopens a sample."""
         _, policy, _, query_generator, _ = _run()
         candidates_per_iteration = 2
+        sampled = {attributes for attributes, _ in query_generator.calls}
 
         assert len(policy.calls) == ITERATIONS
-        assert len(query_generator.calls) == ITERATIONS * candidates_per_iteration
+        assert len(sampled) == candidates_per_iteration
 
 
 class TestGating:
@@ -163,13 +184,14 @@ class TestGating:
         assert sent == {SURVIVING_QUERIES[0]}
         assert evaluations != []
 
-    def test_the_dropped_query_contributes_exactly_zero(self):
-        """FR-030, and the zero has to stay explainable through `on_profile`."""
+    def test_the_dropped_query_contributes_nothing_at_all(self):
+        """FR-030 as amended, live through the policy-gradient search: the gated query is
+        regenerated while attempts remain and then discarded, never scored."""
         evaluations, _, _, _, _ = _run()
         surviving = next(item for item in evaluations if tuple(item.category.attributes) == SURVIVING_ATTRS)
 
-        assert surviving.violations == fx.GATED_VIOLATIONS
-        assert surviving.on_profile == [True, False]
+        assert surviving.violations == fx.SURVIVING_VIOLATIONS
+        assert surviving.on_profile == [True]
 
     def test_a_category_over_delta_is_not_reported(self):
         evaluations, _, _, _, _ = _run()
@@ -245,7 +267,9 @@ class TestTheQueryGeneratorStaysFrozen:
             SURVIVING_ATTRS: SURVIVING_QUERIES,
             UNREALISTIC_ATTRS: UNREALISTIC_QUERIES,
         }
-        assert set(vars(query_generator)) == {"queries", "calls"}
+        # The double's own constructor state, and nothing the search put there. `meta` is what it
+        # answers `meta_for` with; the search neither reads it nor writes it.
+        assert set(vars(query_generator)) == {"queries", "meta", "calls"}
 
     def test_only_the_policy_receives_an_update(self):
         _, _, update_step, query_generator, _ = _run()

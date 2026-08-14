@@ -38,15 +38,28 @@ if TYPE_CHECKING:
 MAXIMUM_VIOLATION = 1.0
 """The upper bound of ``v``, and of every rate the method derives from it by averaging."""
 
-GATED_CONTRIBUTION = 0.0
-"""What a query below ``kappa`` contributes to its category's score (FR-030).
+GATE_ATTEMPTS = 3
+"""How many times a category's gated queries are regenerated before the survivors are final.
 
-Exactly zero, and stated once: the gate itself is ``is_on_profile`` and this is the value the
-query is recorded with, so the rule the evaluator applies is composed from two named pieces rather
-than reimplemented as a comparison and a literal. Nothing computes a violation for such a query —
-it is never sent — so the zero is what stands in for a measurement that was deliberately not
-taken, and ``CategoryEvaluation.on_profile`` is what keeps it explainable.
+The same budget ``PromptedQueryGenerator`` already spends on a generator that replies short, and
+affordable for the same reason the regeneration is: the ``kappa`` gate runs *before* the target
+call, so a gated query costs one generator call and no assistant call. Stated here rather than
+imported from the generator, which pulls a model client this module may not have (FR-037).
 """
+
+
+def enough_on_profile(surviving: int, asked: int) -> bool:
+    """Whether enough queries cleared ``kappa`` for the category to be scored at all.
+
+    The floor is half of what was **asked for**, never half of what was generated: counting
+    generated queries would let a retry move the floor, loosening the criterion exactly when the
+    category is worst.
+
+    A category under the floor leaves the ranking entirely. Scoring it zero would reintroduce one
+    level up the very defect that discarding the gated query removes — a measurement that was
+    never taken entering an average as if it had been.
+    """
+    return surviving * 2 >= asked
 
 
 def violation_score(grades: Sequence[PrincipleGrade], contract: BehavioralContract) -> float:
