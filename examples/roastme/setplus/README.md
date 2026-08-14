@@ -10,21 +10,61 @@ expuestas e invocadas, los bloqueos de aprobación humana y cualquier error de t
 
 ## Precondiciones
 
-- Railway CLI autenticado y enlazado al proyecto `test-chris`.
-- rollout agentic commerce habilitado para `default`, `setplus` y
+- Railway CLI instalado y autenticado con `railway login`.
+- La cuenta autenticada debe tener acceso al proyecto `test-chris`. No es necesario ejecutar
+  `railway link`: `config/evaluation.json` ya declara el project ID, servicio y environment.
+- Rollout agentic commerce habilitado para `default`, `setplus` y
   `Club San Martin de los Andes`.
+- Un archivo local con `actor_subjects` sintéticos, vinculados a jugadores productivos de prueba.
+  No usar teléfonos de usuarios reales: el canal intenta entregar la respuesta por Kapso.
+
+El runner usa las credenciales de Railway CLI para obtener `API_TOKEN` mediante
+`railway variable list`. Después ejecuta `railway ssh` sobre `runtime-ucp` para resolver desde
+Registry/Vault el secreto HMAC y el `phone_number_id` del canal. Ninguno de esos valores debe
+copiarse a `.env`. Si no se puede leer `API_TOKEN` desde Railway, se puede proporcionar
+`ROASTME_TARGET_API_TOKEN` como override local.
+
+## Preparación desde un clon limpio
+
+Desde la raíz de `pygaussia`:
+
+```bash
+railway --version
+railway login
+uv sync --extra roastme --extra roastme-reporting --extra toxicity
+cd examples/roastme/setplus
+cp .env.example .env
+```
+
+Crear fuera del repositorio un archivo de contexto con esta estructura:
+
+```json
+{
+  "actor_subjects": [
+    "<subject-sintetico-vinculado-1>",
+    "<subject-sintetico-vinculado-2>"
+  ]
+}
+```
+
+Configurar su ruta absoluta en `.env`:
+
+```dotenv
+ROASTME_ACTOR_CONTEXT_PATH=/ruta/absoluta/a/actor-context.json
+ROASTME_ACTOR_OFFSET=0
+GROQ_API_KEY=
+```
+
+Cada probe consume un actor distinto. `ROASTME_ACTOR_OFFSET` permite saltar actores cuyas sesiones
+ya fueron utilizadas. Los subjects deben estar vinculados a jugadores de prueba en el backend
+productivo; estar autenticado en Railway no crea ni vincula esos jugadores.
 
 ## Ejecución
 
-Para una corrida live, crear `.env` desde `.env.example` y configurar la ruta absoluta al archivo con
-`actor_subjects`. Cada actor debe estar vinculado a un jugador de prueba productivo. Usar
-`ROASTME_ACTOR_OFFSET` para saltar actores cuyas sesiones ya se utilizaron. Para generar la
-interpretación automática, agregar también `GROQ_API_KEY`. La URL, agente, canal, referencias a
-secretos, modelos y configuración de Railway están en `config/evaluation.json`.
+La URL, agente, canal, referencias a secretos, modelos y configuración de Railway están en
+`config/evaluation.json`. Con Railway autenticado y el contexto de actores configurado, ejecutar:
 
 ```bash
-cp .env.example .env
-uv sync --extra roastme-reporting
 uv run python run_roastme.py
 ```
 
@@ -34,8 +74,9 @@ Para regraduar respuestas existentes sin volver a llamar al agente:
 uv run python run_roastme.py --replay out/<sesión-viva>
 ```
 
-Si `GROQ_API_KEY` está disponible, tanto una corrida live como un replay generan
-`findings.json` y `FINDINGS.md`. Para omitir explícitamente esa etapa:
+`GROQ_API_KEY` sólo es necesaria para la interpretación asistida por modelo. Si está disponible,
+tanto una corrida live como un replay generan `findings.json` y `FINDINGS.md`. Para ejecutar los
+probes sin esa clave:
 
 ```bash
 uv run python run_roastme.py --skip-report
