@@ -35,7 +35,11 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
-    concurrency: release
+    # Serialize per branch so two pushes in quick succession queue instead of
+    # racing each other's `git push` of the version bump.
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: write
@@ -44,6 +48,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # The branch tip, not the SHA that triggered the run: by the time this
+          # job leaves the queue the remote may already carry newer commits, and
+          # releasing from the triggering SHA pushes a non-fast-forward bump.
+          ref: ${{ github.ref_name }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
