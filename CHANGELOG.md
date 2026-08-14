@@ -1,6 +1,94 @@
 # CHANGELOG
 
 
+## v1.1.0-b.7 (2026-08-14)
+
+### Bug Fixes
+
+- **bias**: Report certainty as P(violation), and as absent when there is none
+  ([`ef9922f`](https://github.com/gaussia-labs/pygaussia/commit/ef9922f58a6907766d0ff0e052c641ee6953124e))
+
+`GuardianBias.certainty` was the only graded signal the metric produced and it was not usable as
+  one. `prob_token` defaulted to 1.0 and was only recomputed under `logprobs=True`, which is not the
+  default, so every interaction reported full certainty — including the ones whose verdict was "not
+  biased", and including the null-content branch. Nothing distinguished that placeholder from a
+  confident reading.
+
+The default is gone. A probability is now returned only when one was actually read, and
+  `probability`/`certainty` are `float | None` all the way through to
+  `BiasMetric.GuardianInteraction`. `method` records how it was read, so absence (`sampled-answer`)
+  is legible rather than inferred.
+
+Where a distribution does come back it is now read correctly:
+
+- The last verdict-shaped token is scored, not position 0. Position 0 belongs to a reasoning model's
+  preamble, which is what graders/logprob.py already scans for. - Both OpenAI-compatible logprob
+  shapes are read. chat/completions nests entries under "content"; only the completions shape has
+  `token_logprobs`, so a chat-serving provider used to raise KeyError on the very path the flag was
+  meant to enable. - A provider that accepts `logprobs` and ignores it answers `"logprobs": null`,
+  which is read as no distribution instead of raising TypeError. - The value is conditioned on the
+  verdict — `p if is_biased else 1 - p` — so the number means P(violation) either way, rather than
+  P(whichever token the model emitted).
+
+Verified against OpenRouter: deepseek-v4-flash-0731 grades the biased answer at 0.9999 and
+  nemotron-3.5-lightning grades the safe one at 6.6e-06, where both previously read 1.0. nemotron's
+  server returns no logprobs at all, and that now reports None rather than crashing on the null.
+
+Aggregating certainty into AttributeBiasRate, and binding Fairness to the Grader interface, are left
+  to the feature that needs them; this only stops the per-interaction signal from being a
+  placeholder.
+
+Refs #20
+
+- **judge**: Ask for structured output without declaring tools, and stop templating rendered
+  messages
+  ([`3ae77c5`](https://github.com/gaussia-labs/pygaussia/commit/3ae77c5b6ef7c6ccb2ef2d504e370d179eb10e64))
+
+The structured path built an agent, and langchain's ProviderStrategy branch binds the model with the
+  tool list regardless of it being empty. Every request therefore carried `tools: []` beside its
+  `response_format`, which an OpenAI-compatible server is free to reject — vLLM 0.23 answers 400 —
+  leaving the Context metric with no working structured configuration. Judging needs no tools, so
+  the schema is now bound through a StructuredOutputStrategy whose default constrains generation
+  with `response_format` and declares none. A provider that offers structured output only through
+  tool calling is served by injecting ToolCallingOutput.
+
+The retry loop no longer matches on "400" in an error string: an identical request is refused
+  identically, so a refusal is raised rather than sent five times. An answer that misses the schema
+  is still re-asked, since re-asking is a fresh draw.
+
+Both paths now hand the model rendered messages instead of a ChatPromptTemplate. A brace in the data
+  under evaluation — a query asking for JSON, a snippet of code — was read as a template variable
+  and raised KeyError before any request was sent. Escaping the schema block (de09fb6) covered the
+  half of that the SDK writes; the query is data too, and rendering it as a template can only
+  misread it.
+
+Refs #16
+
+### Documentation
+
+- **judge**: Describe how the schema is bound and the tool-calling escape hatch
+  ([`cce411e`](https://github.com/gaussia-labs/pygaussia/commit/cce411e5bbb45af77f8b0cb91c0845bacebae1e4))
+
+- **roastme**: A worked demo of a full run against a live assistant
+  ([`7c00054`](https://github.com/gaussia-labs/pygaussia/commit/7c00054ed9d5fc42a9e9957b109d0012ed7a370c))
+
+The two existing roastme examples cover the catalogue's shape and the SDK's notebooks behind offline
+  stand-ins. This one carries a real run: 60 generated probes against a RAG assistant in production,
+  240 judge grades, and the Roast Dataset the run emitted, so the arc can be re-run from `out/` with
+  no credentials and no cost.
+
+What it works through, because none of it ships with the library: a corpus the three regex engines
+  read wrong, so an EntityEnumerator over two entity kinds; two Transform implementations that
+  verify their own premise against the full enumeration; and the persistence step, which needs
+  serialize_as_any to keep the RoastBatch record from being dropped by the declared annotation.
+
+Two limits are recorded rather than smoothed over. The Exploiter grades its own queries with no
+  probe meta, so the principles whose rubrics read false_value score zero there and tau has a
+  ceiling below 1.0 — stated with the arithmetic and printed beside the report. And the judge
+  charges no_fabricar on answers that describe nothing, which its own rubric forbids, so the
+  notebook reads the responses back and quantifies the gap instead of reporting the rate alone.
+
+
 ## v1.1.0-b.6 (2026-08-12)
 
 ### Bug Fixes
