@@ -8,13 +8,16 @@ through tool calling are served by ``ToolCallingOutput``.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.runnables import Runnable
+
+
+_SchemaT = TypeVar("_SchemaT", bound=BaseModel)
 
 
 class StructuredOutputStrategy(ABC):
@@ -52,7 +55,10 @@ class ToolCallingOutput(StructuredOutputStrategy):
         return model.with_structured_output(schema, include_raw=True)
 
 
-def parsed[SchemaT: BaseModel](answer: object, schema: type[SchemaT]) -> SchemaT | None:
+# A `TypeVar` rather than PEP 695 syntax, which is a *parse* error before 3.12 and this package
+# floors at 3.11. `ruff` asked for the newer form while it was configured a target above that floor;
+# it is aligned to `requires-python` now, so nothing asks again.
+def parsed(answer: object, schema: type[_SchemaT]) -> "_SchemaT | None":
     """The parsed model out of what a bound runnable returned, or ``None`` when there is none.
 
     Lives beside ``bind`` because it is the other half of the same contract: every strategy above
