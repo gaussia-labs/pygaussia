@@ -11,4 +11,7 @@ requires keep working with the ``roastme`` extra uninstalled:
     from gaussia.generators.roastme.probes.enumeration import EnumerationProbeEngine
 
 The enumeration engine needs no extra — only an ``EntityEnumerator`` the user writes (spec D14).
+The grounded engine needs none either: LangChain is a base dependency, so a ``FactTwister`` driven by
+the user's model pulls nothing of the extra and ``GroundedProbeEngine`` sits on the subsystem facade
+beside the enumeration one (FR-042, FR-037).
 """

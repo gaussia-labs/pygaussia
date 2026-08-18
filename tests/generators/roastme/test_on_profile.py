@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from gaussia.generators.roastme.searches.on_profile import RECOMMENDED_KAPPA, JudgeOnProfileFilter
+from gaussia.llm.structured import ToolCallingOutput
 from gaussia.schemas.roastme import AssistantProfile, KnowledgeHook, WeaknessEntry
 from tests.fixtures.roastme import expected as fx
 
@@ -34,6 +35,8 @@ class _BoundStubScoringModel:
 
     def invoke(self, messages: Any, **kwargs: Any) -> Any:
         self._model.invoked_with.append(messages)
+        if self._model.score is None:
+            return {"raw": None, "parsed": None, "parsing_error": None}
         return self._schema(score=self._model.score)
 
 
@@ -41,14 +44,17 @@ class StubScoringModel:
     """A chat model answering a prescribed score and recording what it was asked.
 
     Structured output is what the filter binds, so the double answers through the schema the
-    filter passed rather than assuming its shape.
+    filter passed rather than assuming its shape. A score of `None` stands for the provider
+    answering off-format, which reaches the filter as `parsed is None`.
     """
 
-    def __init__(self, score: float = 0.9):
+    def __init__(self, score: float | None = 0.9):
         self.score = score
         self.invoked_with: list[Any] = []
+        self.bound_with: list[dict[str, Any]] = []
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> _BoundStubScoringModel:
+        self.bound_with.append(kwargs)
         return _BoundStubScoringModel(self, schema)
 
     def prompt_text(self) -> str:
@@ -134,3 +140,34 @@ class TestTheScale:
         """A model answering 1.2 has still judged the query on profile; letting the value out of
         range would put the gate on a scale the recommended `kappa` was never calibrated for."""
         assert _score(StubScoringModel(score=answered)) == expected
+
+
+class TestBindingTheSchema:
+    """The route is named rather than left to the provider (see `PromptedFactTwister`).
+
+    Bound without naming it, a model behind the HuggingFace router ignored the schema and generated
+    prose until the request died on length — a binding failure that reads as a model failure.
+    """
+
+    def test_the_schema_is_bound_through_the_frameworks_strategy(self):
+        model = StubScoringModel()
+
+        JudgeOnProfileFilter(model).score(QUERY, _profile())
+
+        assert model.bound_with == [{"method": "json_schema", "strict": True, "include_raw": True}]
+
+    def test_another_strategy_is_used_when_one_is_injected(self):
+        model = StubScoringModel()
+
+        JudgeOnProfileFilter(model, structured_output=ToolCallingOutput()).score(QUERY, _profile())
+
+        assert model.bound_with == [{"include_raw": True}]
+
+    def test_an_off_format_answer_raises_rather_than_defaulting(self):
+        # This gate has to return a number and neither available default is honest: 0.0 gates the
+        # query out and shrinks what the search covered without saying so, 1.0 lets it through
+        # ungated. So the run stops instead.
+        model = StubScoringModel(score=None)
+
+        with pytest.raises(ValueError, match="no parseable score"):
+            JudgeOnProfileFilter(model).score(QUERY, _profile())

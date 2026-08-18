@@ -28,6 +28,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from gaussia.core.query_generator import QueryGenerator
+from gaussia.llm.structured import ResponseFormatOutput, StructuredOutputStrategy, parsed
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -75,6 +76,14 @@ class PromptedQueryGenerator(QueryGenerator):
             adjectives, in *"popular universal stores like Walmart"*.
         attempts: How many times a short reply is re-asked before the run fails. A knob of
             gaussia's own implementation, so gaussia owns its default (FR-040).
+        structured_output: How the schema is bound to the model. **Not a detail, and the provider's
+            own default is not safe.** Bound without naming the route, a model behind the
+            HuggingFace router ignored the schema entirely and generated prose until it hit forty
+            thousand tokens, so the request failed on *length* — which reads as a model failure and
+            is a binding failure. The framework ships this strategy because providers disagree about
+            how structured output is asked for, and the shipped judge already takes one; this one
+            defaults to the JSON-schema route, and ``ToolCallingOutput`` serves a provider offering
+            only tool calling.
 
     Neither ``domain`` nor ``language`` weakens the invariant they sit next to. FR-013 keeps the
     *user's identifiers* out of the Exploiter so that the method stays domain-agnostic; these two
@@ -88,9 +97,11 @@ class PromptedQueryGenerator(QueryGenerator):
         domain: str | None = None,
         language: str | None = None,
         attempts: int = DEFAULT_ATTEMPTS,
+        structured_output: StructuredOutputStrategy | None = None,
     ) -> None:
         self._model = model
         self._attempts = attempts
+        self._structured_output = structured_output or ResponseFormatOutput()
         self._system = _SYSTEM_PROMPT
         if domain:
             self._system += _DOMAIN_LINE.format(domain=domain)
@@ -122,6 +133,8 @@ class PromptedQueryGenerator(QueryGenerator):
             SystemMessage(content=self._system),
             HumanMessage(content=prompt),
         ]
-        structured = self._model.with_structured_output(_Questions)
-        answer: _Questions = structured.invoke(messages)
-        return [question.strip() for question in answer.questions if question.strip()]
+        answer = parsed(self._structured_output.bind(self._model, _Questions).invoke(messages), _Questions)
+        # An off-format answer is a reply with no questions in it, which is already the case this
+        # method's caller handles: it re-asks, and after the attempt budget the run fails loudly
+        # rather than returning fewer queries than `S(c)` will divide by.
+        return [] if answer is None else [question.strip() for question in answer.questions if question.strip()]

@@ -50,3 +50,31 @@ class ToolCallingOutput(StructuredOutputStrategy):
 
     def bind(self, model: "BaseChatModel", schema: type[BaseModel]) -> "Runnable":
         return model.with_structured_output(schema, include_raw=True)
+
+
+def parsed[SchemaT: BaseModel](answer: object, schema: type[SchemaT]) -> SchemaT | None:
+    """The parsed model out of what a bound runnable returned, or ``None`` when there is none.
+
+    Lives beside ``bind`` because it is the other half of the same contract: every strategy above
+    requests ``include_raw``, so what comes back is a mapping carrying the message itself next to the
+    parsed value, and unwrapping it is not each caller's own business to reinvent.
+
+    ``parsed`` is ``None`` exactly when the provider answered off-format. That happens, and what it
+    costs is the caller's decision rather than this function's — a generator can re-ask, a reading of
+    one passage can contribute nothing, and a gate that has to return a number has neither option.
+
+    Args:
+        answer: Whatever the bound runnable returned. Tolerates a bare model as well as the mapping,
+            so a strategy that does not request ``include_raw`` is read rather than mistaken for a
+            failure.
+        schema: The model class that was bound.
+
+    Returns:
+        The instance, or ``None``.
+    """
+    if isinstance(answer, schema):
+        return answer
+    if isinstance(answer, dict):
+        value = answer.get("parsed")
+        return value if isinstance(value, schema) else None
+    return None

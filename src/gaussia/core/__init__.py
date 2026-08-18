@@ -22,6 +22,7 @@ from .exceptions import (
     StatisticalModeError,
 )
 from .extractor import BaseGroupExtractor
+from .fact_twister import FactTwister
 from .grader import Grader
 from .guardian import Guardian
 from .hook_verifier import HookVerifier
@@ -42,6 +43,7 @@ __all__ = [
     "CategorySearch",
     "Embedder",
     "EntityEnumerator",
+    "FactTwister",
     "Gaussia",
     "GaussiaError",
     "Grader",

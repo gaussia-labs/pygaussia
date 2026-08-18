@@ -23,6 +23,11 @@ the same reason and were the last place the original complaint stayed literally 
 reach ``Exploiter`` from the front door and still not construct one. None of the three touches an
 engine, so the boundary is unchanged.
 
+``GroundedProbeEngine`` and the two model-driven collaborators of FR-042/FR-043 are here on the same
+test and it is worth stating why they pass it: LangChain is a base dependency, so a component driven
+by the user's model pulls nothing of the ``roastme`` extra. The boundary is about dependencies, not
+about whether a model is involved.
+
 ``gaussia.generators.__init__`` imports eagerly, so nothing here may be registered there.
 """
 
@@ -30,7 +35,16 @@ from .dataset import charged_principles, grading_methods, report_to_dataset, to_
 from .exploiter import Exploiter
 from .probes.catalogue import validate_catalogue
 from .probes.enumeration import EnumerationProbeEngine
+from .probes.grounded import GroundedProbeEngine
 from .probes.library import ProbeLibrary
+from .probes.llm import (
+    FALSE_ATTRIBUTE,
+    KEEP_REAL,
+    NEGATE_CLAIM,
+    OVER_GENERALIZATION,
+    LlmMentionExtractor,
+    PromptedFactTwister,
+)
 from .probes.mentions import CompoundTokenExtractor, MentionExtractor
 from .probes.transforms import TRANSFORMS, available, resolve
 from .probes.verification import NearMissVerifier, collision
@@ -42,17 +56,24 @@ from .searches.realism import EmbeddingRealismEstimator
 from .searches.scoring import category_score, standard_error, violation_score
 
 __all__ = [
+    "FALSE_ATTRIBUTE",
+    "KEEP_REAL",
+    "NEGATE_CLAIM",
+    "OVER_GENERALIZATION",
     "TRANSFORMS",
     "AttributeIterationSearch",
     "CompoundTokenExtractor",
     "EmbeddingRealismEstimator",
     "EnumerationProbeEngine",
     "Exploiter",
+    "GroundedProbeEngine",
     "JudgeOnProfileFilter",
+    "LlmMentionExtractor",
     "MentionExtractor",
     "NearMissVerifier",
     "ProbeLibrary",
     "Profiler",
+    "PromptedFactTwister",
     "PromptedQueryGenerator",
     "available",
     "category_score",

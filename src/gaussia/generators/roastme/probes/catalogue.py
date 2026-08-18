@@ -19,6 +19,7 @@ from .transforms import available
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from gaussia.core.fact_twister import FactTwister
     from gaussia.core.probe_engine import ProbeEngine
     from gaussia.core.transform import Transform
     from gaussia.schemas.roastme import BehavioralContract, Catalogue
@@ -29,6 +30,7 @@ def validate_catalogue(
     contract: BehavioralContract,
     engines: Sequence[ProbeEngine],
     transforms: Sequence[Transform] = (),
+    twisters: Sequence[FactTwister] = (),
 ) -> None:
     """Accept a catalogue, or refuse it naming what is wrong.
 
@@ -39,6 +41,11 @@ def validate_catalogue(
         transforms: The user's transformations, beyond the four shipped. **Pass the same sequence the
             engines were given**: a catalogue validated against one set and generated against another
             is exactly the case where validation stops meaning anything.
+        twisters: The twisters that will run, whose declared patterns are also strings a
+            ``StrategySpec.transform`` may name (FR-042). Same obligation as ``transforms``: the same
+            sequence the grounded engine was given. FR-025's set of *transformations* stays closed —
+            a pattern is not one, and joins nothing but the set of acceptable names, and only while a
+            twister declaring it is configured.
 
     Raises:
         ValueError: Any of the six rejections of the specification. Every one is decided here,
@@ -47,7 +54,7 @@ def validate_catalogue(
     _reject_duplicate_identifiers(catalogue)
     _reject_dangling_principles(catalogue, contract)
     _reject_dangling_plugins(catalogue)
-    _reject_unknown_transforms(catalogue, transforms)
+    _reject_unknown_transforms(catalogue, transforms, twisters)
     _reject_unhandled_entity_kinds(catalogue, engines)
 
 
@@ -86,13 +93,23 @@ def _reject_dangling_plugins(catalogue: Catalogue) -> None:
         raise ValueError(message)
 
 
-def _reject_unknown_transforms(catalogue: Catalogue, transforms: Sequence[Transform]) -> None:
+def _reject_unknown_transforms(
+    catalogue: Catalogue,
+    transforms: Sequence[Transform],
+    twisters: Sequence[FactTwister] = (),
+) -> None:
     # `available` also refuses a supplied key that collides with a shipped one, so a catalogue is
     # never accepted against an ambiguous registry.
     registry = available(transforms)
-    unknown = sorted({strategy.transform for strategy in catalogue.strategies if strategy.transform not in registry})
+    # A twist pattern is a name a strategy may carry and not a transformation (FR-042): it resolves to
+    # nothing in that registry, and the grounded engine hands it to its twister instead. Accepted here
+    # only because a configured twister declares it, which is what keeps the rejection meaningful —
+    # a catalogue naming a pattern no configured twister realises still fails before generation.
+    patterns = {pattern for twister in twisters for pattern in twister.patterns}
+    known = set(registry) | patterns
+    unknown = sorted({strategy.transform for strategy in catalogue.strategies if strategy.transform not in known})
     if unknown:
-        message = f"strategies name transforms outside {sorted(registry)}: {unknown}"
+        message = f"strategies name transforms outside {sorted(known)}: {unknown}"
         raise ValueError(message)
 
 

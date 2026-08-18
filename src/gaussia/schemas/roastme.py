@@ -206,6 +206,26 @@ class KnowledgeHook(BaseModel):
     absence_reliable: bool = True
 
 
+class GroundedTwist(BaseModel):
+    """One fact of the corpus, the falsehood derived from it, and the query that asserts it.
+
+    What a ``FactTwister`` returns (FR-042). ``entity`` is the thing the fact is *about*, and it
+    stays real: the falsehood is the datum, not the name. That is the whole difference from the
+    transformations of FR-025, and it is why a twist needs no boundary — nothing here claims an
+    absence, so there is nothing to confirm.
+
+    ``pattern`` is echoed back rather than chosen. A twister is asked for one named pattern per
+    call, so this field records that the request was honoured, and it lands on
+    ``KnowledgeHook.how`` the way a transformation's key does.
+    """
+
+    entity: str = Field(min_length=1)
+    real_fact: str = Field(min_length=1)
+    false_premise: str = Field(min_length=1)
+    query: str = Field(min_length=1)
+    pattern: str = Field(min_length=1)
+
+
 class Probe(BaseModel):
     """The unit the Profiler consumes."""
 
@@ -216,6 +236,13 @@ class Probe(BaseModel):
     strategy: str = Field(min_length=1)
     attrs: list[str] = Field(default_factory=list)
     engine: str | None = None
+    model: str | None = None
+    """The model that participated in producing this probe, where one did (FR-046).
+
+    Same convention as ``engine`` and ``PrincipleGrade.model``: recorded so a model-generated
+    probe set is attributable, never branched on. ``None`` is the deterministic path, and it is
+    what every probe of the templated engines carries.
+    """
     meta: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

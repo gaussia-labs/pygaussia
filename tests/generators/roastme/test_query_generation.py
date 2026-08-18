@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from gaussia.generators.roastme.searches.query_generation import DEFAULT_ATTEMPTS, PromptedQueryGenerator
+from gaussia.llm.structured import ToolCallingOutput
 from gaussia.schemas.roastme import Category
 
 ATTRIBUTE_ONE = "asks for an exception to a stated rule"
@@ -32,7 +33,10 @@ class _BoundStubQueryModel:
 
     def invoke(self, messages: Any, **kwargs: Any) -> Any:
         self._model.invoked_with.append(messages)
-        return self._schema(questions=self._model.reply(len(self._model.invoked_with) - 1))
+        reply = self._model.reply(len(self._model.invoked_with) - 1)
+        if reply is None:
+            return {"raw": None, "parsed": None, "parsing_error": None}
+        return self._schema(questions=reply)
 
 
 class StubQueryModel:
@@ -43,15 +47,20 @@ class StubQueryModel:
     rather than raising, which is what a model that has stopped cooperating does.
     """
 
-    def __init__(self, replies: list[list[str]]):
+    def __init__(self, replies: list[list[str] | None]):
         self.replies = replies
         self.invoked_with: list[Any] = []
+        self.bound_with: list[dict[str, Any]] = []
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> _BoundStubQueryModel:
+        self.bound_with.append(kwargs)
         return _BoundStubQueryModel(self, schema)
 
-    def reply(self, index: int) -> list[str]:
-        return list(self.replies[index]) if index < len(self.replies) else []
+    def reply(self, index: int) -> list[str] | None:
+        if index >= len(self.replies):
+            return []
+        reply = self.replies[index]
+        return None if reply is None else list(reply)
 
     def prompts(self) -> list[str]:
         return ["\n".join(str(message.content) for message in messages) for messages in self.invoked_with]
@@ -205,3 +214,41 @@ class TestTheDomainAndTheLanguage:
 
         assert "assistant you are writing to" not in prompt
         assert "always" not in prompt
+
+
+class TestBindingTheSchema:
+    """The route is named rather than left to the provider.
+
+    Bound without naming it, a model behind the HuggingFace router ignored the schema and generated
+    prose until the request died on length — a binding failure that reads as a model failure, in the
+    half of a run that generates the Exploiter's queries.
+    """
+
+    def test_the_schema_is_bound_through_the_frameworks_strategy(self):
+        model = StubQueryModel([[ATTRIBUTE_ONE]])
+
+        PromptedQueryGenerator(model=model).generate(_category(), 1)
+
+        assert model.bound_with == [{"method": "json_schema", "strict": True, "include_raw": True}]
+
+    def test_another_strategy_is_used_when_one_is_injected(self):
+        model = StubQueryModel([[ATTRIBUTE_ONE]])
+
+        PromptedQueryGenerator(model=model, structured_output=ToolCallingOutput()).generate(_category(), 1)
+
+        assert model.bound_with == [{"include_raw": True}]
+
+    def test_an_off_format_draw_is_re_asked_like_any_short_reply(self):
+        model = StubQueryModel([None, ["one", "two"]])
+
+        queries = PromptedQueryGenerator(model=model).generate(_category(), 2)
+
+        assert queries == ["one", "two"]
+
+    def test_a_model_that_never_answers_in_format_fails_loudly(self):
+        # The failure this class exists to prevent: returning fewer than asked would divide `S(c)`
+        # by a denominator nobody chose and report the category as measured.
+        model = StubQueryModel([None, None, None])
+
+        with pytest.raises(ValueError, match="distinct queries"):
+            PromptedQueryGenerator(model=model).generate(_category(), 2)

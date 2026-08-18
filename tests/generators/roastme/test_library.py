@@ -248,21 +248,34 @@ class TestACorpusOfOrdinaryWords:
 
     The three engines that read a corpus find mentions through an extractor, and the shipped one
     recognises compound identifiers — `POLICY-1`, `Articulo_25`. A corpus of ordinary words yields it
-    nothing, and *nothing is what the engine must then produce*: a boundary it cannot see is not a
-    boundary it may guess at. What makes the corpus usable is injecting a reading of it, not changing
-    the engine.
+    nothing. It used to *return* nothing, on the argument that a boundary it cannot see is not one it
+    may guess at — which is true about the boundary and wrong about the silence: the engine went on to
+    produce an empty probe set, the Profiler reported a rate over nothing, and the run completed. So
+    it refuses instead (FR-044), and what makes the corpus usable is still injecting a reading of it.
     """
 
-    def test_the_default_extractor_finds_nothing_in_it(self):
-        assert CompoundTokenExtractor().extract(fx.ordinary_word_documents()) == frozenset()
+    def test_the_default_extractor_refuses_it_rather_than_returning_nothing(self):
+        with pytest.raises(ValueError, match="recognised no mention"):
+            CompoundTokenExtractor().extract(fx.ordinary_word_documents())
 
-    def test_so_the_engines_produce_no_probes_rather_than_probes_over_junk(self):
+    def test_the_refusal_names_what_to_do_instead(self):
+        with pytest.raises(ValueError, match="recognised no mention") as raised:
+            CompoundTokenExtractor().extract(fx.ordinary_word_documents())
+
+        assert "MentionExtractor" in str(raised.value)
+        assert "EnumerationProbeEngine" in str(raised.value)
+
+    def test_an_empty_corpus_is_not_a_corpus_it_failed_to_read(self):
+        assert CompoundTokenExtractor().extract([]) == frozenset()
+
+    def test_so_the_engines_fail_loudly_rather_than_producing_no_probes(self):
         catalogue = fx.catalogue(TRANSFORM_KEY)
         for engine in (
             GraphProbeEngine(entity_kinds={fx.ENTITY_KIND}),
             MultiHopProbeEngine(entity_kinds={fx.ENTITY_KIND}),
         ):
-            assert engine.generate(fx.ordinary_word_documents(), catalogue) == []
+            with pytest.raises(ValueError, match="recognised no mention"):
+                engine.generate(fx.ordinary_word_documents(), catalogue)
 
     def test_an_injected_extractor_makes_the_same_engines_produce_probes(self):
         engine = GraphProbeEngine(entity_kinds={fx.ENTITY_KIND}, extractor=_HeadingExtractor())

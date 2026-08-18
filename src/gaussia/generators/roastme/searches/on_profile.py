@@ -30,6 +30,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from gaussia.core.on_profile_filter import OnProfileFilter
+from gaussia.llm.structured import ResponseFormatOutput, StructuredOutputStrategy, parsed
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -74,10 +75,15 @@ class JudgeOnProfileFilter(OnProfileFilter):
     Args:
         model: The user's model. Any LangChain chat model; gaussia supplies neither the model nor
             a key for it.
+        structured_output: How the schema is bound to the model. Same reason as on the query
+            generator: bound without naming the route, a provider ignored the schema and answered
+            with prose until the request died on length, which reads as a model failure and is a
+            binding failure.
     """
 
-    def __init__(self, model: BaseChatModel) -> None:
+    def __init__(self, model: BaseChatModel, structured_output: StructuredOutputStrategy | None = None) -> None:
         self._model = model
+        self._structured_output = structured_output or ResponseFormatOutput()
         # Assigned here rather than on the class so every shipped component is read the same way:
         # on the instance. A constant could sit on the class, but then one component would answer
         # from the class and another only from an instance, and a caller reading the class would get
@@ -96,8 +102,17 @@ class JudgeOnProfileFilter(OnProfileFilter):
                 )
             ),
         ]
-        structured = self._model.with_structured_output(_OnProfileScore)
-        answer: _OnProfileScore = structured.invoke(messages)
+        answer = parsed(self._structured_output.bind(self._model, _OnProfileScore).invoke(messages), _OnProfileScore)
+        # Unlike the generator, this one has no second option. It must return a number, and neither
+        # available number is honest: a 0.0 gates the query out and shrinks what the search covered
+        # without saying so, and a 1.0 lets it through ungated. So it raises — the gate either
+        # measured the query or it did not.
+        if answer is None:
+            message = (
+                f"{type(self._model).__name__} returned no parseable score for a query, so the kappa gate has "
+                f"nothing to compare: a default here would gate the query on a number nobody produced"
+            )
+            raise ValueError(message)
         # Clamped rather than rejected: a model that answers 1.2 has still judged the query on
         # profile, and letting the value out of range would put the gate on a scale the
         # recommended kappa was never calibrated for.

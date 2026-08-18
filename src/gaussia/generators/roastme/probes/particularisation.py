@@ -228,6 +228,32 @@ class ParticularisingEngine(ProbeEngine, ABC):
     def decides_absence(self) -> bool:
         """Whether absence from this engine's view is absence from the knowledge base (FR-023)."""
 
+    def boundary(self, kind: str, documents: list[Document]) -> frozenset[str]:
+        """The entities of ``kind`` this engine will treat as the boundary (FR-045).
+
+        Same call generation makes, so what is read here is what a run will use rather than an
+        approximation of it. Reading it costs whatever ``_entities`` costs, which for a model-driven
+        extractor is a pass over the corpus — that is a reason to read it once and keep it, not a
+        reason to guess instead.
+
+        This exists because the written advice for any new corpus is to print the boundary before
+        spending a run on it, and following that advice required reaching past a private method. A
+        prescribed step the API does not support is a step that gets skipped, and the thing skipped
+        here is the one that decides every ``doc`` label the engine will emit.
+
+        Args:
+            kind: The entity kind, in the user's own vocabulary.
+            documents: The knowledge base. Not filtered by ``can_handle`` — pass what generation
+                will see, so what comes back is what generation will use.
+
+        Returns:
+            The boundary, or an empty set for a kind this engine was not trusted with, which is
+            distinguishable from a boundary it could not read because that raises.
+        """
+        if not self._handles(kind):
+            return frozenset()
+        return self._entities(kind, documents)
+
     @abstractmethod
     def _entities(self, kind: str, documents: list[Document]) -> frozenset[str]:
         """The entities of ``kind`` this engine can see in these documents.
