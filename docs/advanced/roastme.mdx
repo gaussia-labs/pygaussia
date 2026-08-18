@@ -35,7 +35,7 @@ Two extras, so whoever only profiles pays for neither training nor retrieval:
 
 | Extra | Buys | Needed for |
 |---|---|---|
-| *(none)* | The ten interfaces, the schemas, the arithmetic, the Profiler, the Exploiter, the Roast Dataset, the shipped grader, the shipped search implementations, the enumeration engine | Everything below except the three default probe engines and whichever `Embedder` you hand to `RetrievalProbeEngine` or `EmbeddingRealismEstimator` |
+| *(none)* | The eleven interfaces, the schemas, the arithmetic, the Profiler, the Exploiter, the Roast Dataset, the shipped grader, the shipped search implementations, the enumeration engine, **the grounded engine and both model-driven components** | Everything below except the three corpus-reading probe engines and whichever `Embedder` you hand to `RetrievalProbeEngine` or `EmbeddingRealismEstimator` |
 | `gaussia[roastme]` | `sentence-transformers`, `torch`, `networkx` | `RetrievalProbeEngine`, `GraphProbeEngine`, `MultiHopProbeEngine`, and `SentenceTransformerEmbedder` for the two components that take an embedder |
 | `gaussia[roastme-rl]` | `gaussia[roastme]` plus `peft`, `accelerate`, `trl` | `ClippedPolicyUpdate`, the training-backed step of the policy-gradient search |
 
@@ -45,9 +45,14 @@ pip install "gaussia[roastme-rl]"     # the above, plus the reinforcement-learni
 ```
 
 Neither extra is part of `gaussia[metrics]` or `gaussia[all]`. Every interface imports with both
-uninstalled, so you can implement against them before installing anything: the engines are imported
-from their own modules rather than re-exported, which is what keeps
+uninstalled, so you can implement against them before installing anything: the three engines behind
+the extra are imported from their own modules rather than re-exported, which is what keeps
 `from gaussia.generators.roastme import ProbeLibrary, Profiler, Exploiter` free of heavy imports.
+
+The boundary is about **dependencies**, not about whether a model is involved. LangChain is a base
+dependency, so `GroundedProbeEngine`, `PromptedFactTwister` and `LlmMentionExtractor` pull nothing of
+the extra and sit on the facade beside `EnumerationProbeEngine`. What they need is your model, and
+that was always yours to supply.
 
 ## Claude Code skills
 
@@ -83,7 +88,10 @@ Exploiter          profile                     ->  failure report + Roast Datase
 
 1. **Probe Library** — the only component that touches the knowledge base. It turns your documents
    and your catalogue into probes, each tagged with whether the content it leans on is documented or
-   invented. Skip it if you already have probes: black-box runs are explicitly supported.
+   invented. Five engines compose here, and they split on one question: four build a premise out of an
+   entity's **name**, so they need to know which names exist; the fifth twists a **datum** and needs no
+   boundary at all. Skip the whole component if you already have probes: black-box runs are explicitly
+   supported.
 2. **Profiler** — drives the target over the probes, grades every response against every principle,
    and aggregates the result into the profile: a weakness map `ω` over prose descriptors, plus the
    knowledge hooks `H` that actually broke the assistant. It reaches no knowledge base and it needs
@@ -94,17 +102,18 @@ Exploiter          profile                     ->  failure report + Roast Datase
 The profile is the **only** artifact crossing from the Profiler to the Exploiter, and it carries
 prose rather than your internal identifiers.
 
-## The ten interfaces
+## The eleven interfaces
 
-You implement against these. Seven ship a reference implementation, declared as such — a convenience,
+You implement against these. Eight ship a reference implementation, declared as such — a convenience,
 never the definition of the component.
 
 | Interface | Obligation | Reference implementation |
 |---|---|---|
-| `ProbeEngine` | Declare the documents and entity kinds it handles; turn documents plus catalogue into tagged probes | Four: `RetrievalProbeEngine`, `GraphProbeEngine`, `MultiHopProbeEngine`, `EnumerationProbeEngine` |
+| `ProbeEngine` | Declare the documents and entity kinds it handles; turn documents plus catalogue into tagged probes | Five: `RetrievalProbeEngine`, `GraphProbeEngine`, `MultiHopProbeEngine`, `EnumerationProbeEngine`, `GroundedProbeEngine` |
 | `EntityEnumerator` | List **every** entity of a kind that exists in the base | None — irreducibly domain knowledge |
 | `HookVerifier` | Confirm a hook's `doc` label against the corpus, independently of the engine | `NearMissVerifier` — catches an absence label the boundary cannot defend |
-| `Transform` | Turn a real entity into the premise a probe leans on | The four the catalogue may name |
+| `Transform` | Turn a real entity into the premise a probe leans on, from its **name** | The four the catalogue may name |
+| `FactTwister` | Turn a **passage** of the base into a false premise about a real entity, following one named pattern | `PromptedFactTwister` — through your model |
 | `Grader` | Estimate one principle's violation in `[0, 1]`, with its evidence | `LogprobGrader` |
 | `TargetAssistant` | Send a query, return the response or mark the exchange failed | None — a transport adapter belongs with its transport |
 | `QueryGenerator` | Realise a category's attributes as concrete queries; declare the grading context a query carries, if any | `PromptedQueryGenerator` — **gaussia's own construction** |
@@ -312,11 +321,21 @@ violation-rate aggregate while staying in the graded record.
 ### Validation you get before anything runs
 
 `validate_catalogue` rejects a catalogue **before** generation, on six conditions: every referenced
-principle resolves in the contract, every referenced plugin exists, `transform` is one of the four,
-`doc` is `0` or `1`, identifiers are unique, and **every `entity_kind` is one a configured engine
-declares it handles**. That last one matters because `entity_kind` is your own vocabulary and
+principle resolves in the contract, every referenced plugin exists, `transform` resolves against the
+registry, `doc` is `0` or `1`, identifiers are unique, and **every `entity_kind` is one a configured
+engine declares it handles**. That last one matters because `entity_kind` is your own vocabulary and
 gaussia never learns what it means — without the check, a plural typo would validate cleanly and
 yield an empty probe set with no error.
+
+`transform` resolves against the four shipped transformations, any you supply, **and the twist
+patterns any configured `FactTwister` declares** — so pass the twisters alongside the transforms:
+
+```python
+validate_catalogue(catalogue, contract, engines, transforms=[...], twisters=[twister])
+```
+
+A pattern no configured twister declares is still refused before generation, which is the point of
+naming them here rather than discovering them mid-run.
 
 ## 3. Probes from a knowledge base
 
@@ -368,7 +387,7 @@ hop is mutated — are the
 attack that engine adds: an assistant that refuses an invented entity may still accept an invented
 **relation** between real ones.
 
-### The four engines
+### The five engines
 
 | Engine | Extra | Absence | Contributes |
 |---|---|---|---|
@@ -376,6 +395,7 @@ attack that engine adds: an assistant that refuses an invented entity may still 
 | `GraphProbeEngine` | `roastme` | Confirmed from the complete co-occurrence graph | Trustworthy `doc = 0` labels |
 | `MultiHopProbeEngine` | `roastme` | Confirmed the same way | False *relations* between real entities |
 | `EnumerationProbeEngine` | none | Confirmed from your enumeration — the strongest guarantee | The absence labels you can defend |
+| `GroundedProbeEngine` | none | Cannot confirm, and never claims to | False premises needing **no boundary at all** |
 
 The first three run by default and together span the absence/breadth trade-off: no single engine
 gives both. Note this is not the engine set the paper evaluated — its canonical dataset came from
@@ -383,34 +403,59 @@ retrieval, graph and enumeration, and the multi-hop engine appears in no trade-o
 
 **Check what those first three can see in your corpus before trusting them.** All three read mentions
 through a `MentionExtractor`, and the shipped one recognises compound identifiers — `POLICY-1`,
-`Articulo_25`. That is the shape of a corpus of numbered clauses. On scraped prose it recognises the
-wrong things — phone numbers, document filenames, footer anchors — and the engine then generates a
-probe per false positive **with no error**, because a junk boundary is indistinguishable from a
-legitimate one at that layer. On one real bank corpus it returned 210 false positives across twelve
-documents.
+`Articulo_25`. That is the shape of a corpus of numbered clauses, and a corpus of ordinary words
+defeats it in two different ways.
+
+Where it recognises **nothing**, it now refuses, naming itself and what to do instead. It used to
+return an empty set on the argument that producing no probes is honest — which is true about the
+boundary and wrong about the silence, because the engine then generated an empty probe set, the
+Profiler reported a rate over nothing, and the run completed.
+
+Where it recognises the **wrong** things — phone numbers, document filenames, footer anchors — nothing
+can fail, because a false positive is well-formed and deciding it is not an entity needs your domain.
+The engine generates a probe per false positive, the assistant is asked about a filename, and the run
+looks successful. On one real bank corpus it returned 208 mentions that were not entities.
+
+That second half is why the boundary is worth reading before a run, and every engine that establishes
+one now exposes it — the same call generation makes, rather than a private method:
 
 ```python
-from gaussia.generators.roastme.probes.mentions import CompoundTokenExtractor
-
-print(sorted(CompoundTokenExtractor().extract(documents))[:30])   # run this first
+print(sorted(engine.boundary("product", documents))[:30])   # run this first
 ```
 
-If that comes back wrong, inject a reading of your own — the default stays the compound-identifier
-one, so a corpus that worked before still works:
+If it comes back wrong, inject a reading of your own. The default stays the compound-identifier one,
+so a corpus that worked before still works, and there is a shipped alternative that reads prose:
 
 ```python
+from gaussia.generators.roastme.probes.llm import LlmMentionExtractor
+
+# your own rule
 class HeadingExtractor(MentionExtractor):
     def extract(self, documents):
         return frozenset(your_reading_of(documents))
 
 
-engine = GraphProbeEngine(entity_kinds={"product"}, extractor=HeadingExtractor())
+# or through your model
+extractor = LlmMentionExtractor(judge, kind="product", domain="a Dominican retail bank")
+
+engine = GraphProbeEngine(entity_kinds={"product"}, extractor=extractor)
 ```
 
+<Warning>
+  **`LlmMentionExtractor` replaces the regular expression; it does not replace an enumerator.**
+  Measured over the same bank corpus against a hand-written enumeration of 136 products, it recovered
+  125 of them — recall `0.92`. That is excellent coverage and it is **not completeness**: the 8% it
+  missed are real entities a probe would then label invented, and every one of those is a false
+  `doc = 0` the judge is asked to rule against. Use it in the engines that do not decide absence. In
+  the one that does, keep the enumerator, whose contract is completeness and not coverage.
+</Warning>
+
 `MentionExtractor` lives beside the engines rather than in `core/`: it is a collaborator of three
-shipped engines, not part of the specification you implement against, so the ten interfaces stay ten.
-`EnumerationProbeEngine` takes no extractor — its boundary comes from your enumerator instead, which
-is the other answer to the same problem and the stronger one when you can enumerate.
+shipped engines, not part of the specification you implement against. `FactTwister` is in `core/` for
+the opposite reason — it reads the corpus and returns a claim about it, which is a contract you
+implement against. `EnumerationProbeEngine` takes no extractor at all: its boundary comes from your
+enumerator instead, which is the other answer to the same problem and the stronger one when you can
+enumerate.
 
 With **no** knowledge base, particularisation still returns probes through the same interface:
 domain-agnostic and hookless. The hook stays empty rather than being filled with a placeholder,
@@ -444,6 +489,65 @@ print(enumeration.can_handle(documents[0]))
 
 `True` then `False`: a document that says its boundary is not enumerable is one this engine declines
 rather than guesses over.
+
+### The grounded engine needs no boundary at all
+
+The other four build a premise out of an entity's **name**, which is why they need to know what names
+exist: to claim `Cuenta Flash Popular Plus` is invented, something has to know the complete list. This
+one twists a **datum** and leaves the name real — the balance, the term, the requirement — so it claims
+no absence and needs no list.
+
+That is the whole of what it buys, and it is the reason a corpus of ordinary words no longer forces you
+to write an enumerator *and* a transformation. Only the enumerator is irreducible.
+
+It takes a `FactTwister`, and the shipped one goes through your model:
+
+```python
+from gaussia.generators.roastme.probes.grounded import GroundedProbeEngine
+from gaussia.generators.roastme.probes.llm import (
+    FALSE_ATTRIBUTE, KEEP_REAL, NEGATE_CLAIM, OVER_GENERALIZATION, PromptedFactTwister,
+)
+
+twister = PromptedFactTwister(judge, language="Spanish")
+grounded = GroundedProbeEngine(twister, entity_kinds={"product"}, passages_per_strategy=17)
+
+validate_catalogue(catalogue, contract, [grounded], twisters=[twister])
+probes = ProbeLibrary([grounded]).generate(documents, catalogue)
+```
+
+**A strategy names its pattern in `transform`.** Four ship: the three twists above, plus `keep_real`,
+which asks the passage's fact unaltered and is how a control survives the change of engine. Controls
+are the only thing separating "the assistant fails" from "the rubric charges too much", so a grounded
+catalogue needs one exactly as much as a templated one does.
+
+<Warning>
+  **The pattern is yours to name, never the model's to choose.** Offered all three and left to pick,
+  the shipped twister returned `false_attribute` **21 times out of 21** over a real corpus. That is the
+  gap the paper admits about its own equivalent engine: it tags every twist with one generic strategy
+  id, and the qualitative patterns its configuration declares appear in none of its tables. Asking for
+  one pattern per request is what closes it — so the schema the twister binds carries no pattern field
+  at all, and a model that names one has nowhere to put it.
+</Warning>
+
+**How many probes it makes, and what it costs.** `passages × strategies`, where the passages are your
+corpus cut on blank lines at `passage_chars` (4000 by default). A 160,000-character corpus is 40
+passages, so 12 strategies is 480 probes and **480 model calls before the assistant is contacted
+once**. `passages_per_strategy` bounds that, and bounds it honestly: it takes the first *n* passages in
+document order rather than sampling, so what a bounded run covered is stated by the number rather than
+hidden by it.
+
+Passages are ordered rather than retrieved by similarity, which is a boundary decision and not a
+simplification — retrieval would pull the `roastme` extra into a path that needs nothing beyond the
+base dependencies, and ordered cutting keeps a generated probe set a function of the corpus and the cut
+size alone.
+
+**What it gives up.** It cannot test fabrication. Every probe it emits carries
+`absence_reliable=False`, because a passage is a sample of the corpus and no sample can confirm what
+the corpus omits. An assistant that invents entities is still the enumeration engine's business — and
+the two compose in one `ProbeLibrary`, which is the configuration that measures both.
+
+Every probe records the model behind it on `Probe.model`, so a probe set generated by one model is
+never mistaken for one generated by another.
 
 ## 4. Profiling a recorded response set
 
@@ -623,6 +727,22 @@ different component's scale.
 | `QueryGenerator` | `PromptedQueryGenerator(model=..., attempts=3)` | **Gaussia's own, not the paper's** |
 | `OnProfileFilter` | `JudgeOnProfileFilter(model=...)` | **Gaussia's own, not the paper's** |
 | `RealismEstimator` | `EmbeddingRealismEstimator(embedder=..., prior=...)` | The paper's |
+
+<Note>
+  **How the schema is bound to your model is a parameter, and the provider's default is not safe.**
+  The two model-driven collaborators above, and both model-driven probe components, take a
+  `structured_output` strategy and default to the JSON-schema route. Left to the provider's own
+  default, a model behind the HuggingFace router ignored the schema entirely and generated prose until
+  it hit forty thousand tokens — so the request failed on **length**, which reads as a model failure
+  and is a binding failure. Pass `ToolCallingOutput()` for a provider that offers only tool calling.
+
+  Where they differ is what an off-format answer costs, and the difference is forced. The generator
+  re-asks, because a reply with no questions in it is a short reply and it already handles those; after
+  the attempt budget the run fails loudly rather than returning fewer queries than `S(c)` will divide
+  by. The `κ` gate has no second option — it must return a number and neither default is honest, since
+  `0.0` gates the query out and shrinks what the search covered without saying so while `1.0` lets it
+  through ungated. So it raises.
+</Note>
 
 <Warning>
   The paper names the query generator and the on-profile filter and gives **no construction for
@@ -814,8 +934,25 @@ Stated here because a reader will otherwise infer stronger claims than the evide
   produced no published number.**
 - **The mention extractor reads compound identifiers, and a corpus of ordinary words defeats it.**
   Over Spanish product pages `CompoundTokenExtractor` returns 208 mentions that are not entities —
-  phone numbers, PDF filenames, footer anchors — and nothing fails: each becomes a probe. Print what
-  it extracts before trusting a run, or supply an enumerator and use `EnumerationProbeEngine`.
+  phone numbers, PDF filenames, footer anchors — and **nothing fails**: each becomes a probe. Only
+  half of that failure is detectable, and that half now refuses: a corpus it recognises *nothing* in
+  raises. False positives cannot, because deciding a well-formed match is not an entity needs your
+  domain. Read `engine.boundary(kind, documents)` before trusting a run, or supply an enumerator and
+  use `EnumerationProbeEngine`.
+- **A model-driven reading of the corpus has coverage, not completeness.** `LlmMentionExtractor`
+  recovered 125 of 136 hand-enumerated products — recall `0.92` — and the 8% it missed would be
+  labelled invented by any probe built over it. It is the right replacement for the regular expression
+  and the wrong replacement for an enumerator. Neither it nor the twister is any engine's default, and
+  that is deliberate: a model in the generation path makes the probe set unreproducible, so two runs
+  of one assistant stop being comparable, and it degrades without failing.
+- **A generated probe set is attributable but not reproducible.** `Probe.model` records which model
+  produced a probe. Nothing caches the set, so re-running the grounded engine against the same corpus
+  re-asks the model, and comparing two runs of one assistant compares two instruments unless you keep
+  the probes.
+- **A provider failure mid-generation ends the pass.** An off-format answer costs one draw and no
+  more. A refusal — a rate limit, a length error — propagates and takes the probes already built with
+  it. That is deliberate rather than settled: a blanket catch would swallow an expired key, and the
+  retryable half belongs to your model client, which is where `max_retries` lives.
 - **A query the `κ` gate stops still counts in its category's score.** It contributes exactly `0.0`
   (FR-030), which lowers the mean and raises the variance, so `S(c)` falls twice over. That is the
   requirement rather than a defect, and it moves the ranking: on one measured run a category rose

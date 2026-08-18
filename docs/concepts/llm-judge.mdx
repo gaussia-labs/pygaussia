@@ -70,6 +70,21 @@ from gaussia.llm.structured import ToolCallingOutput
 judge = Judge(model=model, use_structured_output=True, structured_output=ToolCallingOutput())
 ```
 
+<Warning>
+  **Never leave the route to the provider's own default.** Bound without naming it, a model served
+  behind the HuggingFace router ignored the schema entirely and generated prose until it hit forty
+  thousand completion tokens — so the request failed on **length**, which reads as a model failure and
+  is a binding failure. Both strategies above worked on that same provider once named. This is why the
+  strategy is a parameter rather than a detail, and why every model-driven component of Roast Me takes
+  one too.
+</Warning>
+
+Both strategies request `include_raw`, so a bound runnable answers with a mapping carrying the message
+itself beside the parsed value. `parsed(answer, Schema)` from the same module is the other half of that
+contract: it returns the instance, or `None` when the provider answered off-format. `None` is a thing
+that happens, and what it costs belongs to the caller — a generator can re-ask, a reading of one
+passage can contribute nothing, and a gate that must return a number has neither option.
+
 ## Compatible models
 
 The `Judge` works with any LangChain-compatible chat model:
