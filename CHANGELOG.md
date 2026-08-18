@@ -1,6 +1,202 @@
 # CHANGELOG
 
 
+## v1.1.0-b.9 (2026-08-18)
+
+### Bug Fixes
+
+- **build**: Lint against the Python floor the package claims, not the newest one
+  ([`1564008`](https://github.com/gaussia-labs/pygaussia/commit/15640088e0d9598a080f113483884ed7082553fd))
+
+CI failed on 3.11 with a syntax error, and the offending line was written because ruff asked for it:
+
+src/gaussia/llm/structured.py:55: error: Expected '(' [syntax] def parsed[SchemaT:
+  BaseModel](answer: object, schema: type[SchemaT]) ...
+
+PEP 695 generics parse from 3.12. `requires-python` says `>=3.11`, and the test matrix runs 3.11,
+  3.12 and 3.13 — deliberately, because a wheel claiming 3.11 and only ever tested on 3.13 is an
+  untested claim. So the syntax was unreachable for a third of the matrix.
+
+Nothing local could have caught it, and that is the actual defect. `[tool.ruff]` declared
+  `target-version = "py313"` while the package floors at 3.11, so UP047 saw a `TypeVar` and asked
+  for the newer form — the lint config was requesting code the declared floor cannot read.
+  `[tool.mypy]` declares `python_version = "3.13"` for the same reason, and mypy parses with the
+  *running* interpreter's `ast`, so the local run parsed it happily. CI's `uv run --python 3.11
+  mypy` is the first gate in the pipeline that could see it.
+
+So the fix is the configuration rather than the line. `target-version` now tracks `requires-python`,
+  and with that the `TypeVar` needs no suppression: checked against py311, ruff's only remaining
+  finding was the `noqa` the py313 target had made necessary. Verified over both trees at 3.11 — 150
+  source files and every test file compile, so this was the only occurrence.
+
+`[tool.mypy] python_version` is left at 3.13 and worth stating why, since aligning it looks like the
+  same fix and is not. Setting it to 3.11 is clean — no new errors over 150 files — but it would not
+  have caught this: the version there governs semantics, while new *syntax* is decided by the
+  interpreter mypy runs on. It is an available alignment, not a guard.
+
+Full 3.11 job reproduced locally against an isolated environment, matching the workflow step for
+  step: `uv sync --all-extras --python 3.11`, `uv lock --check`, ruff, mypy, `pytest -m "not slow"`.
+  1084 passed. 3.13 unchanged: 1084 passed, ruff clean, mypy clean on 150 files.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+- **roastme**: Build a premise from the corpus, not only from an entity's name
+  ([`f149b6e`](https://github.com/gaussia-labs/pygaussia/commit/f149b6e35002da290598857fa85d722ccd6a6a36))
+
+The paper this subsystem implements describes three probe-generation engines and two of them are
+  driven by a language model: one anchors a fact in retrieved text and twists it into a false
+  premise, the other has a model extract entities and relations into a graph. Neither was built.
+  What shipped was the deterministic engine plus three engines reading a corpus through one regex
+  over compound identifiers.
+
+The gap was never recorded as a gap, so its cost was paid under another name. Every run against a
+  corpus of ordinary words had to supply a hand-written `EntityEnumerator` *and* a hand-written
+  `Transform`, and both were documented as irreducible domain knowledge. Only the first is.
+  Completeness cannot be derived from a corpus; a premise can. The transform was the manual stand-in
+  for the engine nobody wrote — which is exactly what b87af65 made injectable without noticing what
+  it was substituting for.
+
+Measured before writing any of this, over a Dominican bank's corpus with a 31B model at temperature
+  zero, against the 136 products that run's hand-written enumerator carries.
+  `CompoundTokenExtractor` returned 126 mentions and effectively no products. A model asked for
+  product names returned 199, of which 125 were among the 136 — recall 0.92. A twister over 24
+  passages returned 24 twists, 21 usable.
+
+**The twister needs no boundary, and that is the finding.** It twists a datum and leaves the
+  entity's name real, so it asserts no absence and needs nothing to stand behind such an assertion.
+  It sidesteps completeness entirely — the exact problem the enumerator exists to solve — so it is
+  the only piece that lowers the cost of a run without weakening an absence guarantee.
+  `Transform.apply(entity)` cannot do this: it receives a name and the corpus is not on its
+  signature. `FactTwister` is therefore an eleventh interface rather than a fifth transformation,
+  and FR-025's closed set stays closed. What the patterns join is the set of strings a
+  `StrategySpec.transform` may name, and only while a configured twister declares them, so a
+  catalogue naming a pattern nothing can realise is still refused before generation.
+
+**The pattern is requested, never chosen.** Offered three and left to pick, the model returned
+  `false_attribute` 21 times out of 21. That is the gap the paper admits about its own engine: it
+  tags every twist with one generic strategy id, and the four qualitative strategies its
+  configuration declares appear in none of its tables. So the schema the twister binds carries no
+  pattern field at all — a model that names one has nowhere to put it — and `keep_real` is among the
+  shipped patterns, because controls are the only thing separating "the assistant fails" from "the
+  rubric charges too much" and losing them on this path would make every other number of a grounded
+  run unreadable.
+
+**Neither model-driven component is any engine's default**, and the reason is the same for both:
+  they degrade without failing. Recall 0.92 means the 8% missed are real entities a probe then
+  labels invented, and each is a false `doc = 0` the judge is asked to rule against — the run
+  generates, completes, and looks successful. Probe generation is also deterministic and free today,
+  which is what makes two runs of one assistant comparable, and importing the package must not reach
+  for a key. So the extractor replaces the regex where a caller puts it and replaces the enumerator
+  nowhere, and the default belongs to whoever composes a run rather than to the library. LangChain
+  is a base dependency, so none of this pulls the `roastme` extra and all of it sits on the facade:
+  the boundary is about dependencies, not about whether a model is involved.
+
+**The regex now refuses a corpus it recognises nothing in.** This is the defect distinct from the
+  engines being absent. Returning an empty boundary was defended as honest and is only silent: the
+  engine generated an empty probe set, the Profiler reported a rate over nothing, and the run
+  completed. Only half of the failure is reachable this way — a false positive is well-formed and
+  deciding it is not an entity needs the domain — so the loud refusal is the empty case and the
+  docstring keeps the rest.
+
+**A boundary is now readable before a run.** The written advice for any new corpus was to print the
+  extractor's output before spending a run on it, and following it meant reaching past a private
+  method. `ParticularisingEngine.boundary` makes the same call generation makes. A prescribed step
+  the API does not support is a step that gets skipped, and what was being skipped decides every
+  `doc` label the engine emits.
+
+**How the schema is bound to a model was left to the provider, in both shipped Exploiter
+  collaborators.** Found by running the new engine rather than by reading: bound without naming the
+  route, a model behind the HuggingFace router ignored the schema entirely and generated prose until
+  it hit forty thousand completion tokens, so the request failed on *length* — which reads as a
+  model failure and is a binding failure. `PromptedQueryGenerator` and `JudgeOnProfileFilter` had
+  the same bare call, so the whole search half of a run carried it. Both now take a
+  `StructuredOutputStrategy`, as `llm/judge.py` already did, and the unwrap of `include_raw` moved
+  beside `bind` as `structured.parsed`, since asking for the raw message and reading the parsed
+  value out of it are two halves of one contract rather than each caller's to reinvent.
+
+The two handle an off-format answer differently and the difference is forced. The generator re-asks:
+  a reply with no questions in it is a short reply, which it already handles, and after the attempt
+  budget the run fails loudly rather than returning fewer queries than `S(c)` will divide by. The
+  gate has no second option — it must return a number and neither default is honest, since `0.0`
+  gates the query out and shrinks what the search covered without saying so while `1.0` lets it
+  through ungated. So it raises. An unreadable passage during extraction costs one draw and no more,
+  because a boundary that depended on the worst passage in a corpus would be worse than one that
+  stopped.
+
+`Probe.model` records the model that participated in producing a probe, on the convention
+  `Probe.engine` and `PrincipleGrade.model` already set: recorded for reading, never branched on.
+
+Two defects found in the twister itself, both by running it. Asking the model to "copy the fact"
+  made a 4,200-character passage produce a copy of the passage, deterministically, losing four
+  requests of eight — fixed by bounding every field to one sentence and saying why in the prompt.
+  And an answer missing any field is dropped rather than repaired, because every field is what makes
+  a verdict checkable by a person afterwards.
+
+The tests that should have existed: the corpus-of-ordinary-words fixtures asserted the old silence,
+  so they now assert the refusal; and 49 new ones over the cut, both model-driven components, the
+  engine's two labels, the control, and a catalogue naming a pattern with and without a twister to
+  realise it. Every model is a stub, so nothing needs a key.
+
+What this does not close, stated because nothing local will. A generated probe set is attributable
+  and not reproducible: nothing caches it, so re-running the grounded engine re-asks the model and
+  comparing two runs compares two instruments unless the probes are kept. GraphRAG stays unbuilt —
+  the extraction half is here, but treating the result as a complete catalogue is a claim recall
+  0.92 says would be false. Passage selection is ordered rather than by similarity, since retrieval
+  would pull the extra into a path that needs none. And a provider refusal mid-generation still ends
+  the pass: an off-format answer costs one draw, a rate limit or a length error propagates and takes
+  the probes already built, which is deliberate rather than settled, because a blanket catch would
+  swallow an expired key and the retryable half belongs to the model client.
+
+1084 tests, ruff clean, mypy clean on 150 files. Verified end to end against the bank corpus: four
+  requests, four twists, three distinct patterns and a clean control — 24-60 months read back as
+  12-36, "no promissory note is needed" read back as needed every time, a conditional term asserted
+  universally, and "what is Crediflex Popular?" untouched.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+### Documentation
+
+- **roastme**: The grounded engine, and what a model-read boundary is worth
+  ([`29c3bc0`](https://github.com/gaussia-labs/pygaussia/commit/29c3bc042a0d1e187ed36cf29619751fd0be1f7a))
+
+The guide described ten interfaces, four engines and a `transform` field that had to be one of four.
+  All three are now wrong, and one of its instructions no longer runs: printing
+  `CompoundTokenExtractor().extract(documents)` was the prescribed first step over any new corpus,
+  and a corpus of ordinary words now raises there instead of returning a set. The replacement is
+  `engine.boundary(kind, documents)`, which is the call generation itself makes.
+
+The new section is about the split rather than about a class. Four engines build a premise out of an
+  entity's *name*, so something has to know which names exist; the fifth twists a *datum* and needs
+  no boundary at all. That is why a corpus of ordinary words no longer forces an enumerator and a
+  transformation both, and why only the enumerator was ever irreducible. It carries the arithmetic a
+  reader will need before running it — `passages x strategies`, so twelve strategies over a
+  160,000-character corpus is 480 model calls before the assistant is contacted once — and the
+  warning that a pattern left to the model collapsed to one, 21 times out of 21.
+
+`LlmMentionExtractor` gets a warning of its own, because the number that sells it is the number that
+  must not be over-read. Recall 0.92 against a hand-written enumeration of 136 products is excellent
+  coverage and is not completeness: the 8% missed are real entities a probe then labels invented. It
+  replaces the regex; it replaces an enumerator nowhere.
+
+Four limitations added, all uncomfortable on purpose: only half the extractor's failure is
+  detectable, a model-read boundary has coverage and not completeness, a generated probe set is
+  attributable and not reproducible, and a provider refusal mid-generation takes the probes already
+  built with it.
+
+The judge page already documented `StructuredOutputStrategy` with one reason — vLLM rejecting an
+  empty `tools` array. It gains the sharper one, measured while building this: left to the
+  provider's own default, a model ignored the schema and generated prose until the request died on
+  length, which reads as a model failure and is a binding failure. Both strategies worked on that
+  provider once named. `structured.parsed` is documented beside them as the other half of the same
+  contract.
+
+Every snippet was checked against the code rather than written from memory: imports resolved and
+  signatures compared, including that the grounded engine deliberately exposes no `boundary` because
+  it establishes none.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+
 ## v1.1.0-b.8 (2026-08-14)
 
 ### Bug Fixes
