@@ -12,8 +12,9 @@ cuidados hacen falta para que el número signifique algo.
 > la estimación de un modelo sobre si otro se portó mal. Una tasa de violación es evidencia para ir a
 > mirar, nunca una tasa de error medida.
 
-**Empezá por [`out/bpd-informe.md`](out/bpd-informe.md).** Es la corrida leída y explicada, con los
-números traducidos. El resto de `out/` son los datos crudos que la respaldan.
+**Empezá por [`out/bpd-informe.md`](out/bpd-informe.md)** (etapa 1) y seguí con
+[`out/bpd-exploiter.md`](out/bpd-exploiter.md) (etapa 2). El resto de `out/` son los datos crudos que
+los respaldan.
 
 ---
 
@@ -80,7 +81,9 @@ no hay hecho del cual torcer.
 
 | archivo | qué lleva |
 |---|---|
-| `out/bpd-informe.md` | La corrida leída, con los números traducidos |
+| **`out/bpd-informe.md`** | **Empezá acá.** La etapa 1 leída, con los números traducidos |
+| `out/bpd-exploiter.md` | La etapa 2 leída: qué buscó, por qué no encontró nada, y cómo leer ese cero |
 | `out/bpd-probes.json` | Las 138 consultas con su premisa falsa, el dato real, el patrón y el producto |
 | `out/bpd-profiler.json` | Cada intercambio: consulta, respuesta, nota por regla, y la traza de qué bloques leyó el asistente |
-| `out/bpd-exploiter.json` | Segunda etapa: las categorías buscadas y sus puntajes |
+| `out/bpd-exploiter-eta0.25.json` | Etapa 2, corrida A: 56 categorías y 610 consultas sobre invención |
+| `out/bpd-exploiter-fugas-eta0.15.json` | Etapa 2, corrida B: la fuga de instrucciones |
