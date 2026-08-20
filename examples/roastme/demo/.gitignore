@@ -8,3 +8,9 @@ out/*-replay-*.json
 # `.env` ya lo ignora el .gitignore de la raíz del repo. Se repite acá para que la carpeta sea segura
 # incluso copiada a otro proyecto.
 .env
+
+# El corpus no viaja con el demo. RoastMe no trae contrato ni catálogo ni corpus por la misma razón:
+# contra qué se mide el conocimiento de un asistente es del negocio, no de la librería. La corrida de
+# `out/` se hizo contra las páginas públicas de producto del BPD; para reproducirla hay que rearmar
+# ese archivo. Sin él se lee todo lo de `out/`, pero no se generan consultas nuevas.
+data/

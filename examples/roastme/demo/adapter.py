@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 from gaussia.core.target_assistant import TargetAssistant
 from gaussia.schemas.roastme import TargetResponse
 
+from mcp_trace import leer_traza
+
 _FINAL_EVENT = "AssistantInferenceResponse"
 _PARTIAL_EVENT = "ResponseInferenceResponse"
 # The agent can stop and wait for a person. That is not an answer, so it is reported as a failure.
@@ -126,14 +128,34 @@ class AlquimiaAssistant(TargetAssistant):
         self._base_url = base_url.rstrip("/") + "/"
         self._headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
         self._timeout = httpx.Timeout(timeout, read=stream_timeout)
+        self._enviados = 0
+        self.trazas: dict[str, dict[str, Any]] = {}
+        """La traza del MCP de cada consulta, indexada por el texto de la consulta.
+
+        El adapter la guarda porque es el único objeto que la ve. El Profiler consume un
+        `TargetResponse` y devuelve un `GradedOutcome`, que no tiene campo `raw`: todo lo que no
+        sea texto y notas se descarta ahí. Confiar en `raw` para llevarla al artefacto produjo 96
+        trazas vacías sin un solo error — los `block_id` que hacen verificable un `doc=0`
+        simplemente no llegaban, y nada lo decía.
+        """
 
     def send(self, query: str, session_id: str | None = None) -> TargetResponse:
+        # Progreso cada 10 intercambios. Existe porque el Exploiter no imprime nada por atributo:
+        # una corrida se pasó 40 minutos sin que hubiera forma de saber si iba por el atributo 5 o
+        # por el 50, y decidir si cortarla fue a ciegas. El adapter es el único punto por el que
+        # pasan TODOS los intercambios de las dos etapas, así que es donde el contador vale.
+        self._enviados += 1
+        if self._enviados % 10 == 0:
+            print(f"      … {self._enviados} intercambios con el agente", flush=True)
         coroutine = self._exchange(query, session_id or str(uuid.uuid4()))
         try:
-            return _drive(coroutine)
+            respuesta = _drive(coroutine)
         except Exception as error:
             coroutine.close()
             return TargetResponse(content="", failed=True, failure_reason=f"{type(error).__name__}: {error}")
+        if isinstance(respuesta.raw, dict) and "mcp" in respuesta.raw:
+            self.trazas[query] = respuesta.raw["mcp"]
+        return respuesta
 
     async def _exchange(self, query: str, session_id: str) -> TargetResponse:
         async with httpx.AsyncClient(base_url=self._base_url, headers=self._headers, timeout=self._timeout) as client:
@@ -148,19 +170,36 @@ class AlquimiaAssistant(TargetAssistant):
             if not task_id:
                 return TargetResponse(content="", failed=True, failure_reason=f"no task id in {meta}")
 
-            content, blocked = await self._stream(client, str(task_id))
+            content, blocked, eventos = await self._stream(client, str(task_id))
 
+        # Las dos ramas de fallo también llevan la traza. El adapter del demo las devolvía sin
+        # `raw`, y es exactamente al revés de lo que hace falta: un intercambio que se bloqueó o
+        # volvió vacío es el que más necesita decir qué tools alcanzó a llamar antes de morirse.
+        # Sin eso, un fallo de transporte y un agente que se colgó llamando al cerebro se leen
+        # igual, y los dos entran al reporte como `ungraded` sin nada que los distinga.
+        traza = leer_traza(eventos)
         if blocked:
-            return TargetResponse(content="", failed=True, failure_reason=f"agent blocked on {blocked}")
+            return TargetResponse(
+                content="", failed=True, failure_reason=f"agent blocked on {blocked}",
+                raw={**meta, "mcp": traza},
+            )
         if not content.strip():
-            return TargetResponse(content="", failed=True, failure_reason="empty stream")
+            return TargetResponse(
+                content="", failed=True, failure_reason="empty stream",
+                raw={**meta, "mcp": traza},
+            )
+        # `raw` lleva el meta del runtime MÁS la traza del MCP. El adapter del demo dejaba sólo
+        # el meta y tiraba los eventos, que es donde viven los `tool_calls` y los `block_id`: la
+        # única evidencia que permite verificar un `doc=0` en vez de creerle al juez.
         return TargetResponse(
             content=content,
             session_id=str(_pick(meta, "session_id", "sessionid", "sessionId", default=session_id)),
-            raw=meta,
+            raw={**meta, "mcp": traza},
         )
 
-    async def _stream(self, client: httpx.AsyncClient, task_id: str) -> tuple[str, str | None]:
+    async def _stream(
+        self, client: httpx.AsyncClient, task_id: str
+    ) -> tuple[str, str | None, list[dict[str, Any]]]:
         content = ""
         seen: list[dict[str, Any]] = []
         async with client.stream("GET", f"event/stream/{task_id}") as response:
@@ -178,12 +217,12 @@ class AlquimiaAssistant(TargetAssistant):
                 seen.append(event)
                 event_class = _pick(event, "event_class", "eventClass", "type")
                 if event_class in _BLOCKING_EVENTS:
-                    return "", str(event_class)
+                    return "", str(event_class), seen
                 extracted = _extract_content(event)
                 if event_class == _FINAL_EVENT:
-                    return extracted or content, None
+                    return extracted or content, None, seen
                 if event_class == _PARTIAL_EVENT and extracted:
                     content = extracted
         if not content:
             content = next((text for event in reversed(seen) if (text := _extract_content(event))), "")
-        return content, None
+        return content, None, seen
