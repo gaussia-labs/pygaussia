@@ -367,6 +367,17 @@ class TestTheShippedTwister:
     def test_it_records_the_model_behind_it(self):
         assert PromptedFactTwister(StubTwistModel([])).model == "StubTwistModel"
 
+    def test_records_the_model_s_own_identifier_when_it_has_one(self) -> None:
+        """The stub above names itself nowhere, so it exercises the fallback and not the rule.
+
+        A real chat model carries `model_name`, and that is what has to reach `Probe.model`: the
+        adapter class is one class for every OpenAI-compatible provider, so recording it leaves two
+        runs against two different models indistinguishable in the record (FR-046).
+        """
+        stub = StubTwistModel([])
+        stub.model_name = "google/gemma-4-31B-it:cerebras"
+        assert PromptedFactTwister(stub).model == "google/gemma-4-31B-it:cerebras"
+
     def test_an_off_format_answer_yields_no_twist(self):
         model = StubTwistModel([None])
 

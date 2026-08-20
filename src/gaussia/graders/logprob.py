@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from gaussia.core.exceptions import LogprobsExtractionError, LogprobsNotSupportedError
 from gaussia.core.grader import Grader
+from gaussia.llm.identity import model_identity
 from gaussia.schemas.roastme import PrincipleGrade
 
 if TYPE_CHECKING:
@@ -208,7 +209,7 @@ class LogprobGrader(Grader):
             score=self._verdict_probability(alternatives),
             grader=type(self).__name__,
             method=LOGPROB_METHOD,
-            model=_model_identity(self._model),
+            model=model_identity(self._model),
             evidence={"position": position, "top_logprobs": alternatives, "final_answer": content},
         )
 
@@ -269,7 +270,7 @@ class LogprobGrader(Grader):
             score=sum(votes) / len(votes),
             grader=type(self).__name__,
             method=SAMPLING_FALLBACK_METHOD,
-            model=_model_identity(self._model),
+            model=model_identity(self._model),
             evidence={"samples": answers, "votes": votes, "abandoned": abandoned},
         )
 
@@ -329,8 +330,3 @@ def _aggregate_logprobs(alternatives: list[dict[str, Any]], surface_forms: tuple
         return -math.inf
     largest = max(matches)
     return largest + math.log(sum(math.exp(logprob - largest) for logprob in matches))
-
-
-def _model_identity(model: Any) -> str:
-    name = getattr(model, "model_name", None)
-    return str(name) if name else type(model).__name__

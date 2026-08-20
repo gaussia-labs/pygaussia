@@ -31,6 +31,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from gaussia.core.fact_twister import FactTwister
+from gaussia.llm.identity import model_identity
 from gaussia.llm.structured import ResponseFormatOutput, StructuredOutputStrategy, parsed
 from gaussia.schemas.roastme import GroundedTwist
 
@@ -212,7 +213,7 @@ class LlmMentionExtractor(MentionExtractor):
     @property
     def model(self) -> str:
         """Identity recorded on ``Probe.model`` for probes built over this reading (FR-046)."""
-        return type(self._model).__name__
+        return model_identity(self._model)
 
     def extract(self, documents: Sequence[Document]) -> frozenset[str]:
         found: set[str] = set()
@@ -298,7 +299,7 @@ class PromptedFactTwister(FactTwister):
 
     @property
     def model(self) -> str:
-        return type(self._model).__name__
+        return model_identity(self._model)
 
     def twist(self, passage: str, pattern: str, entity_kind: str, phrasing_hint: str) -> GroundedTwist | None:
         if pattern not in self._patterns:
