@@ -1,6 +1,46 @@
 # CHANGELOG
 
 
+## v1.1.0-b.10 (2026-08-20)
+
+### Bug Fixes
+
+- **llm**: Keep model_identity typed, so mypy stops at the getattr
+  ([`e73a7a6`](https://github.com/gaussia-labs/pygaussia/commit/e73a7a6b2f00ea409197ab7527483f73f3a381b6))
+
+The CI's type check failed on all three Python versions: getattr returns Any, and an isinstance
+  guard on an Any does not narrow it enough to satisfy a function declared -> str, which is
+  precisely the hole no-any-return exists to catch. The private helper this replaced avoided it by
+  wrapping in str(); rewriting it as a public function dropped that without noticing.
+
+Annotating the lookup as object is the honest form: the attribute may hold anything, and the
+  isinstance is what decides whether it is an identifier at all.
+
+Found because ruff check src tests and pytest --no-cov were run locally instead of the three steps
+  CI actually runs: ruff check ., mypy src/gaussia, and pytest with coverage.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+- **roastme**: Record which model answered, not which adapter class it came through
+  ([`53bdc6e`](https://github.com/gaussia-labs/pygaussia/commit/53bdc6e2ad2033c13ee4a8dac9febc85b59881de))
+
+Probe.model carried the LangChain adapter's class name. Measured on a live run: every probe of an
+  84-probe grounded run recorded 'ChatOpenAI', which is what a local server, a router and a hosted
+  API are all reached through. FR-046 exists so a weak result is attributable to the substitutable
+  piece that produced it, and a string four models share attributes nothing — while looking exactly
+  like a record that says something.
+
+The grader already resolved this correctly through a private helper. It is now public as
+  gaussia.llm.identity.model_identity and the two FactTwister/MentionExtractor properties use it
+  instead of restating the fallback as the rule. Reads model_name then model, both defensively: the
+  interface asked for is BaseChatModel, which guarantees neither.
+
+The existing tests kept passing because their stub names itself nowhere, so they pinned the fallback
+  and never the rule. Both now assert the identifier wins when there is one.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+
 ## v1.1.0-b.9 (2026-08-18)
 
 ### Bug Fixes
