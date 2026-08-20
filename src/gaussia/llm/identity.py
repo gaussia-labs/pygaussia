@@ -24,7 +24,9 @@ def model_identity(model: Any) -> str:
     guarantees neither.
     """
     for attribute in ("model_name", "model"):
-        name = getattr(model, attribute, None)
-        if name and isinstance(name, str):
+        # Annotated `object` rather than left to inference: `getattr` returns `Any`, and returning
+        # it from a function declared `-> str` is exactly the hole `no-any-return` exists to catch.
+        name: object = getattr(model, attribute, None)
+        if isinstance(name, str) and name:
             return name
     return type(model).__name__
