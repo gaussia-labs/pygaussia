@@ -7,18 +7,18 @@ from gaussia.schemas.privacy import (
     ClassMetrics,
     CriticalFNContribution,
     DetectionScoreContribution,
+    PIIDetectionMetric,
+    PIIDetectionRanking,
     PrivacyDomainConfig,
-    PrivacyMetric,
-    PrivacyRanking,
     Span,
     interpretation_for,
 )
 
 
-def _metric(name: str = "d", **overrides) -> PrivacyMetric:
+def _metric(name: str = "d", **overrides) -> PIIDetectionMetric:
     base: dict = {"session_id": "s", "assistant_id": "a", "name": name}
     base.update(overrides)
-    return PrivacyMetric(**base)
+    return PIIDetectionMetric(**base)
 
 
 class TestSpan:
@@ -120,7 +120,7 @@ class TestContributions:
             CriticalFNContribution(severity_weight=0.5, fn_rate=0.4, contribution=0.99)
 
 
-class TestPrivacyMetricValidators:
+class TestPIIDetectionMetricValidators:
     def test_score_100_inconsistency_rejected(self):
         with pytest.raises(ValidationError):
             _metric(score=0.5, score_100=49.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0)
@@ -174,7 +174,7 @@ class TestPrivacyMetricValidators:
         assert metric.r_final_100 == metric.r_final * 100.0
 
 
-class TestPrivacyRanking:
+class TestPIIDetectionRanking:
     def test_descending_order_enforced(self):
         a = _metric(
             name="a", score=0.9, score_100=90.0, detection_score=0.9, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
@@ -182,9 +182,11 @@ class TestPrivacyRanking:
         b = _metric(
             name="b", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
         )
-        PrivacyRanking(session_id="s", assistant_id="a", results=[a, b], winning_detector="a", iou_threshold=0.5)
+        PIIDetectionRanking(session_id="s", assistant_id="a", results=[a, b], winning_detector="a", iou_threshold=0.5)
         with pytest.raises(ValidationError):
-            PrivacyRanking(session_id="s", assistant_id="a", results=[b, a], winning_detector="b", iou_threshold=0.5)
+            PIIDetectionRanking(
+                session_id="s", assistant_id="a", results=[b, a], winning_detector="b", iou_threshold=0.5
+            )
 
     def test_failed_entries_must_be_at_tail(self):
         ok = _metric(
@@ -192,7 +194,7 @@ class TestPrivacyRanking:
         )
         failed = _metric(name="bad", success=False, error="x")
         with pytest.raises(ValidationError):
-            PrivacyRanking(
+            PIIDetectionRanking(
                 session_id="s", assistant_id="a", results=[failed, ok], winning_detector=None, iou_threshold=0.5
             )
 
@@ -201,11 +203,13 @@ class TestPrivacyRanking:
             name="ok", score=0.5, score_100=50.0, detection_score=0.5, coverage=1.0, domain_fit=1.0, regulatory_fit=1.0
         )
         with pytest.raises(ValidationError):
-            PrivacyRanking(session_id="s", assistant_id="a", results=[ok], winning_detector="wrong", iou_threshold=0.5)
+            PIIDetectionRanking(
+                session_id="s", assistant_id="a", results=[ok], winning_detector="wrong", iou_threshold=0.5
+            )
 
     def test_all_failed_has_no_winner(self):
         failed = _metric(name="bad", success=False, error="x")
-        ranking = PrivacyRanking(
+        ranking = PIIDetectionRanking(
             session_id="s", assistant_id="a", results=[failed], winning_detector=None, iou_threshold=0.5
         )
         assert ranking.winning_detector is None
