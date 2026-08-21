@@ -13,7 +13,7 @@ The `Judge` supports two evaluation modes:
 
 | Mode | How it works | Best for |
 |---|---|---|
-| **Structured output** | Uses LangChain's `create_agent` with `response_format` for schema-validated responses | Models that support structured outputs (GPT-4o, Gemini) |
+| **Structured output** | Binds the output schema to the model, constraining generation with `response_format` | Models that support structured outputs (GPT-4o, Gemini) |
 | **Regex extraction** | Embeds JSON schema in the prompt, extracts from markdown code blocks | Any model, including open-source |
 
 ## Configuration
@@ -53,6 +53,37 @@ results = Context.run(
 | `strict` | `True` | Enforce strict schema validation |
 | `bos_json_clause` | `` ```json `` | Opening marker for JSON extraction (regex mode only) |
 | `eos_json_clause` | `` ``` `` | Closing marker for JSON extraction (regex mode only) |
+
+### Choosing how the schema is bound
+
+Judging needs no tools, so the default strategy asks for the schema through `response_format`
+and declares none. This matters on self-hosted OpenAI-compatible servers: vLLM rejects a
+request that carries an empty `tools` array with HTTP 400.
+
+Metrics use that default. A custom metric built on `Judge` directly can inject the other
+strategy, for a provider that exposes structured output only through tool calling:
+
+```python
+from gaussia.llm.judge import Judge
+from gaussia.llm.structured import ToolCallingOutput
+
+judge = Judge(model=model, use_structured_output=True, structured_output=ToolCallingOutput())
+```
+
+<Warning>
+  **Never leave the route to the provider's own default.** Bound without naming it, a model served
+  behind the HuggingFace router ignored the schema entirely and generated prose until it hit forty
+  thousand completion tokens — so the request failed on **length**, which reads as a model failure and
+  is a binding failure. Both strategies above worked on that same provider once named. This is why the
+  strategy is a parameter rather than a detail, and why every model-driven component of Roast Me takes
+  one too.
+</Warning>
+
+Both strategies request `include_raw`, so a bound runnable answers with a mapping carrying the message
+itself beside the parsed value. `parsed(answer, Schema)` from the same module is the other half of that
+contract: it returns the instance, or `None` when the provider answered off-format. `None` is a thing
+that happens, and what it costs belongs to the caller — a generator can re-ask, a reading of one
+passage can contribute nothing, and a gate that must return a number has neither option.
 
 ## Compatible models
 

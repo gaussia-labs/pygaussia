@@ -1,0 +1,215 @@
+---
+title: "Privacy"
+description: "Score and rank PII/PHI detectors for a regulated domain with a domain-adjusted detection score and a complementary risk index"
+---
+
+## Overview
+
+The **Privacy** metric implements the **Domain-Adjusted Privacy Detection Score**: a single
+auditable score in `[0, 100]` measuring how suitable a PII/PHI detector is for your domain,
+plus a **risk index** that surfaces critical blind spots the score alone might hide.
+
+You bring a labelled corpus (each turn carries ground-truth PII spans) and one or more
+detectors. `Privacy` evaluates a single detector; `PrivacyRanker` ranks several so you can
+decide which to ship.
+
+```
+Score = DetectionScore · Coverage · DomainFit · RegulatoryFit · Penalty_FN
+```
+
+- **DetectionScore** `Σ_c w_c · F2_c` — recall-weighted F-score per class, weighted by how critical each class is.
+- **Coverage** `|classes_supported ∩ domain| / |domain|` — how much of the taxonomy the detector can detect at all.
+- **DomainFit / RegulatoryFit** — expert `[0, 1]` scalars supplied per detector (use `1.0` when not applicable).
+- **Penalty_FN** `1 − Σ_c ρ_c · FNrate_c` — penalty for missing critical entities.
+- **Risk index** `R_final = 1 − (1 − R1)(1 − R2)` — combines the weakest-class risk (`R1`) and systemic risk (`R2`).
+
+The score is a deterministic function of corpus-wide counts, so there is **no statistical mode**
+(passing `statistical_mode` raises). `load_time` and `inference_latency` are reported for
+diagnostics only and never enter the score.
+
+## Usage
+
+Each turn is a `PrivacyBatch`: `query` is the text shown to the detector and `spans` are the
+ground-truth annotations. Span offsets are character-level and half-open (`[start, end)`).
+`assistant` / `ground_truth_assistant` stay empty.
+
+```python
+from gaussia.core.retriever import Retriever
+from gaussia.detectors.presidio import PresidioDetector
+from gaussia.metrics.privacy import Privacy
+from gaussia.schemas.common import Dataset
+from gaussia.schemas.privacy import PrivacyBatch, PrivacyDomainConfig, Span
+
+
+class MyRetriever(Retriever):
+    def load_dataset(self) -> list[Dataset]:
+        turn = PrivacyBatch(
+            qa_id="t1",
+            query="Reach me at john@example.com",
+            assistant="",
+            ground_truth_assistant="",
+            spans=[Span(label="email_address", start=12, end=28, text="john@example.com")],
+        )
+        return [Dataset(session_id="s", assistant_id="bot", context="", conversation=[turn])]
+
+
+domain = PrivacyDomainConfig(
+    classes=frozenset({"email_address", "phone_number"}),
+    criticality_weights={"email_address": 0.6, "phone_number": 0.4},  # must sum to 1.0
+    fn_severity_weights={"email_address": 0.7, "phone_number": 0.3},  # must sum to 1.0
+    regulatory_framework="GDPR",
+)
+
+detector = PresidioDetector(name="presidio", domain_fit=0.9, regulatory_fit=0.8)
+
+metric = Privacy.run(MyRetriever, detector=detector, domain_config=domain)[0]
+print(f"{metric.name}: {metric.score_100:.1f}/100 -> {metric.interpretation}")
+print(f"risk r_final={metric.r_final:.2f}, weakest class={metric.r1_weakest_class}")
+```
+
+### Ranking several detectors
+
+```python
+from gaussia.metrics.privacy import PrivacyRanker
+
+ranking = PrivacyRanker.run(
+    MyRetriever,
+    detectors=[detector_a, detector_b, detector_c],
+    domain_config=domain,
+)[0]
+
+print("winner:", ranking.winning_detector)
+for result in ranking.results:  # ordered by score_100 desc; failures at the tail
+    print(result.name, result.score_100, result.success)
+```
+
+If a detector raises, `PrivacyRanker` records a failed `PrivacyMetric` (`success=False`,
+`score_100=0`) and keeps going, so one broken backend never aborts the ranking. Each detector
+is set up once per run, not once per session.
+
+### Bring your own detector
+
+Any backend works once wrapped in a `PIIDetector`. Implement two members — `supported_classes`
+(the classes the backend advertises; drives `coverage`) and `predict` (the spans it finds) —
+and optionally `setup` for one-time loading (called once per run, before any `predict`):
+
+```python
+import re
+
+from gaussia.core.detector import PIIDetector
+from gaussia.schemas.privacy import Span
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+
+class RegexEmailDetector(PIIDetector):
+    @property
+    def supported_classes(self) -> frozenset[str]:
+        return frozenset({"email_address"})
+
+    def predict(self, text: str) -> list[Span]:
+        return [
+            Span(label="email_address", start=m.start(), end=m.end(), text=m.group(), score=1.0)
+            for m in _EMAIL.finditer(text)
+        ]
+
+    def setup(self) -> None:  # optional — load heavy models here
+        ...
+
+
+detector = RegexEmailDetector(name="regex-email", domain_fit=0.7, regulatory_fit=1.0)
+```
+
+Predicted labels outside `domain_config.classes` are filtered out (counted in
+`out_of_domain_filtered`), so a detector may safely return classes the domain does not track.
+
+## Parameters
+
+### `Privacy.run` / `PrivacyRanker.run`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `retriever` | `type[Retriever]` | Data source class yielding `Dataset`s of `PrivacyBatch`. |
+| `detector` | `PIIDetector` | Single detector (`Privacy` only). |
+| `detectors` | `list[PIIDetector]` | Detectors to rank (`PrivacyRanker` only). |
+| `domain_config` | `PrivacyDomainConfig` | Shared domain taxonomy, weights and IoU threshold. |
+
+### `PrivacyDomainConfig`
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `classes` | `frozenset[str]` | *required* | The domain taxonomy `C_d`. |
+| `criticality_weights` | `dict[str, float]` | *required* | `w_c` per class; keys must equal `classes` and sum to `1.0`. |
+| `fn_severity_weights` | `dict[str, float]` | *required* | `ρ_c` per class; same constraints. |
+| `iou_threshold` | `float` | `0.50` | IoU cutoff for span matching, in `(0, 1]`. |
+| `regulatory_framework` | `str \| None` | `None` | Free-form label (`"HIPAA"`, `"GDPR"`, …); informational. |
+
+### `PIIDetector` (per detector)
+
+Constructor fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `str` | Identifier used in the result and ranking. |
+| `domain_fit` | `float` | Expert `[0, 1]` scalar; required. |
+| `regulatory_fit` | `float` | Expert `[0, 1]` scalar; required (use `1.0` when no regulation applies). |
+
+Contract to implement in a subclass:
+
+| Member | Type | Description |
+|---|---|---|
+| `supported_classes` | `property -> frozenset[str]` | Classes the backend can detect; intersected with the domain to compute `coverage`. |
+| `predict` | `(text: str) -> list[Span]` | Spans the backend finds in one turn's `query`. |
+| `setup` | `() -> None` | Optional one-time init (model loading); called once per run before any `predict`. |
+
+`domain_fit` and `regulatory_fit` are judgement calls you assign, not measured: `domain_fit`
+is how well the backend's training data matches your domain's language (clinical notes,
+legal text, chat), `regulatory_fit` how well its class taxonomy covers the entities a given
+framework (HIPAA, GDPR) cares about. Both scale the final score linearly, so when in doubt
+prefer a conservative estimate and keep them consistent across the detectors you compare.
+
+## Output schema
+
+### `PrivacyMetric`
+
+| Field | Type | Description |
+|---|---|---|
+| `score` / `score_100` | `float` | Final score in `[0, 1]` and `[0, 100]`. |
+| `interpretation` | `str` | Qualitative band (`"Not suitable"` … `"Recommended with strong local evidence"`). |
+| `detection_score` | `float` | `Σ_c w_c · F2_c`. |
+| `coverage` | `float` | Taxonomic coverage. |
+| `penalty_fn` | `float` | `1 − CriticalFN`. |
+| `r1_weakest_class_risk` / `r1_weakest_class` | `float` / `str \| None` | Weakest-link risk and the class achieving it. |
+| `r2_systemic_risk` / `r_final` | `float` | Systemic and combined risk. |
+| `class_metrics` | `dict[str, ClassMetrics]` | Per-class `tp/fp/fn`, precision, recall, `f2`, `fn_rate`. |
+| `covered_domain_classes` / `missing_domain_classes` | `list[str]` | Domain classes the detector does / doesn't support. |
+| `out_of_domain_filtered` | `int` | Predictions dropped for being outside the taxonomy (never counted as FP). |
+| `load_time` / `inference_latency` | `float` | Diagnostic timings; excluded from the score. |
+| `success` / `error` | `bool` / `str \| None` | `False` with a message for a detector that failed under the ranker. |
+
+### `PrivacyRanking`
+
+| Field | Type | Description |
+|---|---|---|
+| `results` | `list[PrivacyMetric]` | Ordered by `score_100` descending; failures at the tail. |
+| `winning_detector` | `str \| None` | Top successful detector, or `None` if all failed. |
+| `iou_threshold` / `domain_classes` / `regulatory_framework` | — | Echoes of the run's config for traceability. |
+
+Field names match the sandbox JSON, so `model_dump(mode="json")` feeds the diagnostic panel
+without changes.
+
+## Edge cases
+
+- **Out-of-domain predictions** are filtered before accounting (counted in `out_of_domain_filtered`, never FP).
+- **Out-of-domain ground truth** — a ground-truth span whose label is not in `classes`, or a turn that is not a `PrivacyBatch`, fails fast rather than silently skewing the counts.
+- **Overlapping predictions** are resolved by greedy non-maximum suppression on confidence.
+- **Partial overlaps** count as a true positive when `IoU ≥ iou_threshold`, otherwise as FP + FN.
+- **A class with zero ground truth** keeps its full weight (its `f2` is `0.0`); weights are never renormalised.
+
+<Note>
+  The metric core has no extra dependencies — bring your own detector by subclassing
+  `PIIDetector`. Optional adapters require an extra: `pip install "gaussia[privacy-presidio]"`
+  (Microsoft Presidio) or `pip install "gaussia[privacy-huggingface]"` (transformers
+  token-classification). A complete runnable notebook lives in
+  [`examples/privacy/jupyter/privacy.ipynb`](https://github.com/gaussia-labs/pygaussia/blob/develop/examples/privacy/jupyter/privacy.ipynb).
+</Note>

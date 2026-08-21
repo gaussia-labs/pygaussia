@@ -41,7 +41,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-
 dependencies = [
     "langchain>=1.2",
     "langchain-core>=1.2.11",
@@ -59,6 +58,7 @@ context = []
 conversational = []
 bestof = []
 agentic = []
+role-adherence = []
 
 humanity = [
     "numpy>=1.24.0",
@@ -92,6 +92,16 @@ regulatory = [
     "accelerate>=0.25.0",
 ]
 
+privacy-presidio = [
+    "presidio-analyzer>=2.2",
+    "spacy>=3.7",
+]
+
+privacy-huggingface = [
+    "transformers>=4.40",
+    "torch>=2.1",
+]
+
 explainability = [
     "interpreto>=0.1.0",
     "torch>=2.0.0",
@@ -121,9 +131,24 @@ prompt-optimizer = [
 
 generators = []
 
+evalhub = [
+    "gaussia[metrics]",
+    "eval-hub-sdk[adapter]>=0.1.5,<0.2.0",
+    "requests>=2.33.0",
+]
+
 all = [
     "gaussia[metrics,generators,explainability,prompt-optimizer]",
 ]
+
+[project.urls]
+Homepage = "https://github.com/gaussia-labs/pygaussia"
+Repository = "https://github.com/gaussia-labs/pygaussia.git"
+"Bug Tracker" = "https://github.com/gaussia-labs/pygaussia/issues"
+Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
+
+
+
 
 [dependency-groups]
 dev = [
@@ -140,12 +165,6 @@ dev = [
     "types-tqdm>=4.66.0",
     "pandas-stubs>=2.0.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/gaussia-labs/pygaussia"
-Repository = "https://github.com/gaussia-labs/pygaussia.git"
-"Bug Tracker" = "https://github.com/gaussia-labs/pygaussia/issues"
-Changelog = "https://github.com/gaussia-labs/pygaussia/releases"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gaussia"]
@@ -279,6 +298,11 @@ module = [
     "torch.*",
     "transformers",
     "transformers.*",
+    "langchain.*",
+    "langchain_core.*",
+    "presidio_analyzer",
+    "presidio_analyzer.*",
+    "spacy",
 ]
 follow_imports = "skip"
 
@@ -289,32 +313,13 @@ module = [
     "hdbscan.*",
     "umap.*",
     "interpreto.*",
+    "scipy.*",
     "networkx",
     "peft.*",
     "accelerate.*",
 ]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = [
-    "gaussia.embedders.qwen",
-    "gaussia.generators.context_loaders.local_markdown",
-    "gaussia.guardians",
-    "gaussia.guardians.llms.providers",
-    "gaussia.llm.judge",
-    "gaussia.metrics.agentic",
-    "gaussia.metrics.best_of",
-    "gaussia.metrics.bias",
-    "gaussia.metrics.humanity",
-    "gaussia.metrics.regulatory",
-    "gaussia.metrics.toxicity",
-    "gaussia.metrics.vision",
-    "gaussia.prompt_optimizer.mipro.mipro",
-    "gaussia.rerankers.qwen",
-    "gaussia.schemas.generators",
-    "gaussia.statistical.frequentist",
-]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -390,7 +395,15 @@ major_version_zero = true
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["src/gaussia/__init__.py:__version__"]
-build_command = "pip install build && python -m build"
+# `uv lock` re-stamps the project's own version in uv.lock, which semantic-release does not know
+# about and therefore left behind at every release. `uv` is installed here rather than assumed:
+# this command runs inside the release action's container, which has python and pip and nothing the
+# runner installed. The lock is refreshed before the build so that a failure aborts the release
+# rather than tagging a half-updated tree.
+build_command = "pip install build uv && uv lock && python -m build"
+# Files added to the release commit beyond the version locations above. The build runs before the
+# staging step, so what `uv lock` rewrites is what gets committed.
+assets = ["uv.lock"]
 commit_message = "chore(release): v{version}"
 tag_format = "v{version}"
 

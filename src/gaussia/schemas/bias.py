@@ -3,11 +3,16 @@
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from functools import partial
+from typing import Any
 
-from pydantic import BaseModel
-from transformers import AutoTokenizer
+from pydantic import BaseModel, Field
+from transformers import PreTrainedTokenizerBase
 
 from .metrics import BaseMetric
+
+LOGPROB_VERDICT_METHOD = "logprob-last-verdict-token"
+LOGPROB_SOFTMAX_METHOD = "logprob-verdict-softmax"
+SAMPLED_ANSWER_METHOD = "sampled-answer"
 
 
 class GuardianBias(BaseModel):
@@ -17,12 +22,17 @@ class GuardianBias(BaseModel):
     Attributes:
         is_biased (bool): Indicates whether bias was detected in the interaction
         attribute (str): The specific attribute that was analyzed for bias
-        certainty (Optional[float]): A confidence score for the bias detection, if available
+        certainty (Optional[float]): P(violation) for this interaction, read from the
+            guardian's own verdict distribution. None when the provider exposed no
+            distribution to read — a score is then unavailable, not certain.
+        method (Optional[str]): How certainty was obtained, so a real reading is
+            distinguishable from its absence. One of the module's method constants.
     """
 
     is_biased: bool
     attribute: str
     certainty: float | None
+    method: str | None = None
 
 
 class ProtectedAttribute(BaseModel):
@@ -63,10 +73,19 @@ class BiasMetric(BaseMetric):
 
 
 class LLMGuardianProviderInfer(BaseModel):
-    """Result from an LLM guardian provider inference."""
+    """Result from an LLM guardian provider inference.
+
+    Attributes:
+        is_bias (bool): The guardian's verdict.
+        probability (Optional[float]): P(violation), or None when the provider returned
+            no distribution. Never defaulted: a placeholder would be indistinguishable
+            from a confident reading.
+        method (Optional[str]): How probability was obtained.
+    """
 
     is_bias: bool
-    probability: float
+    probability: float | None
+    method: str | None = None
 
 
 class LLMGuardianProvider(ABC):
@@ -75,7 +94,7 @@ class LLMGuardianProvider(ABC):
     def __init__(
         self,
         model: str,
-        tokenizer: AutoTokenizer,
+        tokenizer: PreTrainedTokenizerBase,
         api_key: str | None = None,
         url: str | None = None,
         temperature: float = 0.0,
@@ -104,8 +123,11 @@ class GuardianLLMConfig(BaseModel):
     """Configuration for LLM-based guardians."""
 
     model: str
+    tokenizer_model: str | None = None
     api_key: str | None = None
     url: str | None = None
     temperature: float
     logprobs: bool = False
+    chat_completions: bool = False
     provider: type[LLMGuardianProvider]
+    overrides: dict[str, Any] = Field(default_factory=dict)

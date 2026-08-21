@@ -395,3 +395,42 @@ def create_agentic_dataset() -> list[Dataset]:
             ],
         ),
     ]
+
+
+def create_role_adherence_dataset() -> Dataset:
+    """Create a dataset for RoleAdherence metric testing with a fintech support role."""
+    conversation = [
+        create_sample_batch(
+            qa_id="qa_001",
+            query="Can you help me with my account balance?",
+            assistant="Of course! I can help you check your account balance. Please provide your account number.",
+            ground_truth_assistant="I can help you with account balance inquiries.",
+        ),
+        create_sample_batch(
+            qa_id="qa_002",
+            query="Should I invest in crypto?",
+            assistant="I'm here to help with account and transaction support. For investment advice, please consult a financial advisor.",
+            ground_truth_assistant="I cannot provide investment advice; please consult a financial advisor.",
+        ),
+        create_sample_batch(
+            qa_id="qa_003",
+            query="How do I report a fraudulent transaction?",
+            assistant="To report fraud, please call our 24/7 hotline or visit the nearest branch immediately.",
+            ground_truth_assistant="Contact our fraud department immediately to report suspicious transactions.",
+        ),
+    ]
+
+    return Dataset(
+        session_id="role_adherence_session",
+        assistant_id="fintech_support_bot",
+        language="english",
+        context="Fintech customer support interaction",
+        chatbot_role=(
+            "You are a fintech customer support agent. "
+            "Your scope is limited to account inquiries, transaction support, and fraud reporting. "
+            "You must not provide investment advice. "
+            "Always maintain a professional and empathetic tone. "
+            "Proactively offer next steps when resolving customer issues."
+        ),
+        conversation=conversation,
+    )

@@ -1,0 +1,329 @@
+[
+  {
+    "session_id": "comparison_session",
+    "assistant_id": "assistant_alpha",
+    "language": "english",
+    "context": "You are a helpful AI assistant that provides clear and concise answers.",
+    "conversation": [
+      {
+        "qa_id": "q1",
+        "query": "What are the benefits of renewable energy?",
+        "ground_truth_assistant": "Renewable energy provides clean power, reduces carbon emissions, and offers long-term cost savings.",
+        "assistant": "Renewable energy offers numerous benefits including reduced greenhouse gas emissions, decreased air pollution, energy independence, job creation in green sectors, and long-term cost savings as technology improves. Solar, wind, and hydro power are sustainable alternatives to fossil fuels.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 3},
+              "result": {"documents": ["Renewable energy reduces emissions and provides long-term savings..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2",
+        "query": "How does machine learning differ from traditional programming?",
+        "ground_truth_assistant": "Machine learning learns patterns from data, while traditional programming follows explicit rules.",
+        "assistant": "Traditional programming requires developers to write explicit rules for every scenario. Machine learning, in contrast, allows systems to learn patterns from data and improve over time without being explicitly programmed. This makes ML particularly useful for complex tasks like image recognition and natural language processing.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming", "top_k": 3},
+              "result": {"documents": ["ML learns from data while traditional programming uses explicit rules..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3",
+        "query": "What makes a good team leader?",
+        "ground_truth_assistant": "Good team leaders communicate well, inspire trust, and support their team's growth.",
+        "assistant": "A good team leader combines strong communication skills with emotional intelligence. They set clear goals, provide constructive feedback, recognize achievements, and create an environment where team members feel valued and empowered to contribute their best work.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "qualities of good team leader", "top_k": 3},
+              "result": {"documents": ["Effective leaders communicate well and support growth..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "qualities of good team leader", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      }
+    ]
+  },
+  {
+    "session_id": "comparison_session",
+    "assistant_id": "assistant_beta",
+    "language": "english",
+    "context": "You are a helpful AI assistant that provides clear and concise answers.",
+    "conversation": [
+      {
+        "qa_id": "q1",
+        "query": "What are the benefits of renewable energy?",
+        "ground_truth_assistant": "Renewable energy provides clean power, reduces carbon emissions, and offers long-term cost savings.",
+        "assistant": "Renewable energy is good because it doesn't pollute as much. Solar panels and wind turbines can generate electricity without burning fossil fuels.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "web_search",
+              "parameters": {"query": "renewable energy benefits"},
+              "result": {"results": ["Renewable energy is cleaner than fossil fuels..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2",
+        "query": "How does machine learning differ from traditional programming?",
+        "ground_truth_assistant": "Machine learning learns patterns from data, while traditional programming follows explicit rules.",
+        "assistant": "In traditional programming you write code. In machine learning the computer figures things out from data. It's basically statistics but with more computing power.",
+        "agentic": {
+          "tools_used": [],
+          "final_answer_uses_tools": false
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3",
+        "query": "What makes a good team leader?",
+        "ground_truth_assistant": "Good team leaders communicate well, inspire trust, and support their team's growth.",
+        "assistant": "A good leader tells people what to do and makes sure work gets done on time. They need to be organized and keep track of everything the team is doing.",
+        "agentic": {
+          "tools_used": [],
+          "final_answer_uses_tools": false
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "qualities of good team leader", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      }
+    ]
+  },
+  {
+    "session_id": "comparison_session",
+    "assistant_id": "assistant_gamma",
+    "language": "english",
+    "context": "You are a helpful AI assistant that provides clear and concise answers.",
+    "conversation": [
+      {
+        "qa_id": "q1",
+        "query": "What are the benefits of renewable energy?",
+        "ground_truth_assistant": "Renewable energy provides clean power, reduces carbon emissions, and offers long-term cost savings.",
+        "assistant": "The transition to renewable energy represents one of the most significant technological and economic shifts of our era. Benefits include: 1) Environmental: Zero direct emissions, reduced air/water pollution, minimal land disruption compared to mining. 2) Economic: Decreasing costs, energy price stability, job creation. 3) Strategic: Energy independence, distributed generation resilience. 4) Health: Reduced respiratory diseases from air pollution.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 5},
+              "result": {"documents": ["Environmental benefits include zero emissions...", "Economic benefits include cost savings..."]},
+              "step": 1
+            },
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "health impact renewable energy", "top_k": 3},
+              "result": {"documents": ["Reduced respiratory diseases from cleaner air..."]},
+              "step": 2
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2",
+        "query": "How does machine learning differ from traditional programming?",
+        "ground_truth_assistant": "Machine learning learns patterns from data, while traditional programming follows explicit rules.",
+        "assistant": "The fundamental paradigm shift is this: traditional programming defines explicit rules (if X then Y), while ML systems derive rules from data patterns. Traditional: deterministic, interpretable, requires domain expertise. ML: probabilistic, can find non-obvious patterns, requires quality data. Think of it as teaching vs. training - you teach a traditional program the rules, but you train an ML model with examples.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming paradigm", "top_k": 3},
+              "result": {"documents": ["ML derives rules from data while traditional programming defines explicit rules..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3",
+        "query": "What makes a good team leader?",
+        "ground_truth_assistant": "Good team leaders communicate well, inspire trust, and support their team's growth.",
+        "assistant": "Effective leadership combines multiple competencies: Strategic vision (setting direction), Emotional intelligence (understanding team dynamics), Communication (clarity and active listening), Delegation (trusting and empowering others), Adaptability (responding to change), Accountability (owning outcomes), and Development focus (growing team members). The best leaders create psychological safety where innovation thrives.",
+        "agentic": {
+          "tools_used": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "effective leadership competencies", "top_k": 5},
+              "result": {"documents": ["Leadership requires vision, EQ, communication, delegation..."]},
+              "step": 1
+            }
+          ],
+          "final_answer_uses_tools": true
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "qualities of good team leader", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      }
+    ]
+  },
+  {
+    "session_id": "comparison_session",
+    "assistant_id": "assistant_delta",
+    "language": "english",
+    "context": "You are a helpful AI assistant that provides clear and concise answers.",
+    "conversation": [
+      {
+        "qa_id": "q1",
+        "query": "What are the benefits of renewable energy?",
+        "ground_truth_assistant": "Renewable energy provides clean power, reduces carbon emissions, and offers long-term cost savings.",
+        "assistant": "Clean energy good. Sun power, wind power, water power all help planet. No smoke, no bad air.",
+        "agentic": {
+          "tools_used": [],
+          "final_answer_uses_tools": false
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "benefits of renewable energy", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q2",
+        "query": "How does machine learning differ from traditional programming?",
+        "ground_truth_assistant": "Machine learning learns patterns from data, while traditional programming follows explicit rules.",
+        "assistant": "Regular coding = you write rules. Machine learning = computer learns rules. Both make programs work but different approaches.",
+        "agentic": {
+          "tools_used": [],
+          "final_answer_uses_tools": false
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "machine learning vs traditional programming", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      },
+      {
+        "qa_id": "q3",
+        "query": "What makes a good team leader?",
+        "ground_truth_assistant": "Good team leaders communicate well, inspire trust, and support their team's growth.",
+        "assistant": "Leaders should be nice and help their team. Good communication matters. Being fair to everyone is important too.",
+        "agentic": {
+          "tools_used": [],
+          "final_answer_uses_tools": false
+        },
+        "ground_truth_agentic": {
+          "expected_tools": [
+            {
+              "tool_name": "knowledge_base_search",
+              "parameters": {"query": "qualities of good team leader", "top_k": 3},
+              "step": 1
+            }
+          ],
+          "tool_sequence_matters": false
+        }
+      }
+    ]
+  }
+]

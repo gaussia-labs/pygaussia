@@ -417,6 +417,7 @@ class TestToxicityMetric:
 
             toxicity.batch(
                 session_id=dataset.session_id,
+                context=dataset.context,
                 assistant_id=dataset.assistant_id,
                 batch=dataset.conversation,
                 language=dataset.language,
@@ -464,6 +465,7 @@ class TestToxicityMetric:
 
             toxicity.batch(
                 session_id=dataset.session_id,
+                context=dataset.context,
                 assistant_id=dataset.assistant_id,
                 batch=dataset.conversation,
                 language=dataset.language,

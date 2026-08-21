@@ -61,7 +61,7 @@ class InstructionProposer:
             ),
         ]
         structured = self._model.with_structured_output(_InstructionVariants)
-        result: _InstructionVariants = structured.invoke(messages)  # type: ignore[assignment]
+        result: _InstructionVariants = structured.invoke(messages)
         return result.instructions[: self._num_candidates]
 
 

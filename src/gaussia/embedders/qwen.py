@@ -3,7 +3,7 @@
 import numpy as np
 import torch
 from torch.nn import functional as torch_functional
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
 
 from gaussia.core.embedder import Embedder
 
@@ -31,20 +31,21 @@ class QwenEmbedder(Embedder):
         self._max_length = max_length
         self._batch_size = batch_size
         self._task = task
-        self._tokenizer = None
-        self._model = None
+        self._tokenizer: PreTrainedTokenizerBase | None = None
+        self._model: PreTrainedModel | None = None
 
     @property
-    def tokenizer(self) -> AutoTokenizer:
+    def tokenizer(self) -> PreTrainedTokenizerBase:
         if self._tokenizer is None:
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self._model_name,
                 padding_side="left",
             )
+        assert self._tokenizer is not None
         return self._tokenizer
 
     @property
-    def model(self) -> AutoModel:
+    def model(self) -> PreTrainedModel:
         if self._model is None:
             self._model = AutoModel.from_pretrained(
                 self._model_name,
@@ -52,6 +53,7 @@ class QwenEmbedder(Embedder):
                 device_map="auto",
             )
             self._model.eval()
+        assert self._model is not None
         return self._model
 
     def _last_token_pool(
@@ -87,7 +89,8 @@ class QwenEmbedder(Embedder):
             )
             embeddings = torch_functional.normalize(embeddings, p=2, dim=1)
 
-        return embeddings.cpu().numpy()
+        result: np.ndarray = embeddings.cpu().numpy()
+        return result
 
     def encode(self, sentences: list[str]) -> np.ndarray:
         all_embeddings = []

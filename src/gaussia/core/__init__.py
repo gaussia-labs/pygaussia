@@ -8,6 +8,7 @@ be imported directly:
 
 from .base import Gaussia
 from .category_search import CategorySearch
+from .detector import PIIDetector
 from .embedder import Embedder
 from .entity_enumerator import EntityEnumerator
 from .exceptions import (
@@ -54,6 +55,7 @@ __all__ = [
     "LogprobsNotSupportedError",
     "MetricError",
     "OnProfileFilter",
+    "PIIDetector",
     "ProbeEngine",
     "QueryGenerator",
     "RealismEstimator",
@@ -64,5 +66,6 @@ __all__ = [
     "SimilarityScorer",
     "StatisticalModeError",
     "TargetAssistant",
+    "ToxicityLoader",
     "Transform",
 ]

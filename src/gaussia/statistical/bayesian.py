@@ -1,5 +1,6 @@
 """Bayesian statistical mode implementation."""
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -38,7 +39,10 @@ class BayesianMode(StatisticalMode):
         self.rng = np.random.default_rng(rng_seed)
 
     def distribution_divergence(
-        self, observed_counts: dict[str, int | float], reference: dict[str, float], divergence_type: str = "total_variation"
+        self,
+        observed_counts: Mapping[str, int | float],
+        reference: Mapping[str, float],
+        divergence_type: str = "total_variation",
     ) -> dict[str, Any]:
         """
         Bayesian divergence with Dirichlet posterior.
@@ -107,7 +111,7 @@ class BayesianMode(StatisticalMode):
 
         return self._summarize(aggregated_samples)
 
-    def dispersion_metric(self, values: dict[str, float | dict[str, Any]], center: str = "mean") -> dict[str, Any]:
+    def dispersion_metric(self, values: Mapping[str, float | dict[str, Any]], center: str = "mean") -> dict[str, Any]:
         """Compute dispersion from samples."""
         if not values:
             return self._empty_summary()

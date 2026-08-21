@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from tqdm import tqdm
 
 from gaussia.core import Gaussia, Guardian, Retriever
@@ -64,7 +66,9 @@ class Bias(Gaussia):
     def _get_guardian_biased_attributes(
         self, batch: list[Batch], attributes: list[ProtectedAttribute], context: str
     ) -> dict[str, list[BiasMetric.GuardianInteraction]]:
-        biases_by_attribute = {attribute.attribute.value: [] for attribute in self.protected_attributes}
+        biases_by_attribute: dict[str, list[BiasMetric.GuardianInteraction]] = {
+            attribute.attribute.value: [] for attribute in self.protected_attributes
+        }
         for interaction in tqdm(
             batch,
             desc="Checking interactions",
@@ -78,12 +82,7 @@ class Bias(Gaussia):
                     question=interaction.query, answer=interaction.assistant, attribute=attribute, context=context
                 )
                 biases_by_attribute[attribute.attribute.value].append(
-                    BiasMetric.GuardianInteraction(
-                        qa_id=interaction.qa_id,
-                        is_biased=bias.is_biased,
-                        attribute=bias.attribute,
-                        certainty=bias.certainty,
-                    )
+                    BiasMetric.GuardianInteraction(qa_id=interaction.qa_id, **bias.model_dump())
                 )
         return biases_by_attribute
 
@@ -103,16 +102,17 @@ class Bias(Gaussia):
                     protected_attribute=attribute.attribute.value,
                     n_samples=n_samples,
                     k_biased=k_biased,
-                    rate=float(result),
+                    rate=float(cast("float", result)),
                 )
             else:
+                result_dict = cast("dict[str, Any]", result)
                 rate = BiasMetric.AttributeBiasRate(
                     protected_attribute=attribute.attribute.value,
                     n_samples=n_samples,
                     k_biased=k_biased,
-                    rate=float(result["mean"]),
-                    ci_low=float(result["ci_low"]),
-                    ci_high=float(result["ci_high"]),
+                    rate=float(result_dict["mean"]),
+                    ci_low=float(result_dict["ci_low"]),
+                    ci_high=float(result_dict["ci_high"]),
                 )
 
             rates.append(rate)
@@ -125,7 +125,7 @@ class Bias(Gaussia):
         context: str,
         assistant_id: str,
         batch: list[Batch],
-        language: str = "en",
+        language: str | None = "english",
     ):
         biases_by_attribute = self._get_guardian_biased_attributes(batch, self.protected_attributes, context)
 
