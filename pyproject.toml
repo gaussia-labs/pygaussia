@@ -98,6 +98,19 @@ explainability = [
     "transformers>=4.35.0",
 ]
 
+roastme = [
+    "sentence-transformers>=5.0.0",
+    "torch>=2.0.0",
+    "networkx>=3.0",
+]
+
+roastme-rl = [
+    "gaussia[roastme]",
+    "peft>=0.10.0",
+    "accelerate>=0.25.0",
+    "trl>=0.8.0",
+]
+
 metrics = [
     "gaussia[context,conversational,bestof,agentic,humanity,toxicity,bias,regulatory,vision]",
 ]
@@ -155,7 +168,10 @@ exclude = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+# The floor `requires-python` declares, not the newest version that runs here. Set to py313 it
+# suggested PEP 695 generics, which are a *parse* error before 3.12 — so `ruff` asked for code
+# `mypy --python 3.11` in CI could not read, and no local gate could catch it.
+target-version = "py311"
 extend-exclude = [
     ".git",
     ".venv",
@@ -239,6 +255,7 @@ line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.13"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -258,12 +275,23 @@ pretty = true
 
 [[tool.mypy.overrides]]
 module = [
-    "nltk.*",
+    "torch",
+    "torch.*",
+    "transformers",
     "transformers.*",
+]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
+    "nltk.*",
     "sentence_transformers.*",
     "hdbscan.*",
     "umap.*",
     "interpreto.*",
+    "networkx",
+    "peft.*",
+    "accelerate.*",
 ]
 ignore_missing_imports = true
 
