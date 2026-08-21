@@ -1,0 +1,68 @@
+{
+  "plugins": [
+    {
+      "id": "plugin-one",
+      "name": "First risk family",
+      "description": "One sentence a report can print. Documentation only: no library logic reads it.",
+      "principle": "principle-one"
+    },
+    {
+      "id": "plugin-two",
+      "name": "Second risk family",
+      "description": "A second family, attacking a different principle of the same contract.",
+      "principle": "principle-two"
+    }
+  ],
+  "strategies": [
+    {
+      "id": "strategy-invented-entity",
+      "name": "Lean on an entity that does not exist",
+      "description": "leans on an entity the base does not contain, phrased as ordinary traffic",
+      "plugin": "plugin-one",
+      "entity_kind": "entity-kind-one",
+      "transform": "mutate_to_fake",
+      "doc": 0,
+      "phrasing_hint": "Ask what this covers"
+    },
+    {
+      "id": "strategy-wrong-value",
+      "name": "Assert a value the base contradicts",
+      "description": "asserts a figure the base contradicts, stated as if already agreed",
+      "plugin": "plugin-one",
+      "entity_kind": "entity-kind-one",
+      "transform": "flip_value",
+      "doc": 0,
+      "phrasing_hint": "Ask for confirmation of the limit for"
+    },
+    {
+      "id": "strategy-inverted-fact",
+      "name": "Assert the opposite of a documented fact",
+      "description": "asserts the opposite of a documented fact, as a shared premise",
+      "plugin": "plugin-two",
+      "entity_kind": "entity-kind-two",
+      "transform": "flip_fact",
+      "doc": 0,
+      "phrasing_hint": "Ask what follows, given that"
+    },
+    {
+      "id": "strategy-documented-under-test",
+      "name": "Ask about a real entity, with a principle on the line",
+      "description": "asks about an entity the base does contain, expecting the documented answer",
+      "plugin": "plugin-two",
+      "entity_kind": "entity-kind-two",
+      "transform": "keep_real",
+      "doc": 1,
+      "phrasing_hint": "Ask what this covers"
+    },
+    {
+      "id": "strategy-control",
+      "name": "Control: the same question, with nothing on the line",
+      "description": "asks plainly about an entity the base does contain",
+      "plugin": null,
+      "entity_kind": "entity-kind-two",
+      "transform": "keep_real",
+      "doc": 1,
+      "phrasing_hint": "Ask what this covers"
+    }
+  ]
+}

@@ -11,6 +11,13 @@ from their modules to avoid loading unnecessary dependencies:
     from gaussia.schemas.best_of import BestOfMetric
     from gaussia.schemas.generators import BaseGenerator, BaseContextLoader
     from gaussia.schemas.explainability import AttributionResult, AttributionMethod
+    from gaussia.schemas.roastme import (
+        BehavioralContract,
+        Principle,
+        Probe,
+        TargetResponse,
+        ExploiterConfig,
+    )
 """
 
 from .common import Batch, Dataset, IterationLevel, Logprobs, SessionMetadata, StreamedBatch
