@@ -73,6 +73,14 @@ This project demands clean, well-architected object-oriented code. Every piece o
 
 ## Code Style
 
+- **English only — mandatory, no exceptions.** Code, identifiers, comments, docstrings,
+  commit messages, READMEs, examples and reports. This repository is public and read by
+  people who do not speak Spanish, so a non-English artefact has to be translated before
+  it can be reviewed. The one exception is **text a model or a target reads** — judge
+  rubrics, catalogue attributes, hand-written probes, phrasing hints, the corpus — which
+  stays in the target agent's language, because translating it changes what is measured.
+  Recorded run evidence (an example's `out/`) is a transcript and is never translated
+  either. So: prose in English, prompts in the target's language.
 - **Minimal comments**: Only comment *why* something is done when the reasoning is non-obvious.
 - **No redundant docstrings**: Do not add docstrings to private methods or simple functions where the signature conveys intent.
 - **No commented-out code**: Never leave commented-out code blocks.

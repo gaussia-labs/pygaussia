@@ -1,7 +1,7 @@
 """Qwen3 reranker model implementation."""
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core.reranker import Reranker
 
@@ -29,16 +29,17 @@ class QwenReranker(Reranker):
         self._model_name = model_name
         self._max_length = max_length
         self._instruction = instruction
-        self._tokenizer = None
-        self._model = None
+        self._tokenizer: PreTrainedTokenizerBase | None = None
+        self._model: AutoModelForCausalLM | None = None
 
     @property
-    def tokenizer(self) -> AutoTokenizer:
+    def tokenizer(self) -> PreTrainedTokenizerBase:
         if self._tokenizer is None:
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self._model_name,
                 padding_side="left",
             )
+        assert self._tokenizer is not None
         return self._tokenizer
 
     @property
@@ -50,6 +51,7 @@ class QwenReranker(Reranker):
                 device_map="auto",
             )
             self._model.eval()
+        assert self._model is not None
         return self._model
 
     def _format_pair(self, query: str, doc: str) -> str:
@@ -99,4 +101,5 @@ class QwenReranker(Reranker):
                 dim=1,
             )
 
-        return log_probs[:, 1].exp().tolist()
+        scores: list[float] = log_probs[:, 1].exp().tolist()
+        return scores

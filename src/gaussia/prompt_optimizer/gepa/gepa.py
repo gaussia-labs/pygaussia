@@ -119,7 +119,7 @@ class GEPAOptimizer(BaseOptimizer):
             ),
         ]
         structured_model = self.model.with_structured_output(_CandidatePrompts)
-        result: _CandidatePrompts = structured_model.invoke(messages)  # type: ignore[assignment]
+        result: _CandidatePrompts = structured_model.invoke(messages)
         return result.candidates[: self.candidates_per_iteration]
 
     def _format_failing_examples(self, failing: list[FailingExample]) -> str:

@@ -161,8 +161,9 @@ class LocalMarkdownLoader(BaseContextLoader):
                 )
                 sub_chunks = self._split_by_size(section_content, full_chunk_id)
                 for sub_chunk in sub_chunks:
-                    sub_chunk.metadata["header"] = header
-                    sub_chunk.metadata["source_file"] = str(file_path)
+                    if sub_chunk.metadata is not None:
+                        sub_chunk.metadata["header"] = header
+                        sub_chunk.metadata["source_file"] = str(file_path)
                 chunks.extend(sub_chunks)
             else:
                 chunks.append(
@@ -183,7 +184,8 @@ class LocalMarkdownLoader(BaseContextLoader):
             file_prefix = re.sub(r"[^a-zA-Z0-9]+", "_", file_path.stem.lower()).strip("_")
             chunks = self._split_by_size(content, file_prefix)
             for chunk in chunks:
-                chunk.metadata["source_file"] = str(file_path)
+                if chunk.metadata is not None:
+                    chunk.metadata["source_file"] = str(file_path)
 
         return chunks
 

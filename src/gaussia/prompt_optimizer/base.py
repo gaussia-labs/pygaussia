@@ -19,13 +19,13 @@ class BaseOptimizer(ABC):
         from gaussia.schemas.common import Dataset
 
         raw = retriever(**kwargs).load_dataset()
-        self.dataset: list[Dataset] = list(raw)  # type: ignore[arg-type]
-
-        if self.dataset and not isinstance(self.dataset[0], Dataset):
+        items = list(raw)
+        if items and not isinstance(items[0], Dataset):
             raise TypeError(
                 "Prompt optimizers require a Retriever that returns list[Dataset]. "
                 "StreamedBatch retrievers are not supported."
             )
+        self.dataset: list[Dataset] = [item for item in items if isinstance(item, Dataset)]
 
     @classmethod
     def run(cls, retriever: type["Retriever"], **kwargs) -> "OptimizationResult":

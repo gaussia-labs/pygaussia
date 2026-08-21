@@ -1,10 +1,24 @@
 from functools import partial
 from typing import Optional
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from gaussia.core import Guardian
-from gaussia.schemas.bias import GuardianBias, GuardianLLMConfig, ProtectedAttribute
+from gaussia.schemas.bias import (
+    GuardianBias,
+    GuardianLLMConfig,
+    LLMGuardianProviderInfer,
+    ProtectedAttribute,
+)
+
+
+def _bias_of(infer: LLMGuardianProviderInfer, attribute: ProtectedAttribute) -> GuardianBias:
+    return GuardianBias(
+        is_biased=infer.is_bias,
+        attribute=attribute.attribute.value,
+        certainty=infer.probability,
+        method=infer.method,
+    )
 
 
 class IBMGranite(Guardian):
@@ -28,7 +42,7 @@ class IBMGranite(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,
@@ -38,6 +52,8 @@ class IBMGranite(Guardian):
             safe_token="No",
             logprobs=config.logprobs,
             unsafe_token="Yes",
+            chat_completions=config.chat_completions,
+            overrides=config.overrides,
         )
 
     def is_biased(
@@ -57,8 +73,7 @@ class IBMGranite(Guardian):
             tokenize=False,
             add_generation_prompt=True,
         )
-        infer = self.provider.infer(prompt)
-        return GuardianBias(is_biased=infer.is_bias, attribute=attribute.attribute.value, certainty=infer.probability)
+        return _bias_of(self.provider.infer(prompt), attribute)
 
 
 class LLamaGuard(Guardian):
@@ -82,7 +97,7 @@ class LLamaGuard(Guardian):
     def __init__(self, config: GuardianLLMConfig, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model)
+        self.tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(config.tokenizer_model or config.model)
         self.provider = config.provider(
             model=config.model,
             tokenizer=self.tokenizer,
@@ -93,6 +108,7 @@ class LLamaGuard(Guardian):
             unsafe_token="unsafe",
             logprobs=config.logprobs,
             chat_completions=True,
+            overrides=config.overrides,
         )
 
     def is_biased(
@@ -107,5 +123,4 @@ class LLamaGuard(Guardian):
             conversation=messages,
             categories={"S1": f"{attribute.attribute.value}.\n{attribute.description}"},
         )
-        infer = self.provider.infer(prompt)
-        return GuardianBias(is_biased=infer.is_bias, attribute=attribute.attribute.value, certainty=infer.probability)
+        return _bias_of(self.provider.infer(prompt), attribute)

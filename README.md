@@ -1,5 +1,10 @@
 # Gaussia
 
+[![PyPI version](https://img.shields.io/pypi/v/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/gaussia)](https://pypi.org/project/gaussia/)
+[![PyPI - License](https://img.shields.io/pypi/l/gaussia)](https://pypi.org/project/gaussia/)
+
 AI evaluation framework for measuring fairness, quality, and safety of AI models and assistants.
 
 ## Installation
@@ -13,6 +18,7 @@ With specific metric dependencies:
 ```bash
 pip install gaussia[toxicity]    # Toxicity analysis
 pip install gaussia[bias]        # Bias detection
+pip install gaussia[evalhub]     # EvalHub provider adapter
 pip install gaussia[metrics]     # All metrics
 pip install gaussia[all]         # Everything
 ```
@@ -114,6 +120,14 @@ Optimize prompts using evolutionary and multi-objective strategies:
 
 ```python
 from gaussia.prompt_optimizer import GEPAOptimizer, MIPROv2Optimizer
+```
+
+### EvalHub Provider
+
+Run Gaussia as an EvalHub BYOF provider:
+
+```bash
+python -m gaussia.integrations.evalhub.adapter
 ```
 
 ## Documentation

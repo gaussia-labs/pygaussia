@@ -9,6 +9,13 @@ from their modules to avoid loading unnecessary dependencies:
     from gaussia.schemas.conversational import ConversationalMetric
     from gaussia.schemas.context import ContextMetric
     from gaussia.schemas.best_of import BestOfMetric
+    from gaussia.schemas.privacy import (
+        Span,
+        PrivacyBatch,
+        PrivacyDomainConfig,
+        PrivacyMetric,
+        PrivacyRanking,
+    )
     from gaussia.schemas.generators import BaseGenerator, BaseContextLoader
     from gaussia.schemas.explainability import AttributionResult, AttributionMethod
     from gaussia.schemas.roastme import (
