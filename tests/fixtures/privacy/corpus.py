@@ -2,11 +2,11 @@
 
 from gaussia.core.retriever import Retriever
 from gaussia.schemas.common import Dataset
-from gaussia.schemas.privacy import PrivacyBatch, Span
+from gaussia.schemas.privacy import PIIDetectionBatch, Span
 
 
-def batch(qa_id: str, query: str, spans: list[Span]) -> PrivacyBatch:
-    return PrivacyBatch(
+def batch(qa_id: str, query: str, spans: list[Span]) -> PIIDetectionBatch:
+    return PIIDetectionBatch(
         qa_id=qa_id,
         query=query,
         assistant="",
@@ -15,7 +15,7 @@ def batch(qa_id: str, query: str, spans: list[Span]) -> PrivacyBatch:
     )
 
 
-def dataset(session_id: str, conversation: list[PrivacyBatch], assistant_id: str = "assistant") -> Dataset:
+def dataset(session_id: str, conversation: list[PIIDetectionBatch], assistant_id: str = "assistant") -> Dataset:
     return Dataset(
         session_id=session_id,
         assistant_id=assistant_id,

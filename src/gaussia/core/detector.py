@@ -1,4 +1,4 @@
-"""Abstract PII detector strategy for the Privacy metric.
+"""Abstract PII detector strategy for the PIIDetectorBenchmark metric.
 
 `PIIDetector` is a Pydantic model rather than a plain ABC so that the contextual
 scalars required by the paper (`domain_fit`, `regulatory_fit`) are validated at
@@ -24,7 +24,7 @@ class PIIDetector(BaseModel):
 
     Concrete subclasses translate a backend (Presidio, a HuggingFace pipeline, …)
     into the shared ``predict`` / ``supported_classes`` contract consumed by the
-    ``Privacy`` and ``PrivacyRanker`` metrics.
+    ``PIIDetectorBenchmark`` and ``PIIDetectorRanker`` metrics.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -45,7 +45,7 @@ class PIIDetector(BaseModel):
     def setup(self) -> None:
         """One-time initialisation hook (e.g. model loading).
 
-        Called by ``Privacy`` / ``PrivacyRanker`` exactly once before any
+        Called by ``PIIDetectorBenchmark`` / ``PIIDetectorRanker`` exactly once before any
         ``predict`` call. Default is a no-op; subclasses override it when they
         need lazy heavy initialisation.
         """

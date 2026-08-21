@@ -1,9 +1,9 @@
-"""Ranking tests for PrivacyRanker (T012)."""
+"""Ranking tests for PIIDetectorRanker (T012)."""
 
 import pytest
 
-from gaussia.metrics.privacy import PrivacyRanker
-from gaussia.schemas.privacy import PrivacyDomainConfig, PrivacyRanking, Span
+from gaussia.metrics.privacy import PIIDetectorRanker
+from gaussia.schemas.privacy import PIIDetectionRanking, PrivacyDomainConfig, Span
 from tests.fixtures.privacy.corpus import batch, dataset, make_retriever
 from tests.fixtures.privacy.stub_detector import StubDetector
 
@@ -57,9 +57,9 @@ def _broken() -> StubDetector:
     )
 
 
-def _run(detectors) -> PrivacyRanking:
+def _run(detectors) -> PIIDetectionRanking:
     retriever = make_retriever([dataset("s", [batch("q", QUERY, GT)])])
-    rankings = PrivacyRanker.run(retriever, detectors=detectors, domain_config=_domain())
+    rankings = PIIDetectorRanker.run(retriever, detectors=detectors, domain_config=_domain())
     assert len(rankings) == 1
     return rankings[0]
 
@@ -98,7 +98,7 @@ def test_setup_runs_once_per_detector_across_sessions():
     high, mid = _high(), _mid()
     turn = batch("q", QUERY, GT)
     retriever = make_retriever([dataset("s1", [turn]), dataset("s2", [turn])])
-    rankings = PrivacyRanker.run(retriever, detectors=[high, mid], domain_config=_domain())
+    rankings = PIIDetectorRanker.run(retriever, detectors=[high, mid], domain_config=_domain())
     assert len(rankings) == 2
     assert high.setup_calls == 1
     assert mid.setup_calls == 1
@@ -110,4 +110,4 @@ def test_invalid_corpus_fails_hard_not_per_detector():
     bad = batch("q", QUERY, [Span(label="credit_card", start=0, end=5, text="xxxxx")])
     retriever = make_retriever([dataset("s", [bad])])
     with pytest.raises(ValueError, match="outside the domain classes"):
-        PrivacyRanker.run(retriever, detectors=[_high(), _mid()], domain_config=_domain())
+        PIIDetectorRanker.run(retriever, detectors=[_high(), _mid()], domain_config=_domain())
