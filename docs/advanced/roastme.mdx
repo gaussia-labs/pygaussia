@@ -60,7 +60,7 @@ Four skills cover the pieces you have to author, each stating the rules the libr
 mistake surfaces at validation rather than halfway through a run that costs target calls:
 `roastme-plugins`, `roastme-strategies`, `roastme-profiler` and `roastme-exploiter`. They are not part
 of the pip package — they live in
-[`skills/`](https://github.com/gaussia-labs/pygaussia/tree/main/skills) beside the code they describe,
+[`skills/`](https://github.com/gaussia-labs/pygaussia/tree/HEAD/skills) beside the code they describe,
 so they move with the schema instead of drifting from it.
 
 ```bash
@@ -104,7 +104,7 @@ prose rather than your internal identifiers.
 
 ## The eleven interfaces
 
-You implement against these. Eight ship a reference implementation, declared as such — a convenience,
+You implement against these. Nine ship a reference implementation, declared as such — a convenience,
 never the definition of the component.
 
 | Interface | Obligation | Reference implementation |
@@ -129,7 +129,7 @@ force a fake implementation.
 
 The snippets below name the shipped components, so what you copy is what you would deploy. They are
 not one runnable sequence: for that, run
-[`roastme_quickstart.ipynb`](https://github.com/gaussia-labs/pygaussia/tree/main/examples/roastme/jupyter),
+[`roastme_quickstart.ipynb`](https://github.com/gaussia-labs/pygaussia/tree/HEAD/examples/roastme/jupyter),
 which executes the whole arc offline behind crude stand-ins and stores its output, or the long
 walkthrough beside it, which builds every component up in turn.
 
@@ -198,7 +198,7 @@ principles" reading would clear. That is the point of the weights.
 ## 2. The catalogue
 
 The catalogue is **yours**. Gaussia specifies its shape, validates it, and ships
-[schema examples](https://github.com/gaussia-labs/pygaussia/tree/main/examples/roastme/catalogue) —
+[schema examples](https://github.com/gaussia-labs/pygaussia/tree/HEAD/examples/roastme/catalogue) —
 never a domain catalogue. A rubric and a risk taxonomy *are* what the metric measures, so a shipped
 one would quietly become a standard nobody chose.
 
@@ -686,7 +686,7 @@ config = ExploiterConfig(
 | `delta` | resolved from the estimator | See below. |
 
 A complete worked configuration ships in
-[`examples/roastme/jupyter`](https://github.com/gaussia-labs/pygaussia/tree/main/examples/roastme/jupyter),
+[`examples/roastme/jupyter`](https://github.com/gaussia-labs/pygaussia/tree/HEAD/examples/roastme/jupyter),
 so the two required values are copied from a visible reference rather than guessed.
 
 ### `κ` and `δ` come from the component that owns the scale
