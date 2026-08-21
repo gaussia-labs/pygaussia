@@ -1,6 +1,73 @@
 # CHANGELOG
 
 
+## v1.2.0 (2026-08-21)
+
+### Chores
+
+- **roastme**: Drop the BPD demo from the repository
+  ([`b921fdb`](https://github.com/gaussia-labs/pygaussia/commit/b921fdb10a2608028a96eb6d6fd890f1a83f6c86))
+
+The demo of a full run against a live assistant moves to Alquimia, where the target agent, its
+  corpus and its credentials already live. It never belonged beside the library: it carried a
+  client's product pages, a Spanish-language contract and a recorded run, none of which the SDK can
+  validate or maintain.
+
+What stays is what documents the subsystem without a client in it: the two notebooks, the catalogue
+  schema examples and docs/advanced/roastme.mdx.
+
+### Documentation
+
+- Describe the metrics that shipped, and fix the snippets that never ran
+  ([`e396704`](https://github.com/gaussia-labs/pygaussia/commit/e396704cce7daa756c570ad9bf4c381fa6ef59c7))
+
+The README stopped at the v1.0.0 surface. Privacy, PrivacyRanker, RoleAdherence and Roast Me are
+  absent from it, and so are five extras: privacy-presidio, privacy-huggingface, role-adherence,
+  roastme and roastme-rl -- the last two worth their own note, since they sit outside `metrics` and
+  `all` on purpose and a reader who trusts `all` to mean everything installs neither.
+
+Every snippet it did carry was checked against the code, and most were wrong in a way that a reader
+  finds by running them:
+
+- `from gaussia.metrics import Context` raises ImportError. That module declares `__all__` and
+  imports nothing, deliberately, so no metric drags in another's optional dependencies -- which
+  makes the per-module import the only one that works, and worth saying out loud rather than leaving
+  as a surprise. - `IBMGraniteGuardian` and `LLamaGuardGuardian` do not exist; the classes are
+  `IBMGranite` and `LLamaGuard`. - `run(retriever=MyRetriever())` raises `TypeError: 'MyRetriever'
+  object is not callable`. Both `run` and `Bias`'s guardian take the class -- `retriever(**kwargs)`
+  is the base's first statement -- so every call site passed the one thing the contract cannot
+  accept. - `Context.run` was called without `model`, which it requires. -
+  `AttributionExplainer(method="lime")` selects behaviour with a string, which this repo does not
+  do: the method is a class, `Lime`, and the constructor takes the model and tokenizer. -
+  `create_markdown_loader(path=...)` takes no path, and `BaseGenerator` takes a model rather than a
+  loader; the source is an argument of `generate_dataset`, which is async.
+
+Also two documentation pages that existed and could not be reached: metrics/role-adherence was in
+  neither navigation and metrics/privacy was missing from the sync manifest the central docs repo
+  reads, so the privacy page was published to a site that never linked it.
+
+- Require English for everything written in this repository
+  ([`099780e`](https://github.com/gaussia-labs/pygaussia/commit/099780e78e003b68109d77e194dfc2b33fabd51e))
+
+The repository is public and read by people who do not speak Spanish, so a non-English artefact has
+  to be translated before it can be reviewed. The rule is stated where it is enforced, next to the
+  rest of the code style.
+
+It carries its own exception: text a model or a target reads — judge rubrics, catalogue attributes,
+  hand-written probes, the corpus — stays in the target agent's language, because translating it
+  changes what is measured. Recorded run evidence is a transcript, and is never translated either.
+
+- **roastme**: Fix the branch in four links and one wrong count
+  ([`6d9de40`](https://github.com/gaussia-labs/pygaussia/commit/6d9de403789b666adcef86662a3cd32de0ace941))
+
+The four GitHub links pointed at /tree/main/, and this repository has no main branch — every one of
+  them 404s. They now point at /tree/HEAD/, which GitHub resolves to whatever the default branch is
+  called, so renaming it cannot break them again.
+
+The interfaces table says eight of the eleven ship a reference implementation and lists nine: the
+  HookVerifier row arrived with NearMissVerifier and the count above it was not updated.
+
+
 ## v1.1.0-b.10 (2026-08-20)
 
 ### Bug Fixes
@@ -1379,6 +1446,56 @@ Resolves gaussia-labs/pygaussia#2.
 
 
 ## v1.0.0-b.1 (2026-04-09)
+
+
+## v1.1.0 (2026-08-21)
+
+### Build System
+
+- **roastme**: Declare the extras, and let the gates read the subsystem
+  ([`e27796d`](https://github.com/gaussia-labs/pygaussia/commit/e27796d0fb8bc4c3135f5a36ab79698dadab274f))
+
+Three changes, all of them about the new code being seen correctly rather than about what it does.
+
+The `roastme` and `roastme-rl` extras. Deliberately outside `metrics` and `all`: the three
+  corpus-reading engines want an embedder and a graph library, and only the policy-gradient update
+  step wants the training stack.
+
+`ruff` was linting against py313 while the package declares 3.11. At py313 it asked for PEP 695
+  generics, which are a *parse* error before 3.12 — code that `mypy --python 3.11` in CI cannot
+  read, and that no local gate would catch.
+
+`mypy` gets the pydantic plugin, so a list of a Batch subclass stops reading as an incompatible
+  argument, plus the third-party modules the subsystem imports: networkx, peft and accelerate as
+  missing stubs, and torch and transformers as skipped, since their annotations resolve to Any and
+  `warn_return_any` then fires at every boundary that returns a Tensor.
+
+### Features
+
+- **roastme**: The Roast Me adversarial evaluation subsystem
+  ([`e4989f7`](https://github.com/gaussia-labs/pygaussia/commit/e4989f7bf99ccdc2d9f8f84b03b20038c5ef38bb))
+
+Profile an assistant's weaknesses from tagged adversarial probes, then search for the categories of
+  realistic question that break it reproducibly. A generator subsystem, not a metric: nothing
+  subclasses Gaussia and nothing is registered in gaussia.generators. What enters the metric
+  pipeline is the Roast Dataset it emits.
+
+What lands here:
+
+- the eleven interfaces in gaussia.core, of which nine ship a reference implementation, and the
+  schemas in gaussia.schemas.roastme; - the Probe Library with its five engines, three of which read
+  a corpus and sit behind the roastme extra, while the grounded one and the two model-driven
+  collaborators need only the user's model; - the Profiler, the Exploiter with threshold resolution,
+  both category searches and the shipped logprob grader; - the docs page, the four Claude Code
+  skills, the catalogue schema examples, the two notebooks and the specification.
+
+Two pieces here are not roastme's own and are carried because roastme cannot import without them:
+  gaussia.llm.structured, which its three model-driven components use to bind a schema, and
+  chatbot_role on Dataset, an optional field that arrived with role adherence and that a roastme
+  test asserts is left unset. Both are additive and change no existing behaviour.
+
+Neither extra is part of gaussia[metrics] or gaussia[all], so whoever only profiles pays for neither
+  training nor retrieval.
 
 
 ## v1.0.0 (2026-04-09)
