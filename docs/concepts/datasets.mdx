@@ -66,7 +66,7 @@ batch = Batch(
 | `observation` | `str \| None` | `None` | Additional notes about the interaction |
 | `weight` | `float \| None` | `None` | Importance weight for aggregation (must be ≥ 0) |
 | `agentic` | `dict \| None` | `{}` | Tool usage metadata (for the Agentic metric) |
-| `ground_truth_agentic` | `dict \| None` | `{}` | Expected tool usage (for the Agentic metric) |
+| `ground_truth_agentic` | `dict \| None` | `{}` | Expected tool usage and declared tool scope (for the Agentic metric). Recognized keys: `expected_tools`, `allowed_tools`, `tool_sequence_matters` — anything else is rejected, so a misspelling cannot silently disable a check. Free-form metadata belongs in `agentic` |
 | `logprobs` | `dict \| None` | `{}` | Token log probabilities |
 
 ## Streamed batch

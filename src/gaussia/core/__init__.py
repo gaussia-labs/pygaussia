@@ -12,6 +12,7 @@ from .detector import PIIDetector
 from .embedder import Embedder
 from .entity_enumerator import EntityEnumerator
 from .exceptions import (
+    BoundaryNotDeclaredError,
     GaussiaError,
     GuardianError,
     LoaderError,
@@ -20,6 +21,7 @@ from .exceptions import (
     MetricError,
     RetrieverError,
     StatisticalModeError,
+    UnrecognizedGroundTruthKeysError,
 )
 from .extractor import BaseGroupExtractor
 from .fact_twister import FactTwister
@@ -45,6 +47,7 @@ __all__ = [
     "EntityEnumerator",
     "FactTwister",
     "Gaussia",
+    "BoundaryNotDeclaredError",
     "GaussiaError",
     "Grader",
     "Guardian",
@@ -65,6 +68,7 @@ __all__ = [
     "SentimentAnalyzer",
     "SimilarityScorer",
     "StatisticalModeError",
+    "UnrecognizedGroundTruthKeysError",
     "TargetAssistant",
     "ToxicityLoader",
     "Transform",
