@@ -1,6 +1,56 @@
 # CHANGELOG
 
 
+## v1.1.0 (2026-08-21)
+
+### Build System
+
+- **roastme**: Declare the extras, and let the gates read the subsystem
+  ([`e27796d`](https://github.com/gaussia-labs/pygaussia/commit/e27796d0fb8bc4c3135f5a36ab79698dadab274f))
+
+Three changes, all of them about the new code being seen correctly rather than about what it does.
+
+The `roastme` and `roastme-rl` extras. Deliberately outside `metrics` and `all`: the three
+  corpus-reading engines want an embedder and a graph library, and only the policy-gradient update
+  step wants the training stack.
+
+`ruff` was linting against py313 while the package declares 3.11. At py313 it asked for PEP 695
+  generics, which are a *parse* error before 3.12 — code that `mypy --python 3.11` in CI cannot
+  read, and that no local gate would catch.
+
+`mypy` gets the pydantic plugin, so a list of a Batch subclass stops reading as an incompatible
+  argument, plus the third-party modules the subsystem imports: networkx, peft and accelerate as
+  missing stubs, and torch and transformers as skipped, since their annotations resolve to Any and
+  `warn_return_any` then fires at every boundary that returns a Tensor.
+
+### Features
+
+- **roastme**: The Roast Me adversarial evaluation subsystem
+  ([`e4989f7`](https://github.com/gaussia-labs/pygaussia/commit/e4989f7bf99ccdc2d9f8f84b03b20038c5ef38bb))
+
+Profile an assistant's weaknesses from tagged adversarial probes, then search for the categories of
+  realistic question that break it reproducibly. A generator subsystem, not a metric: nothing
+  subclasses Gaussia and nothing is registered in gaussia.generators. What enters the metric
+  pipeline is the Roast Dataset it emits.
+
+What lands here:
+
+- the eleven interfaces in gaussia.core, of which nine ship a reference implementation, and the
+  schemas in gaussia.schemas.roastme; - the Probe Library with its five engines, three of which read
+  a corpus and sit behind the roastme extra, while the grounded one and the two model-driven
+  collaborators need only the user's model; - the Profiler, the Exploiter with threshold resolution,
+  both category searches and the shipped logprob grader; - the docs page, the four Claude Code
+  skills, the catalogue schema examples, the two notebooks and the specification.
+
+Two pieces here are not roastme's own and are carried because roastme cannot import without them:
+  gaussia.llm.structured, which its three model-driven components use to bind a schema, and
+  chatbot_role on Dataset, an optional field that arrived with role adherence and that a roastme
+  test asserts is left unset. Both are additive and change no existing behaviour.
+
+Neither extra is part of gaussia[metrics] or gaussia[all], so whoever only profiles pays for neither
+  training nor retrieval.
+
+
 ## v1.0.0 (2026-04-09)
 
 ### Bug Fixes
