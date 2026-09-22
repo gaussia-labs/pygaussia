@@ -69,6 +69,11 @@ class Dataset(BaseModel):
         assistant_id (str): Identifier for the specific assistant involved
         language (str): The language used in the conversation
         context (str): Additional context or background information for the conversation
+        oversight_policy (Optional[dict]): The operator's declaration of which tools need
+            approval and who may grant it, read by the accountability metrics. Validated
+            against `schemas.accountability.OversightPolicy` where it is used, so that a
+            metric-specific model stays off the common import path. None means the operator
+            supplied none, which makes the session not evaluable rather than compliant.
         conversation (list[Batch]): List of all interactions (batches) in the conversation
     """
 
@@ -77,4 +82,5 @@ class Dataset(BaseModel):
     language: str | None = "english"
     context: str
     chatbot_role: str | None = None
+    oversight_policy: dict | None = None
     conversation: list[Batch]
