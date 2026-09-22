@@ -2,6 +2,7 @@
 
 from gaussia.core.retriever import Retriever
 from gaussia.schemas.common import Dataset
+from tests.fixtures.accountability import sandbox_datasets
 from tests.fixtures.mock_data import (
     create_agentic_dataset,
     create_bestof_dataset,
@@ -140,6 +141,13 @@ class RoleAdherenceDatasetRetriever(Retriever):
 
     def load_dataset(self) -> list[Dataset]:
         return [create_role_adherence_dataset()]
+
+
+class AccountabilitySandboxRetriever(Retriever):
+    """Mock retriever serving the eighteen accountability sandbox sessions."""
+
+    def load_dataset(self) -> list[Dataset]:
+        return sandbox_datasets()
 
 
 class ErrorRetriever(Retriever):

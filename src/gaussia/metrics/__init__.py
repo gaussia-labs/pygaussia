@@ -8,6 +8,11 @@ Import metrics directly from their modules:
     from gaussia.metrics.bias import Bias
     from gaussia.metrics.best_of import BestOf
     from gaussia.metrics.agentic import Agentic
+    from gaussia.metrics.accountability import (
+        OversightCompliance,
+        ActionDisclosure,
+        DisclosureJudge,
+    )
     from gaussia.metrics.regulatory import Regulatory
     from gaussia.metrics.privacy import Privacy, PrivacyRanker
     from gaussia.metrics.role_adherence import (
@@ -20,13 +25,16 @@ Import metrics directly from their modules:
 """
 
 __all__ = [
+    "ActionDisclosure",
     "Agentic",
     "BestOf",
     "Bias",
     "Context",
     "Conversational",
+    "DisclosureJudge",
     "Humanity",
     "LLMJudgeStrategy",
+    "OversightCompliance",
     "Privacy",
     "PrivacyRanker",
     "Regulatory",
