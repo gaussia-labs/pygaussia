@@ -5,12 +5,15 @@ description: "Score and rank PII/PHI detectors for a regulated domain with a dom
 
 ## Overview
 
-The **Privacy** metric implements the **Domain-Adjusted Privacy Detection Score**: a single
+`PIIDetectorBenchmark` implements the **Domain-Adjusted Privacy Detection Score**: a single
 auditable score in `[0, 100]` measuring how suitable a PII/PHI detector is for your domain,
 plus a **risk index** that surfaces critical blind spots the score alone might hide.
 
+The subject is the detector, not the assistant. `score_100` is a detector's fitness for the
+domain — it does not measure what an assistant disclosed.
+
 You bring a labelled corpus (each turn carries ground-truth PII spans) and one or more
-detectors. `Privacy` evaluates a single detector; `PrivacyRanker` ranks several so you can
+detectors. `PIIDetectorBenchmark` evaluates a single detector; `PIIDetectorRanker` ranks several so you can
 decide which to ship.
 
 ```
@@ -29,21 +32,21 @@ diagnostics only and never enter the score.
 
 ## Usage
 
-Each turn is a `PrivacyBatch`: `query` is the text shown to the detector and `spans` are the
+Each turn is a `PIIDetectionBatch`: `query` is the text shown to the detector and `spans` are the
 ground-truth annotations. Span offsets are character-level and half-open (`[start, end)`).
 `assistant` / `ground_truth_assistant` stay empty.
 
 ```python
 from gaussia.core.retriever import Retriever
 from gaussia.detectors.presidio import PresidioDetector
-from gaussia.metrics.privacy import Privacy
+from gaussia.metrics.privacy import PIIDetectorBenchmark
 from gaussia.schemas.common import Dataset
-from gaussia.schemas.privacy import PrivacyBatch, PrivacyDomainConfig, Span
+from gaussia.schemas.privacy import PIIDetectionBatch, PrivacyDomainConfig, Span
 
 
 class MyRetriever(Retriever):
     def load_dataset(self) -> list[Dataset]:
-        turn = PrivacyBatch(
+        turn = PIIDetectionBatch(
             qa_id="t1",
             query="Reach me at john@example.com",
             assistant="",
@@ -62,7 +65,7 @@ domain = PrivacyDomainConfig(
 
 detector = PresidioDetector(name="presidio", domain_fit=0.9, regulatory_fit=0.8)
 
-metric = Privacy.run(MyRetriever, detector=detector, domain_config=domain)[0]
+metric = PIIDetectorBenchmark.run(MyRetriever, detector=detector, domain_config=domain)[0]
 print(f"{metric.name}: {metric.score_100:.1f}/100 -> {metric.interpretation}")
 print(f"risk r_final={metric.r_final:.2f}, weakest class={metric.r1_weakest_class}")
 ```
@@ -70,9 +73,9 @@ print(f"risk r_final={metric.r_final:.2f}, weakest class={metric.r1_weakest_clas
 ### Ranking several detectors
 
 ```python
-from gaussia.metrics.privacy import PrivacyRanker
+from gaussia.metrics.privacy import PIIDetectorRanker
 
-ranking = PrivacyRanker.run(
+ranking = PIIDetectorRanker.run(
     MyRetriever,
     detectors=[detector_a, detector_b, detector_c],
     domain_config=domain,
@@ -83,7 +86,7 @@ for result in ranking.results:  # ordered by score_100 desc; failures at the tai
     print(result.name, result.score_100, result.success)
 ```
 
-If a detector raises, `PrivacyRanker` records a failed `PrivacyMetric` (`success=False`,
+If a detector raises, `PIIDetectorRanker` records a failed `PIIDetectionMetric` (`success=False`,
 `score_100=0`) and keeps going, so one broken backend never aborts the ranking. Each detector
 is set up once per run, not once per session.
 
@@ -125,13 +128,13 @@ Predicted labels outside `domain_config.classes` are filtered out (counted in
 
 ## Parameters
 
-### `Privacy.run` / `PrivacyRanker.run`
+### `PIIDetectorBenchmark.run` / `PIIDetectorRanker.run`
 
 | Parameter | Type | Description |
 |---|---|---|
-| `retriever` | `type[Retriever]` | Data source class yielding `Dataset`s of `PrivacyBatch`. |
-| `detector` | `PIIDetector` | Single detector (`Privacy` only). |
-| `detectors` | `list[PIIDetector]` | Detectors to rank (`PrivacyRanker` only). |
+| `retriever` | `type[Retriever]` | Data source class yielding `Dataset`s of `PIIDetectionBatch`. |
+| `detector` | `PIIDetector` | Single detector (`PIIDetectorBenchmark` only). |
+| `detectors` | `list[PIIDetector]` | Detectors to rank (`PIIDetectorRanker` only). |
 | `domain_config` | `PrivacyDomainConfig` | Shared domain taxonomy, weights and IoU threshold. |
 
 ### `PrivacyDomainConfig`
@@ -170,7 +173,7 @@ prefer a conservative estimate and keep them consistent across the detectors you
 
 ## Output schema
 
-### `PrivacyMetric`
+### `PIIDetectionMetric`
 
 | Field | Type | Description |
 |---|---|---|
@@ -187,11 +190,11 @@ prefer a conservative estimate and keep them consistent across the detectors you
 | `load_time` / `inference_latency` | `float` | Diagnostic timings; excluded from the score. |
 | `success` / `error` | `bool` / `str \| None` | `False` with a message for a detector that failed under the ranker. |
 
-### `PrivacyRanking`
+### `PIIDetectionRanking`
 
 | Field | Type | Description |
 |---|---|---|
-| `results` | `list[PrivacyMetric]` | Ordered by `score_100` descending; failures at the tail. |
+| `results` | `list[PIIDetectionMetric]` | Ordered by `score_100` descending; failures at the tail. |
 | `winning_detector` | `str \| None` | Top successful detector, or `None` if all failed. |
 | `iou_threshold` / `domain_classes` / `regulatory_framework` | — | Echoes of the run's config for traceability. |
 
@@ -201,7 +204,7 @@ without changes.
 ## Edge cases
 
 - **Out-of-domain predictions** are filtered before accounting (counted in `out_of_domain_filtered`, never FP).
-- **Out-of-domain ground truth** — a ground-truth span whose label is not in `classes`, or a turn that is not a `PrivacyBatch`, fails fast rather than silently skewing the counts.
+- **Out-of-domain ground truth** — a ground-truth span whose label is not in `classes`, or a turn that is not a `PIIDetectionBatch`, fails fast rather than silently skewing the counts.
 - **Overlapping predictions** are resolved by greedy non-maximum suppression on confidence.
 - **Partial overlaps** count as a true positive when `IoU ≥ iou_threshold`, otherwise as FP + FN.
 - **A class with zero ground truth** keeps its full weight (its `f2` is `0.0`); weights are never renormalised.

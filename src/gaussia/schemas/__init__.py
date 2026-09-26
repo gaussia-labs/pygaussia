@@ -11,10 +11,10 @@ from their modules to avoid loading unnecessary dependencies:
     from gaussia.schemas.best_of import BestOfMetric
     from gaussia.schemas.privacy import (
         Span,
-        PrivacyBatch,
+        PIIDetectionBatch,
         PrivacyDomainConfig,
-        PrivacyMetric,
-        PrivacyRanking,
+        PIIDetectionMetric,
+        PIIDetectionRanking,
     )
     from gaussia.schemas.generators import BaseGenerator, BaseContextLoader
     from gaussia.schemas.explainability import AttributionResult, AttributionMethod

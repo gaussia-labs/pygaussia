@@ -1,8 +1,14 @@
 """Domain-Adjusted Privacy Detection metric and ranker.
 
-`Privacy` evaluates one injected `PIIDetector` against a labelled corpus and
-emits one `PrivacyMetric` per dataset. `PrivacyRanker` evaluates several
-detectors against the same corpus and emits a score-ordered `PrivacyRanking`.
+The subject here is the detector, not the assistant. Both classes score an
+injected `PIIDetector` against a corpus that already carries ground-truth
+spans; `score_100` is that detector's fitness for the domain, not a measure of
+what an assistant disclosed. Every other module in `gaussia.metrics` scores an
+assistant's responses — this one does not.
+
+`PIIDetectorBenchmark` evaluates one injected `PIIDetector` against a labelled corpus and
+emits one `PIIDetectionMetric` per dataset. `PIIDetectorRanker` evaluates several
+detectors against the same corpus and emits a score-ordered `PIIDetectionRanking`.
 
 The score and risk formulas are deterministic functions of corpus-wide class
 counts (no `StatisticalMode`, FR-020). Latency is measured for diagnostics only
@@ -21,10 +27,10 @@ from gaussia.schemas.privacy import (
     ClassMetrics,
     CriticalFNContribution,
     DetectionScoreContribution,
-    PrivacyBatch,
+    PIIDetectionBatch,
+    PIIDetectionMetric,
+    PIIDetectionRanking,
     PrivacyDomainConfig,
-    PrivacyMetric,
-    PrivacyRanking,
     Span,
 )
 
@@ -134,8 +140,8 @@ class _CorpusEvaluation:
 
 def _validate_corpus(conversation: Iterable[Batch], config: PrivacyDomainConfig) -> None:
     for turn in conversation:
-        if not isinstance(turn, PrivacyBatch):
-            raise TypeError("Privacy corpus turns must be PrivacyBatch carrying ground-truth spans")
+        if not isinstance(turn, PIIDetectionBatch):
+            raise TypeError("PIIDetectorBenchmark corpus turns must be PIIDetectionBatch carrying ground-truth spans")
         for span in turn.spans:
             if span.label not in config.classes:
                 raise ValueError(f"ground-truth span label {span.label!r} is outside the domain classes")
@@ -148,11 +154,11 @@ def _evaluate(
     session_id: str,
     assistant_id: str,
     load_time: float,
-) -> PrivacyMetric:
+) -> PIIDetectionMetric:
     evaluation = _CorpusEvaluation(config)
     inference_latency = 0.0
     for turn in conversation:
-        ground_truth = turn.spans if isinstance(turn, PrivacyBatch) else []
+        ground_truth = turn.spans if isinstance(turn, PIIDetectionBatch) else []
         start = time.perf_counter()
         predictions = detector.predict(turn.query)
         inference_latency += time.perf_counter() - start
@@ -192,7 +198,7 @@ def _evaluate(
     r_final = 1.0 - (1.0 - r1) * (1.0 - r2)
     score = detection_score * coverage * detector.domain_fit * detector.regulatory_fit * penalty_fn
 
-    return PrivacyMetric(
+    return PIIDetectionMetric(
         session_id=session_id,
         assistant_id=assistant_id,
         name=detector.name,
@@ -234,11 +240,18 @@ def _reject_statistical_mode(kwargs: dict) -> None:
     # FR-020: the score/risk are deterministic functions of corpus-wide counts;
     # there is no per-batch distribution to aggregate, so no StatisticalMode applies.
     if "statistical_mode" in kwargs:
-        raise TypeError("Privacy metrics do not accept 'statistical_mode' (FR-020): the score is deterministic")
+        raise TypeError(
+            "PIIDetectorBenchmark metrics do not accept 'statistical_mode' (FR-020): the score is deterministic"
+        )
 
 
-class Privacy(Gaussia):
-    """Evaluate a single `PIIDetector` against a labelled corpus (one `PrivacyMetric` per dataset)."""
+class PIIDetectorBenchmark(Gaussia):
+    """Evaluate a single `PIIDetector` against a labelled corpus (one `PIIDetectionMetric` per dataset).
+
+    Scores the detector, not the assistant: the corpus must be `PIIDetectionBatch`
+    turns carrying ground-truth spans, and `score_100` reports how well the
+    detector recovered them.
+    """
 
     def __init__(
         self,
@@ -267,8 +280,12 @@ class Privacy(Gaussia):
         )
 
 
-class PrivacyRanker(Gaussia):
-    """Rank several `PIIDetector`s against the same corpus (one `PrivacyRanking` per dataset)."""
+class PIIDetectorRanker(Gaussia):
+    """Rank several `PIIDetector`s against the same corpus (one `PIIDetectionRanking` per dataset).
+
+    A detector-selection tool: `winning_detector` names the best of the injected
+    detectors for the domain. It says nothing about any assistant.
+    """
 
     def __init__(
         self,
@@ -292,7 +309,7 @@ class PrivacyRanker(Gaussia):
         language: str | None = "english",
     ) -> None:
         _validate_corpus(batch, self.domain_config)
-        results: list[PrivacyMetric] = []
+        results: list[PIIDetectionMetric] = []
         for detector in self.detectors:
             results.append(self._evaluate_one(detector, batch, session_id, assistant_id))
 
@@ -303,7 +320,7 @@ class PrivacyRanker(Gaussia):
         )
         winner = ranked[0].name if ranked and ranked[0].success else None
         self.metrics.append(
-            PrivacyRanking(
+            PIIDetectionRanking(
                 session_id=session_id,
                 assistant_id=assistant_id,
                 results=ranked,
@@ -322,12 +339,12 @@ class PrivacyRanker(Gaussia):
 
     def _evaluate_one(
         self, detector: PIIDetector, batch: list[Batch], session_id: str, assistant_id: str
-    ) -> PrivacyMetric:
+    ) -> PIIDetectionMetric:
         try:
             load_time = self._setup_once(detector)
             return _evaluate(detector, self.domain_config, batch, session_id, assistant_id, load_time)
         except Exception as error:
-            return PrivacyMetric(
+            return PIIDetectionMetric(
                 session_id=session_id,
                 assistant_id=assistant_id,
                 name=detector.name,

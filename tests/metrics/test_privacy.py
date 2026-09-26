@@ -1,4 +1,4 @@
-"""Accounting and score-pipeline tests for the Privacy metric (T009-T011).
+"""Accounting and score-pipeline tests for the PIIDetectorBenchmark metric (T009-T011).
 
 All expected values are computed by hand from the paper's formulas using a
 deterministic StubDetector, per SC-001.
@@ -7,9 +7,9 @@ deterministic StubDetector, per SC-001.
 import pytest
 from pydantic import ValidationError
 
-from gaussia.metrics.privacy import Privacy
+from gaussia.metrics.privacy import PIIDetectorBenchmark
 from gaussia.schemas.common import Batch
-from gaussia.schemas.privacy import PrivacyDomainConfig, PrivacyMetric, Span, interpretation_for
+from gaussia.schemas.privacy import PIIDetectionMetric, PrivacyDomainConfig, Span, interpretation_for
 from tests.fixtures.privacy.corpus import batch, dataset, make_retriever
 from tests.fixtures.privacy.stub_detector import StubDetector
 
@@ -51,7 +51,7 @@ PRED_SPANS = [
 ]
 
 
-def _run_shared(domain_fit: float = 1.0, regulatory_fit: float = 1.0) -> PrivacyMetric:
+def _run_shared(domain_fit: float = 1.0, regulatory_fit: float = 1.0) -> PIIDetectionMetric:
     detector = StubDetector(
         name="stub",
         domain_fit=domain_fit,
@@ -60,7 +60,7 @@ def _run_shared(domain_fit: float = 1.0, regulatory_fit: float = 1.0) -> Privacy
         predictions={QUERY: PRED_SPANS},
     )
     retriever = make_retriever([dataset("s1", [batch("q1", QUERY, GT_SPANS)])])
-    metrics = Privacy.run(retriever, detector=detector, domain_config=_domain())
+    metrics = PIIDetectorBenchmark.run(retriever, detector=detector, domain_config=_domain())
     assert len(metrics) == 1
     return metrics[0]
 
@@ -171,7 +171,7 @@ class TestPerfectDetector:
         )
         conv = [batch(q, q, gt[q]) for q in (q1, q2, q3)]
         retriever = make_retriever([dataset("s", conv)])
-        m = Privacy.run(retriever, detector=detector, domain_config=domain)[0]
+        m = PIIDetectorBenchmark.run(retriever, detector=detector, domain_config=domain)[0]
         assert m.detection_score == pytest.approx(1.0)
         assert m.coverage == pytest.approx(1.0)
         assert m.penalty_fn == pytest.approx(1.0)
@@ -196,7 +196,9 @@ class TestLatencyAndExclusions:
         )
         retriever = make_retriever([dataset("s1", [batch("q1", QUERY, GT_SPANS)])])
         with pytest.raises(TypeError):
-            Privacy.run(retriever, detector=detector, domain_config=_domain(), statistical_mode="frequentist")
+            PIIDetectorBenchmark.run(
+                retriever, detector=detector, domain_config=_domain(), statistical_mode="frequentist"
+            )
 
     def test_detector_exception_propagates(self):
         detector = StubDetector(
@@ -208,7 +210,7 @@ class TestLatencyAndExclusions:
         )
         retriever = make_retriever([dataset("s1", [batch("q1", QUERY, GT_SPANS)])])
         with pytest.raises(RuntimeError, match="backend exploded"):
-            Privacy.run(retriever, detector=detector, domain_config=_domain())
+            PIIDetectorBenchmark.run(retriever, detector=detector, domain_config=_domain())
 
 
 class TestCorpusValidation:
@@ -226,14 +228,14 @@ class TestCorpusValidation:
     def test_non_privacy_batch_turn_rejected(self):
         plain = Batch(qa_id="q1", query=QUERY, assistant="", ground_truth_assistant="")
         retriever = make_retriever([dataset("s1", [plain])])
-        with pytest.raises(TypeError, match="PrivacyBatch"):
-            Privacy.run(retriever, detector=self._detector(), domain_config=_domain())
+        with pytest.raises(TypeError, match="PIIDetectionBatch"):
+            PIIDetectorBenchmark.run(retriever, detector=self._detector(), domain_config=_domain())
 
     def test_out_of_domain_ground_truth_label_rejected(self):
         bad = batch("q1", QUERY, [_span("credit_card", 0, 5)])
         retriever = make_retriever([dataset("s1", [bad])])
         with pytest.raises(ValueError, match="outside the domain classes"):
-            Privacy.run(retriever, detector=self._detector(), domain_config=_domain())
+            PIIDetectorBenchmark.run(retriever, detector=self._detector(), domain_config=_domain())
 
 
 def test_paper_worked_example_uses_five_factor_formula():
@@ -243,7 +245,7 @@ def test_paper_worked_example_uses_five_factor_formula():
     """
     det, cov, dfit, rfit, pen = 0.8231, 0.7273, 0.85, 0.80, 0.81
     score = det * cov * dfit * rfit * pen
-    metric = PrivacyMetric(
+    metric = PIIDetectionMetric(
         session_id="s",
         assistant_id="a",
         name="presidio-healthcare",
@@ -263,7 +265,7 @@ def test_paper_worked_example_uses_five_factor_formula():
 def test_score_validator_catches_infra_factor():
     # Sanity: constructing a metric whose score smuggles in a sixth factor fails.
     with pytest.raises(ValidationError):
-        PrivacyMetric(
+        PIIDetectionMetric(
             session_id="s",
             assistant_id="a",
             name="x",

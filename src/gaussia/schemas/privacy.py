@@ -66,7 +66,7 @@ class Span(BaseModel):
         return self
 
 
-class PrivacyBatch(Batch):
+class PIIDetectionBatch(Batch):
     """A ``Batch`` whose ``query`` is the text shown to the detector, annotated with ground-truth spans."""
 
     spans: list[Span] = Field(default_factory=list)
@@ -146,7 +146,7 @@ class CriticalFNContribution(BaseModel):
         return self
 
 
-class PrivacyMetric(BaseMetric):
+class PIIDetectionMetric(BaseMetric):
     """Per-detector evaluation result containing every component of the paper's output contract."""
 
     name: str
@@ -191,7 +191,7 @@ class PrivacyMetric(BaseMetric):
     r_final_100: float = Field(default=0.0, ge=0.0, le=100.0)
 
     @model_validator(mode="after")
-    def _check_consistency(self) -> "PrivacyMetric":
+    def _check_consistency(self) -> "PIIDetectionMetric":
         self.interpretation = interpretation_for(self.score_100)
         self.r1_weakest_class_risk_100 = self.r1_weakest_class_risk * 100.0
         self.r2_systemic_risk_100 = self.r2_systemic_risk * 100.0
@@ -212,17 +212,17 @@ class PrivacyMetric(BaseMetric):
         return self
 
 
-class PrivacyRanking(BaseMetric):
+class PIIDetectionRanking(BaseMetric):
     """Ordered per-detector results plus the winning detector identifier."""
 
-    results: list[PrivacyMetric]
+    results: list[PIIDetectionMetric]
     winning_detector: str | None = None
     iou_threshold: float = Field(gt=0.0, le=1.0)
     domain_classes: list[str] = Field(default_factory=list)
     regulatory_framework: str | None = None
 
     @model_validator(mode="after")
-    def _check_ordering(self) -> "PrivacyRanking":
+    def _check_ordering(self) -> "PIIDetectionRanking":
         successful = [r for r in self.results if r.success]
         seen_failure = False
         for result in self.results:
@@ -245,10 +245,10 @@ __all__ = [
     "CriticalFNContribution",
     "DetectionScoreContribution",
     "Interpretation",
-    "PrivacyBatch",
+    "PIIDetectionBatch",
+    "PIIDetectionMetric",
+    "PIIDetectionRanking",
     "PrivacyDomainConfig",
-    "PrivacyMetric",
-    "PrivacyRanking",
     "Span",
     "interpretation_for",
 ]

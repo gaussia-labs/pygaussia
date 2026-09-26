@@ -82,8 +82,8 @@ nothing, so no metric drags in another's optional dependencies.
 | **RoleAdherence** | Whether the assistant stays inside its defined role, scored from judge first-token logprobs | — |
 | **Toxicity** | Cluster-based toxicity profiling with demographic and sentiment analysis | `[toxicity]` |
 | **Bias** | Bias detection across protected attributes using guardians | `[bias]` |
-| **Privacy** | Domain-adjusted detection score rating one PII/PHI detector's fitness for a regulated domain | `[privacy-presidio]` / `[privacy-huggingface]` |
-| **PrivacyRanker** | The same score across several detectors, ranked, to decide which one to ship | `[privacy-presidio]` / `[privacy-huggingface]` |
+| **PIIDetectorBenchmark** | Domain-adjusted detection score rating one PII/PHI detector's fitness for a regulated domain | `[privacy-presidio]` / `[privacy-huggingface]` |
+| **PIIDetectorRanker** | The same score across several detectors, ranked, to decide which one to ship | `[privacy-presidio]` / `[privacy-huggingface]` |
 | **Humanity** | Emotion, empathy, and human-like quality analysis | `[humanity]` |
 | **Regulatory** | Compliance evaluation against regulatory documents | `[regulatory]` |
 | **VisionSimilarity** | VLM description comparison via semantic similarity | `[vision]` |
@@ -110,7 +110,7 @@ passed as an instance:
 
 ```python
 from gaussia.detectors.presidio import PresidioDetector
-from gaussia.metrics.privacy import Privacy
+from gaussia.metrics.privacy import PIIDetectorBenchmark
 from gaussia.schemas.privacy import PrivacyDomainConfig
 
 domain = PrivacyDomainConfig(
@@ -121,10 +121,10 @@ domain = PrivacyDomainConfig(
 )
 detector = PresidioDetector(name="presidio", domain_fit=0.9, regulatory_fit=0.8)
 
-metrics = Privacy.run(MyRetriever, detector=detector, domain_config=domain)
+metrics = PIIDetectorBenchmark.run(MyRetriever, detector=detector, domain_config=domain)
 ```
 
-`PrivacyRanker` takes `detectors=[...]` instead and ranks them under the same domain config.
+`PIIDetectorRanker` takes `detectors=[...]` instead and ranks them under the same domain config.
 
 ### Role Adherence
 
