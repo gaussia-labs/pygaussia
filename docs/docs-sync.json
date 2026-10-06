@@ -38,7 +38,8 @@
           "sdks/python/metrics/vision",
           "sdks/python/metrics/regulatory",
           "sdks/python/metrics/privacy",
-          "sdks/python/metrics/role-adherence"
+          "sdks/python/metrics/role-adherence",
+          "sdks/python/metrics/accountability"
         ]
       },
       {
