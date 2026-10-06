@@ -48,6 +48,9 @@ Gaussia provides nine specialized metrics for comprehensive AI evaluation. Each 
   <Card title="Privacy" icon="user-shield" href="/metrics/privacy">
     Score and rank PII/PHI detectors for a regulated domain, with a risk index.
   </Card>
+  <Card title="Accountability" icon="user-check" href="/metrics/accountability">
+    Check that gated tool calls had a valid human approval and that the assistant disclosed what it ran.
+  </Card>
 </CardGroup>
 
 ## Comparison Table
@@ -64,6 +67,7 @@ Gaussia provides nine specialized metrics for comprehensive AI evaluation. Each 
 | **Vision** | VLM similarity / hallucination | Per-session metrics | No |
 | **Regulatory** | Regulatory compliance | Per-session scores | No |
 | **Privacy** | Score/rank PII detectors | Per-dataset score + risk | No |
+| **Accountability** | Human oversight and action disclosure | Per-session figures | Oversight: No. Disclosure: Yes (Judge) |
 
 ## Common Usage Pattern
 
@@ -207,6 +211,10 @@ results = Regulatory.run(
 
   <Accordion title="I want to check regulatory compliance">
     Use **Regulatory** for evaluating responses against a regulatory corpus.
+  </Accordion>
+
+  <Accordion title="I want to check that an agent asked for approval">
+    Use **Accountability**: `OversightCompliance` for approvals on gated tools, `ActionDisclosure` for whether the agent told the truth about what it ran.
   </Accordion>
 </AccordionGroup>
 

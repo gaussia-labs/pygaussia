@@ -55,7 +55,8 @@
               "metrics/vision",
               "metrics/regulatory",
               "metrics/privacy",
-              "metrics/role-adherence"
+              "metrics/role-adherence",
+              "metrics/accountability"
             ]
           }
         ]
